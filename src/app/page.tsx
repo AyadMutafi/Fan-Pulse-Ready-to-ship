@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Activity, TrendingUp, TrendingDown, Minus, Play, Star, AlertTriangle,
-  Lock, Clock, Zap, Shield, ArrowUpRight, ArrowDownRight, CircleDot,
-  ChevronRight, Sparkles, BarChart3, Users, Timer
+  Lock, Clock, Zap, Shield, CircleDot,
+  Sparkles, BarChart3, Users, Timer
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -14,7 +14,7 @@ import { Progress } from '@/components/ui/progress'
 import TopHeader from '@/components/TopHeader'
 import Navigation, { type TabId } from '@/components/Navigation'
 import { useLanguage } from '@/context/LanguageContext'
-import { NATIONAL_TEAMS, findNationalTeam } from '@/lib/national-teams'
+import { findNationalTeam } from '@/lib/national-teams'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -73,6 +73,19 @@ const MOCK_SENTIMENTS = [
   { name: 'Wout Weghorst', nationCode: 'NED', score: 22 },
 ]
 
+const MOCK_RATINGS = [
+  { id: 1, name: 'Kylian Mbappé', nationCode: 'FRA', position: 'LW', avgRating: 4.7 },
+  { id: 2, name: 'Vinícius Jr', nationCode: 'BRA', position: 'LW', avgRating: 4.5 },
+  { id: 3, name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', avgRating: 4.6 },
+  { id: 4, name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', avgRating: 4.4 },
+  { id: 5, name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', avgRating: 3.8 },
+  { id: 6, name: 'Rodri', nationCode: 'ESP', position: 'CDM', avgRating: 3.5 },
+  { id: 7, name: 'Richarlison', nationCode: 'BRA', position: 'ST', avgRating: 2.1 },
+  { id: 8, name: 'Harry Maguire', nationCode: 'ENG', position: 'CB', avgRating: 1.8 },
+  { id: 9, name: 'Alisson', nationCode: 'BRA', position: 'GK', avgRating: 4.2 },
+  { id: 10, name: 'Hakimi', nationCode: 'MAR', position: 'RB', avgRating: 3.9 },
+]
+
 const MOCK_GOALS = [
   { id: 1, scorer: 'Mbappé', team: 'FRA', flag: '🇫🇷', minute: 23, match: 'FRA vs COL', type: 'Goal' },
   { id: 2, scorer: 'Vinícius Jr', team: 'BRA', flag: '🇧🇷', minute: 45, match: 'BRA vs PAR', type: 'Goal' },
@@ -106,27 +119,27 @@ function getFlag(nationCode: string): string {
 }
 
 function getTrendIcon(trend: string) {
-  if (trend === 'rising') return <TrendingUp className="size-3.5 text-emerald-400" />
-  if (trend === 'falling') return <TrendingDown className="size-3.5 text-red-400" />
-  return <Minus className="size-3.5 text-amber-400" />
+  if (trend === 'rising') return <TrendingUp className="size-3.5 text-[#4CAF50]" />
+  if (trend === 'falling') return <TrendingDown className="size-3.5 text-[#E74C3C]" />
+  return <Minus className="size-3.5 text-[#F59E0B]" />
 }
 
 function getTrendColor(trend: string) {
-  if (trend === 'rising') return 'text-emerald-400'
-  if (trend === 'falling') return 'text-red-400'
-  return 'text-amber-400'
+  if (trend === 'rising') return 'text-[#4CAF50]'
+  if (trend === 'falling') return 'text-[#E74C3C]'
+  return 'text-[#F59E0B]'
 }
 
 function getSentimentColor(score: number) {
-  if (score >= 80) return 'text-emerald-400'
-  if (score >= 50) return 'text-amber-400'
-  return 'text-red-400'
+  if (score >= 80) return 'text-[#4CAF50]'
+  if (score >= 50) return 'text-[#F59E0B]'
+  return 'text-[#E74C3C]'
 }
 
 function getSentimentBg(score: number) {
-  if (score >= 80) return 'bg-emerald-500/15 border-emerald-500/30'
-  if (score >= 50) return 'bg-amber-500/15 border-amber-500/30'
-  return 'bg-red-500/15 border-red-500/30'
+  if (score >= 80) return 'bg-[#4CAF50]/8 border-[#4CAF50]/20'
+  if (score >= 50) return 'bg-[#F59E0B]/8 border-[#F59E0B]/20'
+  return 'bg-[#E74C3C]/8 border-[#E74C3C]/20'
 }
 
 function getProgressClass(score: number) {
@@ -138,13 +151,9 @@ function getProgressClass(score: number) {
 // ── Position Layout for 4-3-3 ────────────────────────────────
 
 const FORMATION_ROWS = [
-  // GK
   [{ pos: 'GK', col: 1 }],
-  // DEF
   [{ pos: 'RB', col: 3 }, { pos: 'CB', col: 1 }, { pos: 'CB', col: 2 }, { pos: 'LB', col: 0 }],
-  // MID
   [{ pos: 'CM', col: 2 }, { pos: 'CAM', col: 1 }, { pos: 'CM', col: 0 }],
-  // FWD
   [{ pos: 'RW', col: 2 }, { pos: 'ST', col: 1 }, { pos: 'LW', col: 0 }],
 ]
 
@@ -152,7 +161,7 @@ const FORMATION_ROWS = [
 
 function LiveBadge() {
   return (
-    <Badge className="bg-red-500/20 text-red-400 border-red-500/40 gap-1 text-[10px] font-bold">
+    <Badge className="bg-[#E74C3C]/10 text-[#E74C3C] border-[#E74C3C]/30 gap-1 text-[10px] font-bold">
       <span className="live-dot" />
       LIVE
     </Badge>
@@ -179,22 +188,22 @@ function HomeTab() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-background to-amber-500/5 p-6"
+        className="relative overflow-hidden rounded-2xl border border-[#6C5CE7]/15 bg-gradient-to-br from-[#6C5CE7]/8 via-white dark:via-[#1A1A2E] to-[#F59E0B]/5 p-6"
       >
-        <div className="absolute -right-8 -top-8 size-32 rounded-full bg-emerald-500/5 blur-3xl" />
-        <div className="absolute -bottom-8 -left-8 size-32 rounded-full bg-amber-500/5 blur-3xl" />
-        <h2 className="relative text-3xl font-black tracking-tight text-foreground">
-          {t('home.your_pulse')} <span className="text-emerald-400">⚡</span>
+        <div className="absolute -right-8 -top-8 size-32 rounded-full bg-[#6C5CE7]/5 blur-3xl" />
+        <div className="absolute -bottom-8 -left-8 size-32 rounded-full bg-[#F59E0B]/5 blur-3xl" />
+        <h2 className="relative text-2xl font-bold tracking-tight text-foreground">
+          {t('home.your_pulse')} <span className="text-[#6C5CE7]">⚡</span>
         </h2>
         <p className="relative mt-2 text-sm text-muted-foreground">
           {t('home.mood_desc')}
         </p>
         <div className="relative mt-4 flex items-center gap-3">
-          <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1.5 text-xs font-semibold text-emerald-400">
+          <div className="flex items-center gap-1.5 rounded-full bg-[#4CAF50]/10 px-3 py-1.5 text-xs font-semibold text-[#4CAF50]">
             <Zap className="size-3.5" />
             78% Positive
           </div>
-          <div className="flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1.5 text-xs font-semibold text-amber-400">
+          <div className="flex items-center gap-1.5 rounded-full bg-[#F59E0B]/10 px-3 py-1.5 text-xs font-semibold text-[#F59E0B]">
             <Activity className="size-3.5" />
             2 Live
           </div>
@@ -203,7 +212,7 @@ function HomeTab() {
 
       {/* Featured Matches */}
       <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground">
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Featured Matches
         </h3>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -214,7 +223,7 @@ function HomeTab() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, delay: i * 0.08 }}
             >
-              <Card className="group relative overflow-hidden border-border/50 transition-all duration-300 hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/5">
+              <Card className="group border-border/50 shadow-sm transition-all duration-300 hover:border-[#6C5CE7]/20 hover:shadow-md">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -249,27 +258,27 @@ function HomeTab() {
 
       {/* Arena Intelligence */}
       <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-muted-foreground">
+        <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Arena Intelligence
         </h3>
-        <Card className="border-border/50">
+        <Card className="border-border/50 shadow-sm">
           <CardContent className="p-4 space-y-3">
             {[
-              { icon: Sparkles, text: 'Mbappé sentiment surged +12% after hat-trick vs Colombia', time: '2m ago', color: 'text-emerald-400' },
-              { icon: BarChart3, text: 'Fan mood shifting: Brazil supporters growing anxious despite lead', time: '8m ago', color: 'text-amber-400' },
-              { icon: Users, text: '1.2M fan votes tallied for Group Stage Elite XI', time: '15m ago', color: 'text-emerald-400' },
-              { icon: Timer, text: 'Maguire crisis index hits season-high after defensive errors', time: '22m ago', color: 'text-red-400' },
+              { icon: Sparkles, text: 'Mbappé sentiment surged +12% after hat-trick vs Colombia', time: '2m ago', color: 'text-[#6C5CE7]' },
+              { icon: BarChart3, text: 'Fan mood shifting: Brazil supporters growing anxious despite lead', time: '8m ago', color: 'text-[#F59E0B]' },
+              { icon: Users, text: '1.2M fan votes tallied for Group Stage Elite XI', time: '15m ago', color: 'text-[#4CAF50]' },
+              { icon: Timer, text: 'Maguire crisis index hits season-high after defensive errors', time: '22m ago', color: 'text-[#E74C3C]' },
             ].map((item, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.3, delay: i * 0.1 }}
-                className="flex items-start gap-3 rounded-lg bg-muted/30 p-3"
+                className="flex items-start gap-3 rounded-lg bg-muted/40 p-3"
               >
                 <item.icon className={`mt-0.5 size-4 shrink-0 ${item.color}`} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs leading-relaxed text-foreground/90">{item.text}</p>
+                  <p className="text-xs leading-relaxed text-foreground/80">{item.text}</p>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">{item.time}</p>
                 </div>
               </motion.div>
@@ -293,7 +302,7 @@ function SentimentsTab() {
         animate={{ opacity: 1, y: 0 }}
         className="space-y-1"
       >
-        <h2 className="text-2xl font-black tracking-tight">{t('sentiments.title')}</h2>
+        <h2 className="text-2xl font-bold tracking-tight">{t('sentiments.title')}</h2>
         <p className="text-sm text-muted-foreground">{t('sentiments.powered')}</p>
       </motion.div>
 
@@ -305,7 +314,7 @@ function SentimentsTab() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: i * 0.05 }}
           >
-            <Card className={`border-border/50 transition-all duration-300 hover:shadow-md ${getSentimentBg(player.score)}`}>
+            <Card className={`border-border/50 shadow-sm transition-all duration-300 hover:shadow-md ${getSentimentBg(player.score)}`}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -345,6 +354,101 @@ function SentimentsTab() {
   )
 }
 
+// ── RATE Tab ─────────────────────────────────────────────────
+
+function RateTab() {
+  const { t } = useLanguage()
+  const [ratings, setRatings] = useState<Record<number, number>>({})
+
+  const handleRate = (playerId: number, rating: number) => {
+    setRatings(prev => ({ ...prev, [playerId]: rating }))
+  }
+
+  return (
+    <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-1"
+      >
+        <h2 className="text-2xl font-bold tracking-tight">{t('ratings.title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('ratings.desc')}</p>
+      </motion.div>
+
+      <div className="space-y-3">
+        {MOCK_RATINGS.map((player, i) => (
+          <motion.div
+            key={player.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: i * 0.05 }}
+          >
+            <Card className="border-border/50 shadow-sm transition-all duration-300 hover:shadow-md">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">{getFlag(player.nationCode)}</span>
+                    <div>
+                      <p className="text-sm font-bold">{player.name}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0">
+                          {player.position}
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground">
+                          Avg: {player.avgRating.toFixed(1)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Star Rating */}
+                  <div className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((star) => {
+                      const isSelected = (ratings[player.id] ?? 0) >= star
+                      const isHovered = false
+                      return (
+                        <button
+                          key={star}
+                          onClick={() => handleRate(player.id, star)}
+                          className="transition-transform duration-150 hover:scale-125"
+                        >
+                          <Star
+                            className={`size-5 ${
+                              isSelected
+                                ? 'fill-[#F59E0B] text-[#F59E0B]'
+                                : 'text-gray-300 dark:text-gray-600'
+                            }`}
+                          />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {ratings[player.id] && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-2 flex items-center justify-between"
+                  >
+                    <span className="text-xs text-[#6C5CE7] font-medium">
+                      Your rating: {ratings[player.id]}/5
+                    </span>
+                    <Progress
+                      value={(ratings[player.id] / 5) * 100}
+                      className="h-1 w-20 progress-purple"
+                    />
+                  </motion.div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── GOALS Tab ────────────────────────────────────────────────
 
 function GoalsTab() {
@@ -357,7 +461,7 @@ function GoalsTab() {
         animate={{ opacity: 1, y: 0 }}
         className="space-y-1"
       >
-        <h2 className="text-2xl font-black tracking-tight">{t('goals.title')}</h2>
+        <h2 className="text-2xl font-bold tracking-tight">{t('goals.title')}</h2>
         <p className="text-sm text-muted-foreground">{t('goals.desc')}</p>
       </motion.div>
 
@@ -369,12 +473,12 @@ function GoalsTab() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.3, delay: i * 0.06 }}
           >
-            <Card className="group border-border/50 transition-all duration-300 hover:border-emerald-500/30 hover:shadow-md">
+            <Card className="group border-border/50 shadow-sm transition-all duration-300 hover:border-[#6C5CE7]/20 hover:shadow-md">
               <CardContent className="p-4">
                 <div className="flex items-center gap-4">
                   {/* Video placeholder */}
-                  <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-muted/50 transition-colors group-hover:bg-emerald-500/10">
-                    <Play className="size-5 text-muted-foreground transition-colors group-hover:text-emerald-400" />
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted/50 transition-colors group-hover:bg-[#6C5CE7]/10">
+                    <Play className="size-4 text-muted-foreground transition-colors group-hover:text-[#6C5CE7]" />
                   </div>
                   {/* Info */}
                   <div className="min-w-0 flex-1">
@@ -391,7 +495,7 @@ function GoalsTab() {
                   </div>
                   {/* Minute */}
                   <div className="shrink-0 text-right">
-                    <p className="text-xl font-black text-emerald-400">{goal.minute}&apos;</p>
+                    <p className="text-xl font-black text-[#6C5CE7]">{goal.minute}&apos;</p>
                     <p className="text-[10px] text-muted-foreground">minute</p>
                   </div>
                 </div>
@@ -416,13 +520,13 @@ function TOTWTab() {
         animate={{ opacity: 1, y: 0 }}
         className="space-y-1"
       >
-        <h2 className="text-2xl font-black tracking-tight">{t('totw.title')}</h2>
+        <h2 className="text-2xl font-bold tracking-tight">{t('totw.title')}</h2>
         <p className="text-sm text-muted-foreground">4-3-3 Formation</p>
       </motion.div>
 
-      <Card className="border-border/50">
+      <Card className="border-border/50 shadow-sm">
         <CardContent className="p-4">
-          <div className="pitch-bg rounded-xl p-3 space-y-4">
+          <div className="pitch-bg rounded-xl p-3 sm:p-4 space-y-4">
             {FORMATION_ROWS.map((row, ri) => (
               <div key={ri} className="flex justify-center gap-3 sm:gap-6">
                 {row.map((slot, ci) => {
@@ -435,7 +539,7 @@ function TOTWTab() {
                       transition={{ duration: 0.3, delay: ri * 0.1 + ci * 0.05 }}
                       className="flex flex-col items-center"
                     >
-                      <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-emerald-500/40 bg-card text-lg shadow-lg shadow-emerald-500/10">
+                      <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-[#6C5CE7]/30 bg-white dark:bg-[#1A1A2E] text-lg shadow-md">
                         {player ? getFlag(player.nationCode) : '👤'}
                       </div>
                       <p className="mt-1 max-w-[60px] truncate text-[10px] font-bold text-foreground text-center">
@@ -445,7 +549,7 @@ function TOTWTab() {
                         {slot.pos}
                       </Badge>
                       {player && (
-                        <p className="mt-0.5 text-[10px] font-bold text-emerald-400">
+                        <p className="mt-0.5 text-[10px] font-bold text-[#6C5CE7]">
                           {player.rating}
                         </p>
                       )}
@@ -486,19 +590,18 @@ function FormationPlayerCard({
     >
       <div
         className={`
-          relative flex size-14 sm:size-16 items-center justify-center rounded-full border-2 text-xl shadow-lg
+          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 text-xl shadow-md
           ${isElite
-            ? 'border-emerald-500/50 bg-card shadow-emerald-500/15'
-            : 'border-red-500/50 bg-card shadow-red-500/15'
+            ? 'border-[#6C5CE7]/40 bg-white dark:bg-[#1A1A2E] shadow-[#6C5CE7]/10'
+            : 'border-[#E74C3C]/40 bg-white dark:bg-[#1A1A2E] shadow-[#E74C3C]/10'
           }
           ${isLive ? 'animate-pulse-glow' : ''}
           transition-all duration-300 hover:scale-110
         `}
-        style={{ color: isElite ? '#10b981' : '#ef4444' }}
       >
         <span className="text-lg sm:text-xl">{flag}</span>
         {isLive && (
-          <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-red-500 shadow-lg shadow-red-500/50 animate-live-pulse" />
+          <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#E74C3C] shadow-lg shadow-[#E74C3C]/50 animate-live-pulse" />
         )}
         {isCompleted && (
           <Lock className="absolute -right-0.5 -top-0.5 size-3 text-muted-foreground" />
@@ -511,7 +614,7 @@ function FormationPlayerCard({
         <Badge
           variant="outline"
           className={`text-[7px] sm:text-[8px] font-bold px-1 py-0 ${
-            isElite ? 'border-emerald-500/40 text-emerald-400' : 'border-red-500/40 text-red-400'
+            isElite ? 'border-[#6C5CE7]/30 text-[#6C5CE7]' : 'border-[#E74C3C]/30 text-[#E74C3C]'
           }`}
         >
           {player.position}
@@ -523,7 +626,7 @@ function FormationPlayerCard({
           value={player.pulseScore}
           className={`h-1 ${isElite ? getProgressClass(player.pulseScore) : 'progress-red'}`}
         />
-        <p className={`mt-0.5 text-center text-[9px] font-bold ${isElite ? getSentimentColor(player.pulseScore) : 'text-red-400'}`}>
+        <p className={`mt-0.5 text-center text-[9px] font-bold ${isElite ? getSentimentColor(player.pulseScore) : 'text-[#E74C3C]'}`}>
           {Math.round(player.pulseScore)}
         </p>
       </div>
@@ -545,14 +648,12 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
   const [crisisData, setCrisisData] = useState<WCSelection | null>(null)
   const [loading, setLoading] = useState(false)
 
-  // Set initial selected stage
   useEffect(() => {
     if (stages.length > 0 && !selectedStageId) {
       setSelectedStageId(stages[0].id)
     }
   }, [stages, selectedStageId])
 
-  // Fetch elite-crisis when stage changes
   const fetchEliteCrisis = useCallback(async (stageId: string) => {
     setLoading(true)
     try {
@@ -578,15 +679,6 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
   const selectedStage = stages.find(s => s.id === selectedStageId)
   const stageStatus = selectedStage?.status ?? 'upcoming'
 
-  const stageTranslationKeys: Record<string, string> = {
-    'Group Stage': 'wc.group_stage',
-    'Round of 32': 'wc.round_32',
-    'Round of 16': 'wc.round_16',
-    'Quarter Finals': 'wc.quarter_finals',
-    'Semi Finals': 'wc.semi_finals',
-    'Final': 'wc.final',
-  }
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'live':
@@ -600,7 +692,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
         )
       default:
         return (
-          <Badge variant="outline" className="text-amber-400 border-amber-500/40 gap-1 text-[10px] font-bold">
+          <Badge variant="outline" className="text-[#F59E0B] border-[#F59E0B]/30 gap-1 text-[10px] font-bold">
             <Clock className="size-3" />
             {t('wc.upcoming')}
           </Badge>
@@ -608,7 +700,6 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
     }
   }
 
-  // Organize players by formation rows
   const organizeFormation = (players: WCSelectionPlayer[]) => {
     const gk = players.filter(p => p.position === 'GK')
     const def = players.filter(p => ['CB', 'LB', 'RB'].includes(p.position))
@@ -625,7 +716,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
         animate={{ opacity: 1, y: 0 }}
         className="space-y-1"
       >
-        <h2 className="text-2xl font-black tracking-tight">
+        <h2 className="text-2xl font-bold tracking-tight">
           🏆 {t('wc.title')}
         </h2>
         <p className="text-sm text-muted-foreground">{t('wc.new_stage')}</p>
@@ -644,7 +735,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                 relative flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold
                 transition-all duration-300
                 ${isActive
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-lg shadow-emerald-500/10'
+                  ? 'bg-[#6C5CE7]/15 text-[#6C5CE7] dark:text-[#8B7CF7] border border-[#6C5CE7]/30 shadow-sm shadow-[#6C5CE7]/10'
                   : 'bg-muted/50 text-muted-foreground border border-border/50 hover:bg-muted/80'
                 }
               `}
@@ -675,7 +766,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
       {/* Loading */}
       {loading && stageStatus !== 'upcoming' && (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin size-8 rounded-full border-2 border-emerald-500/30 border-t-emerald-500" />
+          <div className="animate-spin size-8 rounded-full border-2 border-[#6C5CE7]/30 border-t-[#6C5CE7]" />
         </div>
       )}
 
@@ -689,13 +780,13 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <Card className="emerald-glow border-emerald-500/20 overflow-hidden">
-                <div className="h-1 w-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-amber-400" />
+              <Card className="purple-glow border-[#6C5CE7]/20 shadow-sm overflow-hidden">
+                <div className="h-1 w-full bg-gradient-to-r from-[#6C5CE7] via-[#8B5CF6] to-[#F59E0B]" />
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-2xl">🌟</span>
                     <div>
-                      <CardTitle className="text-xl font-black text-emerald-400">
+                      <CardTitle className="text-xl font-bold text-[#6C5CE7] dark:text-[#8B7CF7]">
                         {t('wc.elite')}
                       </CardTitle>
                       <CardDescription className="text-xs">
@@ -739,13 +830,13 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              <Card className="red-glow border-red-500/20 overflow-hidden">
-                <div className="h-1 w-full bg-gradient-to-r from-red-500 via-red-400 to-amber-500" />
+              <Card className="red-glow border-[#E74C3C]/20 shadow-sm overflow-hidden">
+                <div className="h-1 w-full bg-gradient-to-r from-[#E74C3C] via-[#C0392B] to-[#F59E0B]" />
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-2xl">⚠️</span>
                     <div>
-                      <CardTitle className="text-xl font-black text-red-400">
+                      <CardTitle className="text-xl font-bold text-[#E74C3C]">
                         {t('wc.crisis')}
                       </CardTitle>
                       <CardDescription className="text-xs">
@@ -763,7 +854,10 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                   </div>
                 </CardHeader>
                 <CardContent className="pb-6">
-                  <div className="pitch-bg rounded-xl p-4 sm:p-6 space-y-6 sm:space-y-8" style={{ '--pitch': 'rgba(239, 68, 68, 0.06)', '--pitch-line': 'rgba(239, 68, 68, 0.2)' } as React.CSSProperties}>
+                  <div
+                    className="pitch-bg rounded-xl p-4 sm:p-6 space-y-6 sm:space-y-8"
+                    style={{ '--pitch': 'rgba(231, 76, 60, 0.04)', '--pitch-line': 'rgba(231, 76, 60, 0.15)' } as React.CSSProperties}
+                  >
                     {organizeFormation(crisisData.players).map((row, ri) => (
                       <div key={ri} className="flex justify-center gap-4 sm:gap-8">
                         {row.map((player) => (
@@ -791,12 +885,12 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
               className="grid grid-cols-2 gap-3 sm:grid-cols-4"
             >
               {[
-                { label: 'Elite Avg Pulse', value: Math.round(eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length), icon: TrendingUp, color: 'text-emerald-400' },
-                { label: 'Crisis Avg Pulse', value: Math.round(crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length), icon: TrendingDown, color: 'text-red-400' },
-                { label: 'Live Players', value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-amber-400' },
+                { label: 'Elite Avg Pulse', value: Math.round(eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length), icon: TrendingUp, color: 'text-[#6C5CE7]' },
+                { label: 'Crisis Avg Pulse', value: Math.round(crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length), icon: TrendingDown, color: 'text-[#E74C3C]' },
+                { label: 'Live Players', value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-[#F59E0B]' },
                 { label: 'Total Votes', value: '1.2M', icon: Users, color: 'text-foreground' },
               ].map((stat, i) => (
-                <Card key={i} className="border-border/50">
+                <Card key={i} className="border-border/50 shadow-sm">
                   <CardContent className="p-4 text-center">
                     <stat.icon className={`mx-auto size-5 mb-2 ${stat.color}`} />
                     <p className={`text-xl font-black ${stat.color}`}>{stat.value}</p>
@@ -819,15 +913,12 @@ export default function Home() {
   const [stages, setStages] = useState<WCStage[]>([])
   const [seeded, setSeeded] = useState(false)
 
-  // Seed and fetch data on mount
   useEffect(() => {
     async function init() {
       try {
-        // Seed the database
         await fetch('/api/world-cup/seed', { method: 'POST' })
         setSeeded(true)
 
-        // Fetch stages
         const res = await fetch('/api/world-cup/stages')
         if (res.ok) {
           const data = await res.json()
@@ -835,7 +926,6 @@ export default function Home() {
         }
       } catch (err) {
         console.error('Init failed:', err)
-        // Still mark seeded so UI doesn't hang
         setSeeded(true)
       }
     }
@@ -843,27 +933,35 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-background">
-      <TopHeader />
-      <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+    <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#16162A]">
+      <div className="flex">
+        {/* Sidebar */}
+        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <main className="mx-auto max-w-5xl px-4 py-6">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.25 }}
-          >
-            {activeTab === 'home' && <HomeTab />}
-            {activeTab === 'sentiments' && <SentimentsTab />}
-            {activeTab === 'goals' && <GoalsTab />}
-            {activeTab === 'totw' && <TOTWTab />}
-            {activeTab === 'worldcup' && <WorldCupTab stages={stages} />}
-          </motion.div>
-        </AnimatePresence>
-      </main>
+        {/* Main content area */}
+        <div className="flex-1 md:ml-60">
+          <TopHeader activeTab={activeTab} />
+
+          <main className="mx-auto max-w-5xl px-4 py-6 pb-24 md:pb-6">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25 }}
+              >
+                {activeTab === 'home' && <HomeTab />}
+                {activeTab === 'sentiments' && <SentimentsTab />}
+                {activeTab === 'rate' && <RateTab />}
+                {activeTab === 'goals' && <GoalsTab />}
+                {activeTab === 'totw' && <TOTWTab />}
+                {activeTab === 'worldcup' && <WorldCupTab stages={stages} />}
+              </motion.div>
+            </AnimatePresence>
+          </main>
+        </div>
+      </div>
     </div>
   )
 }
