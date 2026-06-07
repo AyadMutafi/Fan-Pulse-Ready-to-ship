@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -21,12 +15,60 @@ model User {
   updatedAt DateTime @updatedAt
 }
 
-model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ── World Cup Models ──────────────────────────────────────────────────────────
+
+model WCStage {
+  id          String   @id @default(cuid())
+  name        String   // "Group Stage", "Round of 32", "Round of 16", "Quarter Finals", "Semi Finals", "Final"
+  nameAr      String   // Arabic name
+  order       Int      // 1, 2, 3, 4, 5, 6
+  status      String   @default("upcoming") // "upcoming" | "live" | "completed"
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  selections  WCSelection[]
+}
+
+model WCSelection {
+  id         String   @id @default(cuid())
+  type       String   // "elite" | "crisis"
+  stageId    String
+  stage      WCStage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  formation  String   @default("4-3-3")
+  locked     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  players    WCSelectionPlayer[]
+}
+
+model WCSelectionPlayer {
+  id           String   @id @default(cuid())
+  selectionId  String
+  selection    WCSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  playerName   String
+  nationCode   String   // ISO country code e.g. "BRA", "KSA"
+  position     String   // GK, CB, LB, RB, CM, CAM, LW, RW, ST
+  pulseScore   Float    @default(0) // 0-100
+  sentiment    Float    @default(0) // fan sentiment %
+  trend        String   @default("stable") // "rising" | "stable" | "falling"
+  isLive       Boolean  @default(false)
+  matchInfo    String?  // e.g. "BRA vs ARG 2-1"
+  order        Int      @default(0) // position in formation
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model NationalTeam {
+  id            String   @id @default(cuid())
+  name          String   // "Brazil"
+  nameAr        String   // "البرازيل"
+  code          String   @unique // "BRA"
+  flag          String   // emoji flag "🇧🇷"
+  group         String   // "A", "B", etc.
+  fifaRank      Int      @default(0)
+  primaryColor  String   @default("#000000") // hex
+  region        String   @default("") // "South America", "Europe", etc.
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
