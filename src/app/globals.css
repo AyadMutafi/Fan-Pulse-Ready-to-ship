@@ -48,84 +48,85 @@
   --color-pitch-line: var(--pitch-line);
 }
 
+/* ── LIGHT THEME (DEFAULT) ─────────────────────────────────── */
 :root {
   --radius: 0.625rem;
-  /* Light theme - default */
-  --background: #F8F9FA;
-  --foreground: #333333;
+  --background: #FFFFFF;
+  --foreground: #1A1A1A;
   --card: #FFFFFF;
-  --card-foreground: #333333;
+  --card-foreground: #1A1A1A;
   --popover: #FFFFFF;
-  --popover-foreground: #333333;
-  --primary: #6C5CE7;
+  --popover-foreground: #1A1A1A;
+  --primary: #6C2BD9;
   --primary-foreground: #FFFFFF;
-  --secondary: #F0EFFF;
-  --secondary-foreground: #333333;
-  --muted: #F1F3F5;
+  --secondary: #F3EEFF;
+  --secondary-foreground: #1A1A1A;
+  --muted: #F8F9FA;
   --muted-foreground: #666666;
-  --accent: #F0EFFF;
-  --accent-foreground: #333333;
-  --destructive: #E74C3C;
-  --border: #E9ECEF;
-  --input: #E9ECEF;
-  --ring: #6C5CE7;
-  --chart-1: #6C5CE7;
-  --chart-2: #F59E0B;
-  --chart-3: #E74C3C;
-  --chart-4: #4CAF50;
+  --accent: #F3EEFF;
+  --accent-foreground: #1A1A1A;
+  --destructive: #EF4444;
+  --border: #E0E0E0;
+  --input: #E0E0E0;
+  --ring: #6C2BD9;
+  --chart-1: #6C2BD9;
+  --chart-2: #FF6B35;
+  --chart-3: #EF4444;
+  --chart-4: #10B981;
   --chart-5: #8B5CF6;
-  --purple-glow: rgba(108, 92, 231, 0.15);
-  --amber-glow: rgba(245, 158, 11, 0.15);
-  --red-glow: rgba(231, 76, 60, 0.15);
-  --pitch: rgba(76, 175, 80, 0.06);
-  --pitch-line: rgba(76, 175, 80, 0.2);
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #333333;
-  --sidebar-primary: #6C5CE7;
+  --purple-glow: rgba(108, 43, 217, 0.15);
+  --amber-glow: rgba(255, 107, 53, 0.15);
+  --red-glow: rgba(239, 68, 68, 0.15);
+  --pitch: rgba(16, 185, 129, 0.06);
+  --pitch-line: rgba(16, 185, 129, 0.2);
+  --sidebar: #F8F9FA;
+  --sidebar-foreground: #1A1A1A;
+  --sidebar-primary: #6C2BD9;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F0EFFF;
-  --sidebar-accent-foreground: #333333;
-  --sidebar-border: #E9ECEF;
-  --sidebar-ring: #6C5CE7;
+  --sidebar-accent: #F3EEFF;
+  --sidebar-accent-foreground: #1A1A1A;
+  --sidebar-border: #E0E0E0;
+  --sidebar-ring: #6C2BD9;
 }
 
+/* ── DARK THEME ────────────────────────────────────────────── */
 .dark {
-  --background: #16162A;
-  --foreground: #E8E8F0;
-  --card: #1A1A2E;
-  --card-foreground: #E8E8F0;
-  --popover: #1A1A2E;
-  --popover-foreground: #E8E8F0;
-  --primary: #8B7CF7;
-  --primary-foreground: #16162A;
+  --background: #1A1A1A;
+  --foreground: #FFFFFF;
+  --card: #2D2D2D;
+  --card-foreground: #FFFFFF;
+  --popover: #2D2D2D;
+  --popover-foreground: #FFFFFF;
+  --primary: #8B5CF6;
+  --primary-foreground: #1A1A1A;
   --secondary: #222240;
-  --secondary-foreground: #E8E8F0;
-  --muted: #222240;
-  --muted-foreground: #9999B8;
+  --secondary-foreground: #CCCCCC;
+  --muted: #2D2D2D;
+  --muted-foreground: #CCCCCC;
   --accent: #222240;
-  --accent-foreground: #E8E8F0;
+  --accent-foreground: #FFFFFF;
   --destructive: #EF4444;
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.1);
   --input: rgba(255, 255, 255, 0.12);
-  --ring: #8B7CF7;
-  --chart-1: #8B7CF7;
-  --chart-2: #F59E0B;
+  --ring: #8B5CF6;
+  --chart-1: #8B5CF6;
+  --chart-2: #FF6B35;
   --chart-3: #EF4444;
-  --chart-4: #4CAF50;
+  --chart-4: #10B981;
   --chart-5: #A78BFA;
-  --purple-glow: rgba(139, 124, 247, 0.2);
-  --amber-glow: rgba(245, 158, 11, 0.2);
+  --purple-glow: rgba(139, 92, 246, 0.2);
+  --amber-glow: rgba(255, 107, 53, 0.2);
   --red-glow: rgba(239, 68, 68, 0.2);
-  --pitch: rgba(76, 175, 80, 0.05);
-  --pitch-line: rgba(76, 175, 80, 0.15);
-  --sidebar: #1A1A2E;
-  --sidebar-foreground: #E8E8F0;
-  --sidebar-primary: #8B7CF7;
+  --pitch: rgba(16, 185, 129, 0.05);
+  --pitch-line: rgba(16, 185, 129, 0.15);
+  --sidebar: #16162A;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #8B5CF6;
   --sidebar-primary-foreground: #16162A;
   --sidebar-accent: #222240;
-  --sidebar-accent-foreground: #E8E8F0;
+  --sidebar-accent-foreground: #FFFFFF;
   --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #8B7CF7;
+  --sidebar-ring: #8B5CF6;
 }
 
 @layer base {
@@ -164,7 +165,7 @@
   background: #555;
 }
 
-/* ── Pulse Animation ──────────────────────────────────────── */
+/* ── Pulse Animations ─────────────────────────────────────── */
 @keyframes pulse-glow {
   0%, 100% {
     opacity: 1;
@@ -231,22 +232,22 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(108, 92, 231, 0.06) 50%,
+    rgba(108, 43, 217, 0.06) 50%,
     transparent 100%
   );
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
 }
 
-/* ── Live Indicator Glow ──────────────────────────────────── */
+/* ── Live Indicator ───────────────────────────────────────── */
 .live-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #E74C3C;
+  background: #EF4444;
   display: inline-block;
   animation: live-pulse 1.5s ease-in-out infinite;
-  box-shadow: 0 0 8px rgba(231, 76, 60, 0.6);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
 }
 
 /* ── Pitch Background ─────────────────────────────────────── */
@@ -264,7 +265,7 @@
   pointer-events: none;
 }
 
-/* ── Purple Glow Card (Elite) ─────────────────────────────── */
+/* ── Purple Glow Card (Elite/Pulse Elite) ─────────────────── */
 .purple-glow {
   box-shadow: 0 0 20px var(--purple-glow), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
@@ -273,7 +274,7 @@
   box-shadow: 0 0 30px var(--purple-glow), inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-/* ── Red Glow Card (Crisis) ───────────────────────────────── */
+/* ── Red Glow Card (Crisis Radar) ─────────────────────────── */
 .red-glow {
   box-shadow: 0 0 20px var(--red-glow), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
@@ -289,35 +290,35 @@
 
 /* ── Progress bar custom colors ───────────────────────────── */
 .progress-purple > [data-slot="progress-indicator"] {
-  background: linear-gradient(90deg, #5B4BD5, #6C5CE7);
+  background: linear-gradient(90deg, #5B1FBF, #6C2BD9);
 }
 
 .progress-emerald > [data-slot="progress-indicator"] {
-  background: linear-gradient(90deg, #059669, #4CAF50);
+  background: linear-gradient(90deg, #059669, #10B981);
 }
 
 .progress-red > [data-slot="progress-indicator"] {
-  background: linear-gradient(90deg, #C0392B, #E74C3C);
+  background: linear-gradient(90deg, #DC2626, #EF4444);
 }
 
 .progress-amber > [data-slot="progress-indicator"] {
-  background: linear-gradient(90deg, #D97706, #F59E0B);
+  background: linear-gradient(90deg, #D97706, #FF6B35);
 }
 
-/* ── Sidebar styles ───────────────────────────────────────── */
+/* ── Sidebar Navigation ───────────────────────────────────── */
 .sidebar-nav-item {
   position: relative;
   transition: all 0.2s ease;
 }
 
 .sidebar-nav-item.active {
-  background: #F0EFFF;
-  border-left: 3px solid #6C5CE7;
+  background: #F3EEFF;
+  border-left: 3px solid #6C2BD9;
 }
 
 .dark .sidebar-nav-item.active {
-  background: rgba(108, 92, 231, 0.15);
-  border-left: 3px solid #8B7CF7;
+  background: rgba(108, 43, 217, 0.15);
+  border-left: 3px solid #8B5CF6;
 }
 
 .sidebar-nav-item:not(.active):hover {
@@ -335,4 +336,67 @@
 .scrollbar-none {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ── Formation Layout ─────────────────────────────────────── */
+.formation-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .formation-row {
+    gap: 2rem;
+  }
+}
+
+/* ── Sentiment Bar ────────────────────────────────────────── */
+.sentiment-bar {
+  height: 6px;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.dark .sentiment-bar {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sentiment-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.6s ease;
+}
+
+.sentiment-positive {
+  background: linear-gradient(90deg, #059669, #10B981);
+}
+
+.sentiment-negative {
+  background: linear-gradient(90deg, #DC2626, #EF4444);
+}
+
+.sentiment-neutral {
+  background: linear-gradient(90deg, #D97706, #FF6B35);
+}
+
+/* ── Safe area bottom for mobile ──────────────────────────── */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Card hover transition ────────────────────────────────── */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: rgba(108, 43, 217, 0.2);
+}
+
+.dark .card-hover:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-color: rgba(139, 92, 246, 0.2);
 }

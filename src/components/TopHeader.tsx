@@ -12,7 +12,7 @@ interface TopHeaderProps {
 
 const tabTitles: Record<TabId, string> = {
   home: 'Home',
-  sentiments: 'Sentiments',
+  sentiments: 'Sentiments Hub',
   rate: 'Rate',
   goals: 'Goals',
   totw: 'Team of the Week',
@@ -24,10 +24,10 @@ export default function TopHeader({ activeTab }: TopHeaderProps) {
   const { theme, setTheme } = useTheme()
 
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-border/50 bg-white/80 dark:bg-[#1A1A2E]/80 backdrop-blur-xl">
-      <div className="flex h-12 items-center justify-between px-4 md:px-6">
+    <header className="sticky top-0 z-30 w-full border-b border-[#E0E0E0]/50 dark:border-white/5 bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl">
+      <div className="flex h-11 items-center justify-between px-4 md:px-6">
         {/* Section title */}
-        <h2 className="text-sm font-semibold text-foreground/70">
+        <h2 className="text-sm font-semibold text-[#1A1A1A]/70 dark:text-white/70">
           {tabTitles[activeTab]}
         </h2>
 
@@ -38,7 +38,7 @@ export default function TopHeader({ activeTab }: TopHeaderProps) {
             variant="ghost"
             size="sm"
             onClick={() => setLang(lang === 'EN' ? 'AR' : 'EN')}
-            className="gap-1 text-xs font-medium text-muted-foreground hover:text-foreground h-8"
+            className="gap-1 text-xs font-medium text-[#666] dark:text-gray-400 hover:text-[#1A1A1A] dark:hover:text-white h-8"
           >
             <Globe className="size-3.5" />
             <span>{lang}</span>
@@ -49,7 +49,7 @@ export default function TopHeader({ activeTab }: TopHeaderProps) {
             variant="ghost"
             size="icon"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="size-8 text-muted-foreground hover:text-foreground"
+            className="size-8 text-[#666] dark:text-gray-400 hover:text-[#1A1A1A] dark:hover:text-white"
           >
             {theme === 'dark' ? (
               <Sun className="size-4" />

@@ -1,32 +1,35 @@
 ---
 Task ID: 1
 Agent: Main Agent
-Task: Build Fan Pulse app with World Cup tab featuring Elite & Crisis XI
+Task: Rebuild Fan Pulse to match Antigravity design system
 
 Work Log:
-- Analyzed GitHub repo (AyadMutafi/live-match-pulse-app) to understand existing app structure
-- Confirmed no World Cup tab existed in the original app
-- Planned and executed World Cup feature build from scratch on blank Next.js scaffold
-- Created Prisma schema with WCStage, WCSelection, WCSelectionPlayer, NationalTeam models
-- Created national-teams.ts with 48 World Cup 2026 teams across 12 groups
-- Created LanguageContext.tsx with full EN/AR translations including all WC keys
-- Created 3 API routes: /api/world-cup/stages, /api/world-cup/elite-crisis, /api/world-cup/seed
-- Built complete frontend with 5 tabs: HOME, SENTIMENTS, GOALS, TOTW, WORLD CUP
-- Built World Cup tab with stage selector, Elite XI (emerald theme), Crisis XI (red theme)
-- Dynamic behavior: upcoming shows placeholder, live shows data with LIVE badges, completed shows locked
-- Added theme toggle (dark/light), language toggle (EN/AR), responsive design
-- Custom CSS animations: pulse-glow, live-pulse, score-fill, emerald-glow, red-glow
-- Verified all tabs work with Agent Browser
-- Verified Arabic translation works correctly
-- Verified upcoming stage shows "Coming Soon" placeholder
-- Verified live stage shows Elite XI + Crisis XI with all player data
-- All API endpoints returning 200, lint passes clean
+- Read uploaded design spec PDF (pptEAC3.pptx - AutoRecovered-1.pdf)
+- Extracted 15 images from PDF and analyzed with VLM
+- Identified exact Antigravity design system colors: Purple #6C2BD9, Orange #FF6B35
+- Rebuilt entire app to match design spec:
+  - Left sidebar navigation (not top tabs)
+  - Light theme default with dark mode support
+  - Purple primary, Orange secondary accents
+  - FANPULSE branding with purple lightning + orange accent
+  - Arena Live indicator with green dot
+  - Arena Pro CTA with purple gradient
+  - RATE tab restored with star ratings
+  - WORLD CUP tab with "NEW" purple badge
+- World Cup tab now uses Antigravity naming:
+  - "PULSE ELITE" (not "Elite XI") with "Stars of the Week" subtitle
+  - "CRISIS RADAR" (not "Crisis XI") with "Flops of the Week" subtitle
+  - Toggle between PULSE ELITE and CRISIS RADAR tabs
+  - Purple score badges for Elite, Red for Crisis
+- Match cards have "Share Pulse" + "PSYCHE" buttons per design spec
+- Sentiment bars with emojis (😊😐😰) per design spec
+- Filter pills for leagues (ALL/PL/LA LIGA/UCL)
+- Goal cards with #HEADER/#TOPSCORER tags per design spec
+- Verified all 6 tabs work with Agent Browser
+- Lint passes clean
 
 Stage Summary:
-- Complete Fan Pulse app with World Cup 2026 feature
-- Elite XI shows top 11 players (4-3-3 formation) with pulse scores 80-96
-- Crisis XI shows bottom 11 players with pulse scores 15-32
-- 6 stages with dynamic status (upcoming/live/completed)
-- Full EN/AR bilingual support
-- Dark/light theme support
-- 48 national teams registered with flags, FIFA rankings, groups
+- App now matches Antigravity design system from uploaded spec
+- All 6 tabs functional: HOME, SENTIMENTS, RATE, GOALS, TOTW, WORLD CUP
+- World Cup feature: PULSE ELITE / CRISIS RADAR with dynamic stage behavior
+- Color scheme: Purple #6C2BD9, Orange #FF6B35, Green #10B981, Red #EF4444
