@@ -754,7 +754,9 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
 
   useEffect(() => {
     if (stages.length > 0 && !selectedStageId) {
-      setSelectedStageId(stages[0].id)
+      // Auto-select the first LIVE stage, fallback to first stage
+      const liveStage = stages.find(s => s.status === 'live')
+      setSelectedStageId((liveStage ?? stages[0]).id)
     }
   }, [stages, selectedStageId])
 
