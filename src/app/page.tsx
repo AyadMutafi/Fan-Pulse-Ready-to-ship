@@ -51,14 +51,38 @@ interface WCStage {
 
 // ── Mock Data ────────────────────────────────────────────────
 
-// Real World Cup 2026 friendly + group stage match data
+// Real World Cup 2026 pre-tournament friendlies + group stage match data
 const MOCK_MATCHES = [
-  { id: 1, home: 'FRA', away: 'COL', homeFlag: '🇫🇷', awayFlag: '🇨🇴', score: '3 - 1', homeSentiment: 88, awaySentiment: 35, live: false, league: 'Friendly' },
-  { id: 2, home: 'BRA', away: 'MAR', homeFlag: '🇧🇷', awayFlag: '🇲🇦', score: '1 - 1', homeSentiment: 55, awaySentiment: 78, live: true, league: 'WC Group C' },
-  { id: 3, home: 'MEX', away: 'RSA', homeFlag: '🇲🇽', awayFlag: '🇿🇦', score: '2 - 0', homeSentiment: 85, awaySentiment: 22, live: false, league: 'WC Group A' },
-  { id: 4, home: 'ENG', away: 'CRO', homeFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', awayFlag: '🇭🇷', score: '2 - 1', homeSentiment: 82, awaySentiment: 45, live: true, league: 'WC Group L' },
-  { id: 5, home: 'ARG', away: 'ALG', homeFlag: '🇦🇷', awayFlag: '🇩🇿', score: '3 - 0', homeSentiment: 92, awaySentiment: 18, live: false, league: 'WC Group J' },
-  { id: 6, home: 'GER', away: 'CIV', homeFlag: '🇩🇪', awayFlag: '🇨🇮', score: '2 - 1', homeSentiment: 72, awaySentiment: 48, live: false, league: 'WC Group E' },
+  // ── Pre-Tournament Friendlies ──
+  { id: 1, home: 'FRA', away: 'BRA', homeFlag: '🇫🇷', awayFlag: '🇧🇷', score: '2 - 1', homeSentiment: 82, awaySentiment: 42, live: false, league: 'Friendly' },
+  { id: 2, home: 'COL', away: 'FRA', homeFlag: '🇨🇴', awayFlag: '🇫🇷', score: '1 - 3', homeSentiment: 30, awaySentiment: 90, live: false, league: 'Friendly' },
+  { id: 3, home: 'POR', away: 'CHI', homeFlag: '🇵🇹', awayFlag: '🇨🇱', score: '2 - 1', homeSentiment: 78, awaySentiment: 40, live: false, league: 'Friendly' },
+  { id: 4, home: 'FRA', away: 'NIR', homeFlag: '🇫🇷', awayFlag: '🇬🇧', score: '3 - 0', homeSentiment: 88, awaySentiment: 20, live: false, league: 'Friendly' },
+  { id: 5, home: 'ESP', away: 'PER', homeFlag: '🇪🇸', awayFlag: '🇵🇪', score: '3 - 1', homeSentiment: 85, awaySentiment: 30, live: false, league: 'Friendly' },
+  { id: 6, home: 'ARG', away: 'ISL', homeFlag: '🇦🇷', awayFlag: '🇮🇸', score: '3 - 0', homeSentiment: 90, awaySentiment: 22, live: false, league: 'Friendly' },
+  { id: 7, home: 'ENG', away: 'NZL', homeFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', awayFlag: '🇳🇿', score: '1 - 0', homeSentiment: 72, awaySentiment: 45, live: false, league: 'Friendly' },
+  { id: 8, home: 'POR', away: 'NGA', homeFlag: '🇵🇹', awayFlag: '🇳🇬', score: '2 - 1', homeSentiment: 80, awaySentiment: 35, live: false, league: 'Friendly' },
+  { id: 9, home: 'ENG', away: 'CRC', homeFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', awayFlag: '🇨🇷', score: '3 - 0', homeSentiment: 88, awaySentiment: 18, live: false, league: 'Friendly' },
+  { id: 10, home: 'KSA', away: 'SEN', homeFlag: '🇸🇦', awayFlag: '🇸🇳', score: '0 - 0', homeSentiment: 38, awaySentiment: 55, live: false, league: 'Friendly' },
+  { id: 11, home: 'CRO', away: 'BEL', homeFlag: '🇭🇷', awayFlag: '🇧🇪', score: '1 - 1', homeSentiment: 55, awaySentiment: 50, live: false, league: 'Friendly' },
+  { id: 12, home: 'NED', away: 'UZB', homeFlag: '🇳🇱', awayFlag: '🇺🇿', score: '2 - 0', homeSentiment: 78, awaySentiment: 28, live: false, league: 'Friendly' },
+  { id: 13, home: 'GER', away: 'DEN', homeFlag: '🇩🇪', awayFlag: '🇩🇰', score: '2 - 1', homeSentiment: 75, awaySentiment: 38, live: false, league: 'Friendly' },
+  // ── World Cup Group Stage ──
+  { id: 14, home: 'MEX', away: 'RSA', homeFlag: '🇲🇽', awayFlag: '🇿🇦', score: '2 - 0', homeSentiment: 88, awaySentiment: 18, live: false, league: 'WC Group A' },
+  { id: 15, home: 'KOR', away: 'CZE', homeFlag: '🇰🇷', awayFlag: '🇨🇿', score: '2 - 1', homeSentiment: 82, awaySentiment: 35, live: false, league: 'WC Group A' },
+  { id: 16, home: 'CAN', away: 'BIH', homeFlag: '🇨🇦', awayFlag: '🇧🇦', score: '1 - 1', homeSentiment: 55, awaySentiment: 52, live: false, league: 'WC Group B' },
+  { id: 17, home: 'QAT', away: 'SUI', homeFlag: '🇶🇦', awayFlag: '🇨🇭', score: '1 - 1', homeSentiment: 50, awaySentiment: 58, live: false, league: 'WC Group B' },
+  { id: 18, home: 'BRA', away: 'MAR', homeFlag: '🇧🇷', awayFlag: '🇲🇦', score: '1 - 1', homeSentiment: 50, awaySentiment: 78, live: false, league: 'WC Group C' },
+  { id: 19, home: 'HAI', away: 'SCO', homeFlag: '🇭🇹', awayFlag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', score: '0 - 1', homeSentiment: 22, awaySentiment: 75, live: false, league: 'WC Group C' },
+  { id: 20, home: 'USA', away: 'PAR', homeFlag: '🇺🇸', awayFlag: '🇵🇾', score: '4 - 1', homeSentiment: 92, awaySentiment: 15, live: false, league: 'WC Group D' },
+  { id: 21, home: 'AUS', away: 'TUR', homeFlag: '🇦🇺', awayFlag: '🇹🇷', score: '2 - 0', homeSentiment: 80, awaySentiment: 25, live: false, league: 'WC Group D' },
+  { id: 22, home: 'ARG', away: 'ALG', homeFlag: '🇦🇷', awayFlag: '🇩🇿', score: '3 - 0', homeSentiment: 94, awaySentiment: 12, live: true, league: 'WC Group J' },
+  { id: 23, home: 'ENG', away: 'CRO', homeFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', awayFlag: '🇭🇷', score: '2 - 1', homeSentiment: 82, awaySentiment: 42, live: true, league: 'WC Group L' },
+  { id: 24, home: 'GER', away: 'CUW', homeFlag: '🇩🇪', awayFlag: '🇨🇼', score: '3 - 0', homeSentiment: 88, awaySentiment: 15, live: true, league: 'WC Group E' },
+  { id: 25, home: 'ESP', away: 'CPV', homeFlag: '🇪🇸', awayFlag: '🇨🇻', score: '2 - 0', homeSentiment: 85, awaySentiment: 20, live: true, league: 'WC Group H' },
+  { id: 26, home: 'FRA', away: 'SEN', homeFlag: '🇫🇷', awayFlag: '🇸🇳', score: '2 - 0', homeSentiment: 86, awaySentiment: 32, live: true, league: 'WC Group I' },
+  { id: 27, home: 'POR', away: 'COD', homeFlag: '🇵🇹', awayFlag: '🇨🇩', score: '1 - 0', homeSentiment: 78, awaySentiment: 28, live: true, league: 'WC Group K' },
+  { id: 28, home: 'NED', away: 'JPN', homeFlag: '🇳🇱', awayFlag: '🇯🇵', score: '1 - 1', homeSentiment: 52, awaySentiment: 65, live: true, league: 'WC Group F' },
 ]
 
 const MOCK_SENTIMENTS = [
@@ -90,14 +114,23 @@ const MOCK_RATINGS = [
 ]
 
 const MOCK_GOALS = [
-  { id: 1, scorer: 'Mbappé', team: 'FRA', flag: '🇫🇷', minute: 23, match: 'FRA 3-1 COL', type: 'Goal', tags: ['HEADER', 'TOPSCORER'], source: 'Friendly' },
-  { id: 2, scorer: 'Mbappé', team: 'FRA', flag: '🇫🇷', minute: 58, match: 'FRA 3-1 COL', type: 'Goal', tags: ['TOPSCORER'], source: 'Friendly' },
-  { id: 3, scorer: 'Bellingham', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 67, match: 'ENG 2-1 CRO', type: 'Goal', tags: ['HEADER'], source: 'WC' },
-  { id: 4, scorer: 'Yamal', team: 'ESP', flag: '🇪🇸', minute: 12, match: 'ESP vs CPV', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
-  { id: 5, scorer: 'Wirtz', team: 'GER', flag: '🇩🇪', minute: 34, match: 'GER 2-1 CIV', type: 'Goal', tags: ['HEADER'], source: 'WC' },
-  { id: 6, scorer: 'Hakimi', team: 'MAR', flag: '🇲🇦', minute: 78, match: 'BRA 1-1 MAR', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
-  { id: 7, scorer: 'Messi', team: 'ARG', flag: '🇦🇷', minute: 35, match: 'ARG 3-0 ALG', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
-  { id: 8, scorer: 'Saka', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 15, match: 'ENG 2-1 CRO', type: 'Goal', tags: ['HEADER'], source: 'WC' },
+  // ── Friendly Goals ──
+  { id: 1, scorer: 'Doué', team: 'FRA', flag: '🇫🇷', minute: 23, match: 'COL 1-3 FRA', type: 'Goal', tags: ['BRACE', 'TOPSCORER'], source: 'Friendly' },
+  { id: 2, scorer: 'Doué', team: 'FRA', flag: '🇫🇷', minute: 58, match: 'COL 1-3 FRA', type: 'Goal', tags: ['TOPSCORER'], source: 'Friendly' },
+  { id: 3, scorer: 'Olise', team: 'FRA', flag: '🇫🇷', minute: 12, match: 'FRA 3-0 NIR', type: 'Goal', tags: ['HATTRICK'], source: 'Friendly' },
+  { id: 4, scorer: 'Messi', team: 'ARG', flag: '🇦🇷', minute: 35, match: 'ARG 3-0 ISL', type: 'Goal', tags: ['TOPSCORER', 'RETURN'], source: 'Friendly' },
+  { id: 5, scorer: 'Yamal', team: 'ESP', flag: '🇪🇸', minute: 22, match: 'ESP 3-1 PER', type: 'Goal', tags: ['TOPSCORER'], source: 'Friendly' },
+  { id: 6, scorer: 'Kane', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 55, match: 'ENG 3-0 CRC', type: 'Goal', tags: ['HEADER'], source: 'Friendly' },
+  // ── World Cup Group Stage Goals ──
+  { id: 7, scorer: 'Quiñones', team: 'MEX', flag: '🇲🇽', minute: 14, match: 'MEX 2-0 RSA', type: 'Goal', tags: ['FIRSTGOAL', 'HISTORIC'], source: 'WC' },
+  { id: 8, scorer: 'Reyna', team: 'USA', flag: '🇺🇸', minute: 31, match: 'USA 4-1 PAR', type: 'Goal', tags: ['TRIVELA', 'TOPSCORER'], source: 'WC' },
+  { id: 9, scorer: 'Hakimi', team: 'MAR', flag: '🇲🇦', minute: 78, match: 'BRA 1-1 MAR', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+  { id: 10, scorer: 'Bellingham', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 67, match: 'ENG 2-1 CRO', type: 'Goal', tags: ['HEADER'], source: 'WC' },
+  { id: 11, scorer: 'Wirtz', team: 'GER', flag: '🇩🇪', minute: 34, match: 'GER 3-0 CUW', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+  { id: 12, scorer: 'Messi', team: 'ARG', flag: '🇦🇷', minute: 42, match: 'ARG 3-0 ALG', type: 'Goal', tags: ['TOPSCORER', 'HEADER'], source: 'WC' },
+  { id: 13, scorer: 'Mbappé', team: 'FRA', flag: '🇫🇷', minute: 55, match: 'FRA 2-0 SEN', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+  { id: 14, scorer: 'Álvarez', team: 'ARG', flag: '🇦🇷', minute: 71, match: 'ARG 3-0 ALG', type: 'Goal', tags: ['HEADER'], source: 'WC' },
+  { id: 15, scorer: 'Saka', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 15, match: 'ENG 2-1 CRO', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
 ]
 
 const MOCK_TOTW = [
@@ -210,6 +243,11 @@ function PsycheButton() {
 
 function HomeTab() {
   const { t } = useLanguage()
+  const [matchFilter, setMatchFilter] = useState<'ALL' | 'Friendly' | 'WC'>('ALL')
+
+  const filteredMatches = matchFilter === 'ALL'
+    ? MOCK_MATCHES
+    : MOCK_MATCHES.filter(m => matchFilter === 'Friendly' ? m.league === 'Friendly' : m.league.startsWith('WC'))
 
   return (
     <div className="space-y-6">
@@ -235,23 +273,42 @@ function HomeTab() {
           </div>
           <div className="flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-3 py-1.5 text-xs font-semibold text-[#EF4444]">
             <Activity className="size-3.5" />
-            2 {t('home.live')}
+            {MOCK_MATCHES.filter(m => m.live).length} {t('home.live')}
           </div>
         </div>
       </motion.div>
 
       {/* Featured Matches */}
       <div>
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
-          {t('home.featured')}
-        </h3>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
+            {t('home.featured')}
+          </h3>
+          <div className="flex gap-1.5">
+            {(['ALL', 'Friendly', 'WC'] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setMatchFilter(filter)}
+                className={`
+                  rounded-full px-3 py-1 text-[10px] font-bold transition-all duration-200
+                  ${matchFilter === filter
+                    ? 'bg-[#6C2BD9] text-white shadow-sm'
+                    : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10'
+                  }
+                `}
+              >
+                {filter === 'ALL' ? '⚽ All' : filter === 'Friendly' ? '🤝 Friendlies' : '🏆 World Cup'}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          {MOCK_MATCHES.map((match, i) => (
+          {filteredMatches.map((match, i) => (
             <motion.div
               key={match.id}
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: i * 0.08 }}
+              transition={{ duration: 0.4, delay: i * 0.05 }}
             >
               <Card className="card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
                 <CardContent className="p-4">
@@ -269,8 +326,18 @@ function HomeTab() {
                       <span className="text-xl">{match.awayFlag}</span>
                     </div>
                   </div>
+                  {/* League badge */}
+                  <div className="mt-2">
+                    <Badge variant="outline" className={`text-[8px] font-bold px-1.5 py-0 ${
+                      match.league === 'Friendly'
+                        ? 'border-[#FF6B35]/30 text-[#FF6B35]'
+                        : 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]'
+                    }`}>
+                      {match.league}
+                    </Badge>
+                  </div>
                   {/* Sentiment bars */}
-                  <div className="mt-3 space-y-1.5">
+                  <div className="mt-2 space-y-1.5">
                     <div>
                       <div className="flex items-center justify-between text-[10px] mb-1">
                         <span className="text-[#666] dark:text-[#CCCCCC]">{match.home} {t('home.fan_mood')}</span>
@@ -309,10 +376,13 @@ function HomeTab() {
         <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
           <CardContent className="p-4 space-y-3">
             {[
-              { icon: Sparkles, text: 'Mbappé sentiment surged +12% after brace vs Colombia in friendly', time: '2m ago', color: 'text-[#6C2BD9]' },
+              { icon: Sparkles, text: 'Doué brace vs Colombia sends France into World Cup brimming with confidence', time: '2m ago', color: 'text-[#6C2BD9]' },
               { icon: BarChart3, text: 'Morocco fans buzzing after 1-1 draw with Brazil in Group C opener', time: '8m ago', color: 'text-[#FF6B35]' },
               { icon: Users, text: '1.2M fan votes tallied for World Cup 2026 Group Stage Elite XI', time: '15m ago', color: 'text-[#10B981]' },
-              { icon: Timer, text: 'Ivory Coast shock France 2-1 in warm-up — Griezmann crisis deepens', time: '22m ago', color: 'text-[#EF4444]' },
+              { icon: Timer, text: 'Reyna trivela stuns Paraguay as USA dominate 4-1 in Group D', time: '22m ago', color: 'text-[#EF4444]' },
+              { icon: Flame, text: 'Messi returns with goal as Argentina beat Iceland 3-0 in warm-up', time: '35m ago', color: 'text-[#6C2BD9]' },
+              { icon: Activity, text: 'Olise hat-trick vs Northern Ireland — France\'s deadliest weapon emerges', time: '1h ago', color: 'text-[#FF6B35]' },
+              { icon: Trophy, text: 'Julián Quiñones scores FIRST GOAL of 2026 FIFA World Cup™ vs South Africa', time: '3h ago', color: 'text-[#10B981]' },
             ].map((item, i) => (
               <motion.div
                 key={i}

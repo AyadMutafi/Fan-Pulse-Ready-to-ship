@@ -1,0 +1,24 @@
+{
+  "code": 200,
+  "data": {
+    "description": "",
+    "external": {},
+    "html": "<html lang=\"en\"><head>\n    <meta charset=\"utf-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n    <title></title>\n    <style>\n        body {\n            font-family: \"Arial\";\n        }\n    </style>\n    <script type=\"text/javascript\">\n    window.awsWafCookieDomainList = [];\n    window.gokuProps = {\n\"key\":\"AQIDAHjcYu/GjX+QlghicBgQ/7bFaQZ+m5FKCMDnO+vTbNg96AESEGe1HkPDOr12sOyiXjJeAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMsrx5/JIxkccmEUIpAgEQgDuiY5+GbGC1mU6A8rvU7maZsq2PRUmo3XRs8ebQPpZdCVZtorD28cpssv673Ip+cEgbRvH/1FHLSO9UzQ==\",\n          \"iv\":\"D54ELgEJLwAAApis\",\n          \"context\":\"08TWWWRUFajZmReOtZXsRnRtRrBIv5dcwy8fOeWY7bieRUrtlIsAVHk+fe8Wl3+78tSQ+Zh4RxyYN/LDI1C60e0aNTPT7MD35kq+7joAYp235sfgRw+KdHpIPjOLSCAYG247UIAkpY/BVm8xEajqGfQILcWjk9NsyvuIDdpI7tTkAFsy+lkYghE19bVx6yccc83KuU3CMyqpoOzF8zTNAKE1Tbk2JOql4KLqfEdSYxzZWTnUfhT8V5MGKxO33dn136FG0Le5voSJbEZjezpP+R6UVIEZ6H/YHcEYylNWJ7TtkC8yJ8NDIQDTpfrTMm/98oS+TfwEp7BJ10lcc6WZIHaVlY/Rioo8pno+TvRwAJJ+l+aSlanouSNc+gJlrxUnSLC++im9/3u6EQ==\"\n};\n    </script>\n    <script src=\"https://c07df3ce4b34.87e4d9af.us-west-2.token.awswaf.com/c07df3ce4b34/ab77e8f35082/374cb277fce0/challenge.js\"></script>\n</head>\n<body>\n    <div id=\"challenge-container\"></div>\n    <script type=\"text/javascript\">\n        AwsWafIntegration.saveReferrer();\n        AwsWafIntegration.checkForceRefresh().then((forceRefresh) => {\n            if (forceRefresh) {\n                AwsWafIntegration.forceRefreshToken().then(() => {\n                    window.location.reload(true);\n                });\n            } else {\n                AwsWafIntegration.getToken().then(() => {\n                    window.location.reload(true);\n                });\n            }\n        });\n    </script>\n    <noscript>\n        <h1>JavaScript is disabled</h1>\n        In order to continue, we need to verify that you're not a robot.\n        This requires JavaScript. Enable JavaScript and then reload the page.\n    </noscript>\n\n</body></html>",
+    "metadata": {
+      "lang": "en",
+      "viewport": "width=device-width, initial-scale=1"
+    },
+    "publishedTime": "Sun, 14 Jun 2026 20:17:05 GMT",
+    "title": "",
+    "url": "https://www.espn.com/soccer/schedule/_/league/fifa.friendly",
+    "usage": {
+      "tokens": 779
+    }
+  },
+  "meta": {
+    "usage": {
+      "tokens": 779
+    }
+  },
+  "status": 20000
+}
