@@ -51,64 +51,67 @@ interface WCStage {
 
 // ── Mock Data ────────────────────────────────────────────────
 
+// Real World Cup 2026 friendly + group stage match data
 const MOCK_MATCHES = [
-  { id: 1, home: 'BRA', away: 'ARG', homeFlag: '🇧🇷', awayFlag: '🇦🇷', score: '2 - 1', homeSentiment: 82, awaySentiment: 58, live: true, league: 'UCL' },
-  { id: 2, home: 'FRA', away: 'ENG', homeFlag: '🇫🇷', awayFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', score: '1 - 1', homeSentiment: 65, awaySentiment: 70, live: true, league: 'PL' },
-  { id: 3, home: 'ESP', away: 'GER', homeFlag: '🇪🇸', awayFlag: '🇩🇪', score: '3 - 0', homeSentiment: 88, awaySentiment: 28, live: false, league: 'UCL' },
-  { id: 4, home: 'POR', away: 'NED', homeFlag: '🇵🇹', awayFlag: '🇳🇱', score: '0 - 2', homeSentiment: 35, awaySentiment: 78, live: false, league: 'PL' },
+  { id: 1, home: 'FRA', away: 'COL', homeFlag: '🇫🇷', awayFlag: '🇨🇴', score: '3 - 1', homeSentiment: 88, awaySentiment: 35, live: false, league: 'Friendly' },
+  { id: 2, home: 'BRA', away: 'MAR', homeFlag: '🇧🇷', awayFlag: '🇲🇦', score: '1 - 1', homeSentiment: 55, awaySentiment: 78, live: true, league: 'WC Group C' },
+  { id: 3, home: 'MEX', away: 'RSA', homeFlag: '🇲🇽', awayFlag: '🇿🇦', score: '2 - 0', homeSentiment: 85, awaySentiment: 22, live: false, league: 'WC Group A' },
+  { id: 4, home: 'ENG', away: 'CRO', homeFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', awayFlag: '🇭🇷', score: '2 - 1', homeSentiment: 82, awaySentiment: 45, live: true, league: 'WC Group L' },
+  { id: 5, home: 'ARG', away: 'ALG', homeFlag: '🇦🇷', awayFlag: '🇩🇿', score: '3 - 0', homeSentiment: 92, awaySentiment: 18, live: false, league: 'WC Group J' },
+  { id: 6, home: 'GER', away: 'CIV', homeFlag: '🇩🇪', awayFlag: '🇨🇮', score: '2 - 1', homeSentiment: 72, awaySentiment: 48, live: false, league: 'WC Group E' },
 ]
 
 const MOCK_SENTIMENTS = [
-  { name: 'Kylian Mbappé', nationCode: 'FRA', score: 96, league: 'UCL' },
-  { name: 'Vinícius Jr', nationCode: 'BRA', score: 94, league: 'UCL' },
-  { name: 'Jude Bellingham', nationCode: 'ENG', score: 92, league: 'PL' },
-  { name: 'Lamine Yamal', nationCode: 'ESP', score: 91, league: 'LL' },
-  { name: 'Florian Wirtz', nationCode: 'GER', score: 67, league: 'UCL' },
-  { name: 'Rodri', nationCode: 'ESP', score: 55, league: 'LL' },
-  { name: 'Richarlison', nationCode: 'BRA', score: 21, league: 'PL' },
-  { name: 'Harry Maguire', nationCode: 'ENG', score: 24, league: 'PL' },
-  { name: 'Andre Onana', nationCode: 'CMR', score: 15, league: 'UCL' },
-  { name: 'Antoine Griezmann', nationCode: 'FRA', score: 18, league: 'LL' },
-  { name: 'Leon Goretzka', nationCode: 'GER', score: 29, league: 'UCL' },
-  { name: 'Wout Weghorst', nationCode: 'NED', score: 22, league: 'PL' },
+  { name: 'Kylian Mbappé', nationCode: 'FRA', score: 96, league: 'WC' },
+  { name: 'Vinícius Jr', nationCode: 'BRA', score: 72, league: 'WC' },
+  { name: 'Jude Bellingham', nationCode: 'ENG', score: 92, league: 'WC' },
+  { name: 'Lamine Yamal', nationCode: 'ESP', score: 91, league: 'WC' },
+  { name: 'Florian Wirtz', nationCode: 'GER', score: 85, league: 'WC' },
+  { name: 'Rodri', nationCode: 'ESP', score: 88, league: 'WC' },
+  { name: 'Richarlison', nationCode: 'BRA', score: 21, league: 'WC' },
+  { name: 'Harry Maguire', nationCode: 'ENG', score: 24, league: 'WC' },
+  { name: 'Achraf Hakimi', nationCode: 'MAR', score: 84, league: 'WC' },
+  { name: 'Antoine Griezmann', nationCode: 'FRA', score: 38, league: 'WC' },
+  { name: 'Leon Goretzka', nationCode: 'GER', score: 29, league: 'WC' },
+  { name: 'Wout Weghorst', nationCode: 'NED', score: 22, league: 'WC' },
 ]
 
 const MOCK_RATINGS = [
-  { id: 1, name: 'Kylian Mbappé', nationCode: 'FRA', position: 'LW', avgRating: 4.7 },
-  { id: 2, name: 'Vinícius Jr', nationCode: 'BRA', position: 'LW', avgRating: 4.5 },
-  { id: 3, name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', avgRating: 4.6 },
-  { id: 4, name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', avgRating: 4.4 },
-  { id: 5, name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', avgRating: 3.8 },
-  { id: 6, name: 'Rodri', nationCode: 'ESP', position: 'CDM', avgRating: 3.5 },
+  { id: 1, name: 'Kylian Mbappé', nationCode: 'FRA', position: 'LW', avgRating: 9.6 },
+  { id: 2, name: 'Vinícius Jr', nationCode: 'BRA', position: 'LW', avgRating: 7.2 },
+  { id: 3, name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', avgRating: 9.2 },
+  { id: 4, name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', avgRating: 9.1 },
+  { id: 5, name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', avgRating: 8.5 },
+  { id: 6, name: 'Rodri', nationCode: 'ESP', position: 'CDM', avgRating: 8.8 },
   { id: 7, name: 'Richarlison', nationCode: 'BRA', position: 'ST', avgRating: 2.1 },
-  { id: 8, name: 'Harry Maguire', nationCode: 'ENG', position: 'CB', avgRating: 1.8 },
-  { id: 9, name: 'Alisson', nationCode: 'BRA', position: 'GK', avgRating: 4.2 },
-  { id: 10, name: 'Hakimi', nationCode: 'MAR', position: 'RB', avgRating: 3.9 },
+  { id: 8, name: 'Harry Maguire', nationCode: 'ENG', position: 'CB', avgRating: 2.4 },
+  { id: 9, name: 'Alisson', nationCode: 'BRA', position: 'GK', avgRating: 8.2 },
+  { id: 10, name: 'Hakimi', nationCode: 'MAR', position: 'RB', avgRating: 8.4 },
 ]
 
 const MOCK_GOALS = [
-  { id: 1, scorer: 'Mbappé', team: 'FRA', flag: '🇫🇷', minute: 23, match: 'FRA vs COL', type: 'Goal', tags: ['HEADER', 'TOPSCORER'], source: 'FIFA' },
-  { id: 2, scorer: 'Vinícius Jr', team: 'BRA', flag: '🇧🇷', minute: 45, match: 'BRA vs PAR', type: 'Goal', tags: ['TOPSCORER'], source: 'FIFA' },
-  { id: 3, scorer: 'Bellingham', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 67, match: 'ENG vs JOR', type: 'Goal', tags: ['HEADER'], source: 'PL' },
-  { id: 4, scorer: 'Yamal', team: 'ESP', flag: '🇪🇸', minute: 12, match: 'ESP vs IDN', type: 'Goal', tags: ['TOPSCORER'], source: 'LL' },
-  { id: 5, scorer: 'Wirtz', team: 'GER', flag: '🇩🇪', minute: 34, match: 'GER vs UZB', type: 'Goal', tags: ['HEADER'], source: 'UCL' },
-  { id: 6, scorer: 'Rodri', team: 'ESP', flag: '🇪🇸', minute: 56, match: 'ESP vs IDN', type: 'Goal', tags: [], source: 'LL' },
-  { id: 7, scorer: 'Hakimi', team: 'MAR', flag: '🇲🇦', minute: 78, match: 'MAR vs IDN', type: 'Goal', tags: ['TOPSCORER'], source: 'UCL' },
-  { id: 8, scorer: 'Dias', team: 'POR', flag: '🇵🇹', minute: 89, match: 'POR vs IDN', type: 'Goal', tags: ['HEADER'], source: 'PL' },
+  { id: 1, scorer: 'Mbappé', team: 'FRA', flag: '🇫🇷', minute: 23, match: 'FRA 3-1 COL', type: 'Goal', tags: ['HEADER', 'TOPSCORER'], source: 'Friendly' },
+  { id: 2, scorer: 'Mbappé', team: 'FRA', flag: '🇫🇷', minute: 58, match: 'FRA 3-1 COL', type: 'Goal', tags: ['TOPSCORER'], source: 'Friendly' },
+  { id: 3, scorer: 'Bellingham', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 67, match: 'ENG 2-1 CRO', type: 'Goal', tags: ['HEADER'], source: 'WC' },
+  { id: 4, scorer: 'Yamal', team: 'ESP', flag: '🇪🇸', minute: 12, match: 'ESP vs CPV', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+  { id: 5, scorer: 'Wirtz', team: 'GER', flag: '🇩🇪', minute: 34, match: 'GER 2-1 CIV', type: 'Goal', tags: ['HEADER'], source: 'WC' },
+  { id: 6, scorer: 'Hakimi', team: 'MAR', flag: '🇲🇦', minute: 78, match: 'BRA 1-1 MAR', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+  { id: 7, scorer: 'Messi', team: 'ARG', flag: '🇦🇷', minute: 35, match: 'ARG 3-0 ALG', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+  { id: 8, scorer: 'Saka', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 15, match: 'ENG 2-1 CRO', type: 'Goal', tags: ['HEADER'], source: 'WC' },
 ]
 
 const MOCK_TOTW = [
   { name: 'Alisson', nationCode: 'BRA', position: 'GK', rating: 8.5 },
-  { name: 'Hakimi', nationCode: 'MAR', position: 'RB', rating: 7.8 },
-  { name: 'Van Dijk', nationCode: 'NED', position: 'CB', rating: 8.2 },
-  { name: 'Dias', nationCode: 'POR', position: 'CB', rating: 8.0 },
-  { name: 'Hernández', nationCode: 'FRA', position: 'LB', rating: 7.9 },
-  { name: 'Rodri', nationCode: 'ESP', position: 'CM', rating: 8.1 },
-  { name: 'Bellingham', nationCode: 'ENG', position: 'CM', rating: 8.8 },
-  { name: 'Wirtz', nationCode: 'GER', position: 'CAM', rating: 8.3 },
-  { name: 'Yamal', nationCode: 'ESP', position: 'RW', rating: 8.7 },
-  { name: 'Mbappé', nationCode: 'FRA', position: 'LW', rating: 9.1 },
-  { name: 'Vinícius Jr', nationCode: 'BRA', position: 'ST', rating: 8.9 },
+  { name: 'Hakimi', nationCode: 'MAR', position: 'RB', rating: 8.4 },
+  { name: 'Van Dijk', nationCode: 'NED', position: 'CB', rating: 8.7 },
+  { name: 'Dias', nationCode: 'POR', position: 'CB', rating: 8.6 },
+  { name: 'Hernández', nationCode: 'FRA', position: 'LB', rating: 8.3 },
+  { name: 'Rodri', nationCode: 'ESP', position: 'CM', rating: 8.8 },
+  { name: 'Bellingham', nationCode: 'ENG', position: 'CM', rating: 9.2 },
+  { name: 'Wirtz', nationCode: 'GER', position: 'CAM', rating: 8.5 },
+  { name: 'Yamal', nationCode: 'ESP', position: 'RW', rating: 9.1 },
+  { name: 'Mbappé', nationCode: 'FRA', position: 'LW', rating: 9.6 },
+  { name: 'Messi', nationCode: 'ARG', position: 'ST', rating: 8.9 },
 ]
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -140,6 +143,23 @@ function getProgressClass(score: number) {
   if (score >= 80) return 'progress-emerald'
   if (score >= 50) return 'progress-amber'
   return 'progress-red'
+}
+
+// Face emoji mapping for /10 rating system
+function getPulseFaceEmoji(pulseScore: number): string {
+  if (pulseScore >= 90) return '🤩'
+  if (pulseScore >= 70) return '😊'
+  if (pulseScore >= 50) return '😐'
+  if (pulseScore >= 30) return '😟'
+  return '😵'
+}
+
+function getRatingColor(rating: number): string {
+  if (rating >= 9) return '#10B981'
+  if (rating >= 7) return '#6C2BD9'
+  if (rating >= 5) return '#FF6B35'
+  if (rating >= 3) return '#EF4444'
+  return '#DC2626'
 }
 
 // ── Formation Layout 4-3-3 ──────────────────────────────────
@@ -289,10 +309,10 @@ function HomeTab() {
         <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
           <CardContent className="p-4 space-y-3">
             {[
-              { icon: Sparkles, text: 'Mbappé sentiment surged +12% after hat-trick vs Colombia', time: '2m ago', color: 'text-[#6C2BD9]' },
-              { icon: BarChart3, text: 'Fan mood shifting: Brazil supporters growing anxious despite lead', time: '8m ago', color: 'text-[#FF6B35]' },
-              { icon: Users, text: '1.2M fan votes tallied for Group Stage Elite XI', time: '15m ago', color: 'text-[#10B981]' },
-              { icon: Timer, text: 'Maguire crisis index hits season-high after defensive errors', time: '22m ago', color: 'text-[#EF4444]' },
+              { icon: Sparkles, text: 'Mbappé sentiment surged +12% after brace vs Colombia in friendly', time: '2m ago', color: 'text-[#6C2BD9]' },
+              { icon: BarChart3, text: 'Morocco fans buzzing after 1-1 draw with Brazil in Group C opener', time: '8m ago', color: 'text-[#FF6B35]' },
+              { icon: Users, text: '1.2M fan votes tallied for World Cup 2026 Group Stage Elite XI', time: '15m ago', color: 'text-[#10B981]' },
+              { icon: Timer, text: 'Ivory Coast shock France 2-1 in warm-up — Griezmann crisis deepens', time: '22m ago', color: 'text-[#EF4444]' },
             ].map((item, i) => (
               <motion.div
                 key={i}
@@ -669,6 +689,9 @@ function TOTWTab() {
 
 // ── Formation Player Card (World Cup) ────────────────────────
 
+// Track which player circles show emoji vs flag (global state via Map)
+const playerDisplayMode = new Map<string, 'flag' | 'emoji'>()
+
 function FormationPlayerCard({
   player,
   type,
@@ -683,7 +706,19 @@ function FormationPlayerCard({
   const isLive = player.isLive && stageStatus === 'live'
   const isCompleted = stageStatus === 'completed'
   const accentColor = isElite ? '#6C2BD9' : '#EF4444'
-  const accentColorDark = isElite ? '#8B5CF6' : '#F87171'
+  const rating = player.pulseScore / 10
+  const faceEmoji = getPulseFaceEmoji(player.pulseScore)
+  const ratingColor = getRatingColor(rating)
+
+  // Toggle between flag and emoji display
+  const [showEmoji, setShowEmoji] = useState(() => playerDisplayMode.get(player.id) === 'emoji')
+  const toggleDisplay = () => {
+    setShowEmoji(prev => {
+      const next = !prev
+      playerDisplayMode.set(player.id, next ? 'emoji' : 'flag')
+      return next
+    })
+  }
 
   return (
     <motion.div
@@ -692,9 +727,12 @@ function FormationPlayerCard({
       transition={{ duration: 0.3 }}
       className="flex flex-col items-center"
     >
-      <div
+      <button
+        type="button"
+        onClick={toggleDisplay}
+        title={showEmoji ? 'Click to show flag' : 'Click to show emoji'}
         className={`
-          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 text-xl shadow-md
+          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 text-xl shadow-md cursor-pointer
           ${isElite
             ? 'border-[#6C2BD9]/40 dark:border-[#8B5CF6]/40 bg-white dark:bg-[#2D2D2D] shadow-[#6C2BD9]/10'
             : 'border-[#EF4444]/40 dark:border-[#F87171]/40 bg-white dark:bg-[#2D2D2D] shadow-[#EF4444]/10'
@@ -704,14 +742,16 @@ function FormationPlayerCard({
         `}
         style={isLive ? { color: accentColor } : undefined}
       >
-        <span className="text-lg sm:text-xl">{flag}</span>
+        <span className="text-lg sm:text-xl transition-all duration-200">
+          {showEmoji ? faceEmoji : flag}
+        </span>
         {isLive && (
           <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
         )}
         {isCompleted && (
           <Lock className="absolute -right-0.5 -top-0.5 size-3 text-[#666] dark:text-[#CCCCCC]" />
         )}
-      </div>
+      </button>
       <p className="mt-1 max-w-[70px] truncate text-[10px] sm:text-xs font-bold text-[#1A1A1A] dark:text-white text-center">
         {player.playerName}
       </p>
@@ -726,13 +766,16 @@ function FormationPlayerCard({
         </Badge>
         {getTrendIcon(player.trend)}
       </div>
-      <Badge
-        className={`mt-1 text-[8px] font-bold px-1.5 py-0 h-4 ${
-          isElite ? 'bg-[#6C2BD9] dark:bg-[#8B5CF6]' : 'bg-[#EF4444] dark:bg-[#F87171]'
-        } text-white`}
-      >
-        {Math.round(player.pulseScore)}
-      </Badge>
+      {/* Rating out of 10 with face emoji */}
+      <div className="mt-1 flex items-center gap-0.5">
+        <span className="text-[10px]">{faceEmoji}</span>
+        <span
+          className="text-[9px] sm:text-[10px] font-black"
+          style={{ color: ratingColor }}
+        >
+          {rating.toFixed(1)}
+        </span>
+      </div>
       {player.matchInfo && (
         <p className="mt-0.5 text-[8px] text-[#666] dark:text-[#CCCCCC] truncate max-w-[80px] text-center">
           {player.matchInfo}
@@ -978,15 +1021,15 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
               className="grid grid-cols-2 gap-3 sm:grid-cols-4"
             >
               {[
-                { label: t('wc.elite_avg'), value: Math.round(eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length), icon: TrendingUp, color: 'text-[#6C2BD9]' },
-                { label: t('wc.crisis_avg'), value: Math.round(crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length), icon: TrendingDown, color: 'text-[#EF4444]' },
-                { label: t('wc.live_players'), value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-[#FF6B35]' },
-                { label: t('wc.total_votes'), value: '1.2M', icon: Users, color: 'text-[#1A1A1A] dark:text-white' },
+                { label: t('wc.elite_avg'), value: (eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length / 10).toFixed(1), icon: TrendingUp, color: 'text-[#6C2BD9]', emoji: '🤩' },
+                { label: t('wc.crisis_avg'), value: (crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length / 10).toFixed(1), icon: TrendingDown, color: 'text-[#EF4444]', emoji: '😟' },
+                { label: t('wc.live_players'), value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-[#FF6B35]', emoji: '' },
+                { label: t('wc.total_votes'), value: '1.2M', icon: Users, color: 'text-[#1A1A1A] dark:text-white', emoji: '' },
               ].map((stat, i) => (
                 <Card key={i} className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
                   <CardContent className="p-3 text-center">
                     <stat.icon className={`mx-auto size-4 mb-1.5 ${stat.color}`} />
-                    <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
+                    <p className={`text-lg font-black ${stat.color}`}>{stat.emoji} {stat.value}</p>
                     <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
                   </CardContent>
                 </Card>
