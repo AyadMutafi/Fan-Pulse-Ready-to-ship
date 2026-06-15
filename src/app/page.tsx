@@ -16,12 +16,13 @@ import Navigation, { type TabId } from '@/components/Navigation'
 import { useLanguage } from '@/context/LanguageContext'
 import { findNationalTeam } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
+import FlagImage from '@/components/common/FlagImage'
 
 // ── Types ────────────────────────────────────────────────────
 
 interface WCSelectionPlayer {
   id: string
-  playerName: string
+  name: string
   nationCode: string
   position: string
   pulseScore: number
@@ -743,8 +744,12 @@ function TOTWTab() {
                       transition={{ duration: 0.3, delay: ri * 0.1 + ci * 0.05 }}
                       className="flex flex-col items-center"
                     >
-                      <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-white/60 bg-white/90 dark:bg-white/80 text-lg shadow-md shadow-black/20">
-                        {player ? getFlag(player.nationCode) : '👤'}
+                      <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-white/60 bg-white/90 dark:bg-white/80 shadow-md shadow-black/20 overflow-hidden">
+                        {player ? (
+                          <FlagImage nationCode={player.nationCode} size={32} fallbackEmoji={getFlag(player.nationCode)} />
+                        ) : (
+                          <span className="text-lg">👤</span>
+                        )}
                       </div>
                       <p className="mt-1 max-w-[60px] truncate text-[10px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                         {player?.name ?? slot.pos}
@@ -785,7 +790,7 @@ function FormationPlayerCard({
   stageStatus: string
 }) {
   const { mode: flagMode } = useFlagMode()
-  const flag = getFlag(player.nationCode)
+  const flagEmoji = getFlag(player.nationCode)
   const isElite = type === 'elite'
   const isLive = player.isLive && stageStatus === 'live'
   const isCompleted = stageStatus === 'completed'
@@ -793,11 +798,6 @@ function FormationPlayerCard({
   const rating = player.pulseScore / 10
   const faceEmoji = getPulseFaceEmoji(player.pulseScore)
   const ratingColor = getRatingColor(rating)
-
-  // In flag mode: show country flag in circle, face emoji + rating below
-  // In emoji mode: show face emoji in circle, rating below (no duplicate emoji)
-  const circleContent = flagMode === 'flag' ? flag : faceEmoji
-  const showEmojiNextToRating = flagMode === 'flag'
 
   return (
     <motion.div
@@ -808,15 +808,19 @@ function FormationPlayerCard({
     >
       <div
         className={`
-          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 text-xl shadow-md
+          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 shadow-md overflow-hidden
           border-white/60 bg-white/90 dark:bg-white/80 shadow-black/20
           ${isLive ? 'animate-pulse-glow' : ''}
           transition-all duration-300 hover:scale-110
         `}
       >
-        <span className="text-lg sm:text-xl transition-all duration-200">
-          {circleContent}
-        </span>
+        {flagMode === 'flag' ? (
+          <FlagImage nationCode={player.nationCode} size={36} fallbackEmoji={flagEmoji} />
+        ) : (
+          <span className="text-lg sm:text-xl leading-none transition-all duration-200">
+            {faceEmoji}
+          </span>
+        )}
         {isLive && (
           <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
         )}
@@ -824,8 +828,8 @@ function FormationPlayerCard({
           <Lock className="absolute -right-0.5 -top-0.5 size-3 text-[#666] dark:text-[#CCCCCC]" />
         )}
       </div>
-      <p className="mt-1 max-w-[70px] truncate text-[10px] sm:text-xs font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-        {player.playerName}
+      <p className="mt-1 max-w-[80px] truncate text-[10px] sm:text-xs font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+        {player.name}
       </p>
       <div className="flex items-center gap-1">
         <Badge
@@ -840,9 +844,10 @@ function FormationPlayerCard({
       </div>
       {/* Rating out of 10 */}
       <div className="mt-1 flex items-center gap-0.5">
-        {showEmojiNextToRating && <span className="text-[10px]">{faceEmoji}</span>}
+        {flagMode === 'flag' && <span className="text-[10px]">{faceEmoji}</span>}
         <span
           className="text-[9px] sm:text-[10px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+          style={{ color: ratingColor }}
         >
           {rating.toFixed(1)}
         </span>
@@ -931,7 +936,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
     const def = players.filter(p => ['CB', 'LB', 'RB'].includes(p.position))
     const mid = players.filter(p => ['CM', 'CAM', 'CDM'].includes(p.position))
     const fwd = players.filter(p => ['LW', 'RW', 'ST', 'CF'].includes(p.position))
-    return [gk, def, mid, fwd]
+    return [fwd, mid, def, gk]  // FWD at top, GK at bottom
   }
 
   const currentData = activeView === 'elite' ? eliteData : crisisData
@@ -1081,22 +1086,14 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                   </div>
                 </CardHeader>
                 <CardContent className="pb-6">
-                  <div className={`pitch-bg rounded-xl relative ${activeView === 'crisis' ? 'crisis-pitch' : ''}`}>
-                    {/* Football Pitch Markings Overlay */}
-                    <div
-                      className="absolute inset-0 pointer-events-none"
-                      style={{
-                        backgroundImage: `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"><g stroke="rgba(255,255,255,0.4)" stroke-width="1.5" fill="none"><rect x="6" y="6" width="188" height="288" rx="2"/><line x1="6" y1="150" x2="194" y2="150"/><circle cx="100" cy="150" r="26"/><circle cx="100" cy="150" r="2.5" fill="rgba(255,255,255,0.4)"/><rect x="40" y="6" width="120" height="48"/><rect x="62" y="6" width="76" height="22"/><circle cx="100" cy="35" r="2.5" fill="rgba(255,255,255,0.4)"/><path d="M 74 54 A 26 26 0 0 0 126 54"/><rect x="40" y="246" width="120" height="48"/><rect x="62" y="272" width="76" height="22"/><circle cx="100" cy="265" r="2.5" fill="rgba(255,255,255,0.4)"/><path d="M 74 246 A 26 26 0 0 1 126 246"/><path d="M 6 14 A 8 8 0 0 1 14 6"/><path d="M 186 6 A 8 8 0 0 1 194 14"/><path d="M 6 286 A 8 8 0 0 0 14 294"/><path d="M 186 294 A 8 8 0 0 0 194 286"/><rect x="78" y="0" width="44" height="6" stroke-dasharray="4 4"/><rect x="78" y="294" width="44" height="6" stroke-dasharray="4 4"/></g></svg>')}")`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        backgroundRepeat: 'no-repeat',
-                      }}
-                    />
+                  <div className={`pitch-bg relative ${activeView === 'crisis' ? 'crisis-pitch' : ''}`}>
+                    {/* Football Pitch Markings - SVG overlay */}
+                    <PitchMarkings crisis={activeView === 'crisis'} />
 
                     {/* Player Formation Rows */}
-                    <div className="relative z-10 p-4 sm:p-6 space-y-5 sm:space-y-6">
+                    <div className="relative z-10 px-3 py-5 sm:px-6 sm:py-8 flex flex-col justify-between h-full">
                       {organizeFormation(currentData.players).map((row, ri) => (
-                        <div key={ri} className="flex justify-center gap-3 sm:gap-6">
+                        <div key={ri} className="flex justify-center gap-2 sm:gap-5">
                           {row.map((player) => (
                             <FormationPlayerCard
                               key={player.id}
@@ -1159,6 +1156,50 @@ function PausedTabOverlay({ tabName }: { tabName: string }) {
         COMING SOON
       </Badge>
     </div>
+  )
+}
+
+// ── Pitch Markings SVG Overlay ──────────────────────────────
+
+function PitchMarkings({ crisis }: { crisis: boolean }) {
+  const lineColor = crisis ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.45)'
+  const dotFill = crisis ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.45)'
+
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      viewBox="0 0 300 420"
+      preserveAspectRatio="xMidYMid slice"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <g stroke={lineColor} strokeWidth="1.8" fill="none">
+        {/* Outer boundary */}
+        <rect x="8" y="8" width="284" height="404" rx="3" />
+        {/* Halfway line */}
+        <line x1="8" y1="210" x2="292" y2="210" />
+        {/* Center circle */}
+        <circle cx="150" cy="210" r="36" />
+        <circle cx="150" cy="210" r="3" fill={dotFill} />
+        {/* Top penalty area */}
+        <rect x="60" y="8" width="180" height="66" />
+        <rect x="95" y="8" width="110" height="30" />
+        <path d="M 110 74 A 36 36 0 0 0 190 74" />
+        <circle cx="150" cy="50" r="3" fill={dotFill} />
+        {/* Bottom penalty area */}
+        <rect x="60" y="346" width="180" height="66" />
+        <rect x="95" y="390" width="110" height="30" />
+        <path d="M 110 346 A 36 36 0 0 1 190 346" />
+        <circle cx="150" cy="370" r="3" fill={dotFill} />
+        {/* Corner arcs */}
+        <path d="M 8 18 A 10 10 0 0 1 18 8" />
+        <path d="M 282 8 A 10 10 0 0 1 292 18" />
+        <path d="M 8 402 A 10 10 0 0 0 18 412" />
+        <path d="M 282 412 A 10 10 0 0 0 292 402" />
+        {/* Goals (dashed) */}
+        <rect x="115" y="0" width="70" height="8" strokeDasharray="4 3" />
+        <rect x="115" y="412" width="70" height="8" strokeDasharray="4 3" />
+      </g>
+    </svg>
   )
 }
 

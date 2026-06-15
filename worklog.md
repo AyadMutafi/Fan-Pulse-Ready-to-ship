@@ -28,3 +28,29 @@ Stage Summary:
 - PULSE ELITE has exactly 11 players in 4-3-3 formation
 - Pitch now looks like a real football field with green stripes, border, and full SVG markings
 - Formation layout reversed: forwards at top (opponent side), goalkeeper at bottom
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Fix page.tsx duplicate components - player names not showing, flag toggle, player photos
+
+Work Log:
+- Discovered page.tsx has its own duplicate WorldCupTab, FormationPlayerCard, TOTWTab, etc. that were being rendered instead of the separate component files
+- The page.tsx WCSelectionPlayer interface used `playerName` field but API now returns `name` - causing player names to not display
+- Fixed page.tsx interface: `playerName` → `name`
+- Fixed FormationPlayerCard in page.tsx: `player.playerName` → `player.name`
+- Added FlagImage import to page.tsx and replaced emoji flags with FlagImage component in FormationPlayerCard and TOTWTab
+- Added PitchMarkings SVG component to page.tsx for proper football field markings
+- Updated pitch container in page.tsx WorldCupTab to use PitchMarkings instead of inline SVG background
+- Fixed formation order in page.tsx: [gk, def, mid, fwd] → [fwd, mid, def, gk]
+- Updated player name max-width from 70px to 80px for better visibility
+- Added rating color styling (ratingColor) to the score display
+- Verified with agent browser: player names visible, flags as images, toggle works, 11 players per team
+
+Stage Summary:
+- Player names now display correctly on both PULSE ELITE and CRISIS RADAR
+- National flags show as real images from flagcdn.com (not just emoji)
+- Flags/Emoji toggle works - switches between flag images and face emojis
+- Pitch has proper football field SVG markings
+- 11 players per team in 4-3-3 formation
+
