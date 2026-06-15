@@ -54,3 +54,32 @@ Stage Summary:
 - Pitch has proper football field SVG markings
 - 11 players per team in 4-3-3 formation
 
+---
+Task ID: 3
+Agent: Main Agent
+Task: Add toggle switch for emoji/flag mode, make emoji clear in circle, flag next to rate score
+
+Work Log:
+- Read current WorldCupTab.tsx, page.tsx, flag-mode.ts, FlagImage.tsx to understand current state
+- Replaced old button toggle with proper Switch component (from shadcn/ui) in both WorldCupTab.tsx and page.tsx
+- Toggle switch now has "Emoji" and "Flag" labels with active state highlighting in purple
+- Changed FormationPlayerCardInline in WorldCupTab.tsx: circle now shows national FLAG EMOJI (like 🇧🇷) instead of face emoji in emoji mode
+- Changed FormationPlayerCard in page.tsx: same change - national flag emoji in circle instead of face emoji
+- Made emoji in circle larger and clearer: text-2xl sm:text-3xl (was text-lg sm:text-xl)
+- Increased circle size from size-13/size-15 to size-14/size-16 for better emoji/flag visibility
+- Added flag (emoji or image depending on mode) next to the rating score number
+- In emoji mode: flag emoji next to rating; In flag mode: small FlagImage next to rating
+- Removed unused imports (ImageIcon, Smile, Globe, getPulseFaceEmoji, getRatingColor)
+- Removed unused playerDisplayMode Map from page.tsx
+- Verified with agent browser in both modes (emoji and flag), on both PULSE ELITE and CRISIS RADAR
+- Tested mobile responsiveness - all features work correctly
+- VLM analysis confirms: toggle switch visible, flag emojis clear in circles, flag next to rating, player names visible
+
+Stage Summary:
+- Toggle switch with "Emoji" / "Flag" labels replaces old button in PULSE ELITE/CRISIS RADAR card header
+- Emoji mode: large national flag emoji (🇧🇷) in player circle, small flag emoji next to rating
+- Flag mode: flag image in player circle, small flag image next to rating
+- Player circles are larger (size-14/16) with clearer emojis (text-2xl/3xl)
+- Face emojis (🤩😊😐😟😵) removed from circles - replaced with national flag emojis
+- Both page.tsx and WorldCupTab.tsx updated consistently
+

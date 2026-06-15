@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Lock, Clock, Activity, TrendingUp, TrendingDown, Users, Shield, Star, CircleDot, ImageIcon, Smile } from 'lucide-react'
+import { Lock, Clock, Activity, TrendingUp, TrendingDown, Users, Shield, Star, CircleDot } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Switch } from '@/components/ui/switch'
 import { LiveBadge } from '@/components/common/LiveBadge'
 import { TrendIcon } from '@/components/common/TrendIcon'
 import PulseScoreRing from '@/components/pulse/PulseScoreRing'
@@ -15,7 +16,6 @@ import { findNationalTeam } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
 import FlagImage from '@/components/common/FlagImage'
 import type { WCStage, SelectionType, StageStatus, Player } from '@/types'
-import { getPulseFaceEmoji, getRatingColor } from '@/types'
 
 // ── World Cup Tab ────────────────────────────────────────
 
@@ -84,23 +84,6 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
         </h2>
         <div className="flex items-center justify-between">
           <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('wc.new_stage')}</p>
-          {/* Flag/Emoji Toggle */}
-          <button
-            onClick={toggleFlag}
-            className="flex items-center gap-1.5 rounded-full bg-[#6C2BD9]/10 dark:bg-[#6C2BD9]/20 border border-[#6C2BD9]/30 px-3 py-1.5 text-[11px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/20 transition-colors"
-          >
-            {flagMode === 'flag' ? (
-              <>
-                <ImageIcon className="size-3.5" />
-                <span>Flags</span>
-              </>
-            ) : (
-              <>
-                <Smile className="size-3.5" />
-                <span>Emoji</span>
-              </>
-            )}
-          </button>
         </div>
       </motion.div>
 
@@ -227,7 +210,17 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
                         {activeView === 'elite' ? t('wc.stars_of_week') : t('wc.flops_of_week')}
                       </CardDescription>
                     </div>
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-auto flex items-center gap-3">
+                      {/* Flag/Emoji Toggle Switch */}
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[11px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Emoji</span>
+                        <Switch
+                          checked={flagMode === 'flag'}
+                          onCheckedChange={() => toggleFlag()}
+                          className="data-[state=checked]:bg-[#6C2BD9] data-[state=unchecked]:bg-[#6C2BD9]/40"
+                        />
+                        <span className={`text-[11px] font-bold transition-colors ${flagMode === 'flag' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Flag</span>
+                      </div>
                       {stageStatus === 'completed' && (
                         <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[10px]">
                           <Lock className="size-3" /> 🔒 {t('wc.locked')}
@@ -349,7 +342,6 @@ function FormationPlayerCardInline({
   const { mode: flagMode } = useFlagMode()
   const team = findNationalTeam(player.nationCode)
   const flagEmoji = team?.flag ?? '🏳️'
-  const faceEmoji = getPulseFaceEmoji(player.pulseScore)
   const ratingValue = (player.pulseScore / 10).toFixed(1)
   const isElite = type === 'elite'
   const isLive = player.isLive && stageStatus === 'live'
@@ -357,12 +349,13 @@ function FormationPlayerCardInline({
 
   return (
     <div className="flex flex-col items-center">
+      {/* Player Circle - shows national flag emoji or flag image */}
       <div
         className={`
-          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 shadow-md overflow-hidden
+          relative flex size-14 sm:size-16 items-center justify-center rounded-full border-2 shadow-md overflow-hidden
           ${isElite
-            ? 'border-white/60 bg-white/90 dark:bg-white/80 shadow-black/20'
-            : 'border-white/60 bg-white/90 dark:bg-white/80 shadow-black/20'
+            ? 'border-white/70 bg-white/95 dark:bg-white/90 shadow-black/20'
+            : 'border-white/70 bg-white/95 dark:bg-white/90 shadow-black/20'
           }
           ${isLive ? 'animate-pulse-glow' : ''}
           ${isSelected ? 'ring-2 ring-[#6C2BD9] ring-offset-2 ring-offset-transparent' : ''}
@@ -370,9 +363,9 @@ function FormationPlayerCardInline({
         `}
       >
         {flagMode === 'flag' ? (
-          <FlagImage nationCode={player.nationCode} size={36} fallbackEmoji={flagEmoji} />
+          <FlagImage nationCode={player.nationCode} size={40} fallbackEmoji={flagEmoji} />
         ) : (
-          <span className="text-lg sm:text-xl leading-none">{faceEmoji}</span>
+          <span className="text-2xl sm:text-3xl leading-none select-none">{flagEmoji}</span>
         )}
         {isLive && (
           <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
@@ -381,9 +374,11 @@ function FormationPlayerCardInline({
           <Lock className="absolute -right-0.5 -top-0.5 size-3 text-[#666] dark:text-[#CCCCCC]" />
         )}
       </div>
-      <p className="mt-1 max-w-[70px] truncate text-[10px] sm:text-xs font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+      {/* Player Name */}
+      <p className="mt-1 max-w-[72px] truncate text-[10px] sm:text-xs font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
         {player.name}
       </p>
+      {/* Position + Trend */}
       <div className="flex items-center gap-1">
         <Badge
           variant="outline"
@@ -395,11 +390,15 @@ function FormationPlayerCardInline({
         </Badge>
         <TrendIcon trend={player.trend} />
       </div>
-      {/* Rating out of 10 */}
-      <div className="mt-1 flex items-center gap-0.5">
-        {flagMode === 'flag' && <span className="text-[10px]">{faceEmoji}</span>}
+      {/* Rating + Flag next to score */}
+      <div className="mt-1 flex items-center gap-1">
+        {flagMode === 'flag' ? (
+          <FlagImage nationCode={player.nationCode} size={14} fallbackEmoji={flagEmoji} />
+        ) : (
+          <span className="text-[11px] leading-none">{flagEmoji}</span>
+        )}
         <span
-          className="text-[9px] sm:text-[10px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+          className="text-[10px] sm:text-[11px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
         >
           {ratingValue}
         </span>
