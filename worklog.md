@@ -83,3 +83,49 @@ Stage Summary:
 - CRISIS RADAR shows different face emojis (😟😵) for low scores
 - Both page.tsx and WorldCupTab.tsx updated consistently
 
+
+## Task 3: Update seed route with WC 2026 data
+
+**Date:** 2026-03-04
+
+### Changes Made
+
+#### 1. `/home/z/my-project/src/app/api/world-cup/seed/route.ts`
+- Replaced `TEAM_INFO` with all 48 WC 2026 teams (12 groups A-L) with flag emojis
+- Replaced `MATCHES_DATA` with 48 Group Stage matches (Matchday 1 & 2, June 11-26)
+- Set realistic sentiment values based on match outcomes (winners 65-95, losers 15-40, draws ~50)
+- All matches have `status: 'completed'` since they've been played
+- Updated stages from 6 (WC 2022) to 7 (WC 2026 format):
+  - Group Stage: `status: 'live'`, `startedAt: '2026-06-11'`
+  - Round of 32: `status: 'upcoming'` (NEW stage for 48-team format)
+  - Round of 16: `status: 'upcoming'`
+  - Quarter Finals: `status: 'upcoming'`
+  - Semi Finals: `status: 'upcoming'`
+  - Third Place: `status: 'upcoming'`
+  - Final: `status: 'upcoming'`
+- Updated Arabic names for all stages
+- Replaced `ELITE_PLAYERS` with only group-stage data (11 players from WC 2026 teams)
+- Replaced `CRISIS_PLAYERS` with only group-stage data (11 players from WC 2026 teams)
+- Set `isLive: true` for all players since group stage is live
+- Set `locked: false` on WCSelection since stage is not completed
+- Added `db.nationalTeam.deleteMany()` to cleanup before re-seeding
+- Removed all knockout stage match/player data (not played yet)
+- Updated success message to "World Cup 2026 data"
+
+#### 2. `/home/z/my-project/src/lib/national-teams.ts`
+- Replaced 32 WC 2022 teams with 48 WC 2026 teams across 12 groups (A-L)
+- Updated Arabic names for all teams
+- Updated FIFA rankings with approximate current values
+- Updated `WC_STAGES` from 6 to 7 stages (added Round of 32)
+- Updated stage Arabic names
+
+#### 3. `/home/z/my-project/src/components/common/FlagImage.tsx`
+- Updated `FIFA_TO_ISO` mapping to match all 48 WC 2026 teams
+- Removed obsolete codes (QAT, IRN, TUN, SRB, HAI, CIV, EGY, IRQ, NOR, AUT, JOR, COD, PAN)
+- Added missing codes (WAL: 'gb-wls', ISL: 'is', HON: 'hn', JAM: 'jm', CRC: 'cr')
+
+### Data Summary
+- 48 teams in 12 groups
+- 48 matches (2 matchdays × 12 groups × 2 matches)
+- 7 stages (1 live + 6 upcoming)
+- 11 elite players + 11 crisis players (group-stage only)

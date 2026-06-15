@@ -7,36 +7,31 @@ import Image from 'next/image'
  * for use with flagcdn.com image service.
  */
 const FIFA_TO_ISO: Record<string, string> = {
+  // ── WC 2026: 48 teams across 12 groups (A-L) ──
   // Group A
   MEX: 'mx', RSA: 'za', KOR: 'kr', CZE: 'cz',
   // Group B
-  CAN: 'ca', BIH: 'ba', QAT: 'qa', SUI: 'ch',
+  CAN: 'ca', BIH: 'ba', SUI: 'ch', DEN: 'dk',
   // Group C
-  BRA: 'br', MAR: 'ma', HAI: 'ht', SCO: 'gb-sct',
+  BRA: 'br', MAR: 'ma', SCO: 'gb-sct', CPV: 'cv',
   // Group D
   USA: 'us', PAR: 'py', AUS: 'au', TUR: 'tr',
   // Group E
-  GER: 'de', CUW: 'cw', CIV: 'ci', ECU: 'ec',
+  GER: 'de', CUW: 'cw', SWE: 'se', NGA: 'ng',
   // Group F
-  NED: 'nl', JPN: 'jp', SWE: 'se', TUN: 'tn',
+  ARG: 'ar', COL: 'co', UZB: 'uz', CMR: 'cm',
   // Group G
-  BEL: 'be', EGY: 'eg', IRN: 'ir', NZL: 'nz',
+  ITA: 'it', CHI: 'cl', ECU: 'ec', ALG: 'dz',
   // Group H
-  ESP: 'es', CPV: 'cv', KSA: 'sa', URU: 'uy',
+  FRA: 'fr', POR: 'pt', PER: 'pe', JAM: 'jm',
   // Group I
-  FRA: 'fr', SEN: 'sn', IRQ: 'iq', NOR: 'no',
+  NED: 'nl', SEN: 'sn', CRC: 'cr', WAL: 'gb-wls',
   // Group J
-  ARG: 'ar', ALG: 'dz', AUT: 'at', JOR: 'jo',
+  ENG: 'gb-eng', URU: 'uy', POL: 'pl', GHA: 'gh',
   // Group K
-  POR: 'pt', COD: 'cd', UZB: 'uz', COL: 'co',
+  ESP: 'es', CRO: 'hr', HON: 'hn', ISL: 'is',
   // Group L
-  ENG: 'gb-eng', CRO: 'hr', GHA: 'gh', PAN: 'pa',
-  // Extra teams that might appear in seed data
-  CMR: 'cm', ITA: 'it', NGA: 'ng', CAM: 'kh',
-  POL: 'pl', SUI: 'ch', DEN: 'dk', UKR: 'ua',
-  SRB: 'rs', CHI: 'cl', PER: 'pe', VEN: 've',
-  RUS: 'ru', CHN: 'cn', THA: 'th', MAS: 'my',
-  IDN: 'id', PHI: 'ph', PRK: 'kp', SAU: 'sa',
+  JPN: 'jp', BEL: 'be', NZL: 'nz', KSA: 'sa',
 }
 
 interface FlagImageProps {

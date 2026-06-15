@@ -807,29 +807,29 @@
    807→      {/* Player Circle - always shows face emoji */}
    808→      <div
    809→        className={`
-   810→          relative flex size-10 sm:size-12 items-center justify-center rounded-full border-2 shadow-md overflow-hidden
-   811→          border-white/70 bg-white/95 dark:bg-white/90 shadow-black/15
+   810→          relative flex size-7 sm:size-8 items-center justify-center rounded-full border-[1.5px] shadow-sm overflow-hidden
+   811→          border-white/70 bg-white/95 dark:bg-white/90 shadow-black/10
    812→          ${isLive ? 'animate-pulse-glow' : ''}
    813→          transition-all duration-300
    814→        `}
    815→      >
-   816→        <span className="text-lg sm:text-xl leading-none select-none">{faceEmoji}</span>
+   816→        <span className="text-xs sm:text-sm leading-none select-none">{faceEmoji}</span>
    817→        {isLive && (
-   818→          <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
+   818→          <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-[#EF4444] shadow-sm shadow-[#EF4444]/50 animate-live-pulse" />
    819→        )}
    820→        {isCompleted && (
-   821→          <Lock className="absolute -right-0.5 -top-0.5 size-2.5 text-[#666] dark:text-[#CCCCCC]" />
+   821→          <Lock className="absolute -right-0.5 -top-0.5 size-2 text-[#666] dark:text-[#CCCCCC]" />
    822→        )}
    823→      </div>
    824→      {/* Player Name */}
-   825→      <p className="mt-0.5 max-w-[60px] truncate text-[9px] sm:text-[10px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+   825→      <p className="mt-px max-w-[48px] truncate text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
    826→        {player.name}
    827→      </p>
    828→      {/* Position + Trend */}
-   829→      <div className="flex items-center gap-0.5">
+   829→      <div className="flex items-center gap-px">
    830→        <Badge
    831→          variant="outline"
-   832→          className={`text-[6px] sm:text-[7px] font-bold px-0.5 py-0 bg-white/90 backdrop-blur-sm ${
+   832→          className={`text-[5px] sm:text-[6px] font-bold px-0.5 py-0 bg-white/90 backdrop-blur-sm leading-tight ${
    833→            isElite ? 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]' : 'border-[#EF4444]/30 text-[#EF4444] dark:border-[#F87171]/30 dark:text-[#F87171]'
    834→          }`}
    835→        >
@@ -845,7 +845,7 @@
    845→          <span className="text-[10px] leading-none">{flagEmoji}</span>
    846→        )}
    847→        <span
-   848→          className="text-[9px] sm:text-[10px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+   848→          className="text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
    849→          style={{ color: ratingColor }}
    850→        >
    851→          {rating.toFixed(1)}
@@ -1040,210 +1040,208 @@
   1040→            >
   1041→              <Card className={`overflow-hidden border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${activeView === 'elite' ? 'purple-glow' : 'red-glow'}`}>
   1042→                {/* Top accent bar */}
-  1043→                <div className={`h-1 w-full ${activeView === 'elite' ? 'bg-gradient-to-r from-[#6C2BD9] via-[#8B5CF6] to-[#FF6B35]' : 'bg-gradient-to-r from-[#EF4444] via-[#DC2626] to-[#FF6B35]'}`} />
-  1044→                <CardHeader className="pb-2">
+  1043→                <div className={`h-0.5 w-full ${activeView === 'elite' ? 'bg-gradient-to-r from-[#6C2BD9] via-[#8B5CF6] to-[#FF6B35]' : 'bg-gradient-to-r from-[#EF4444] via-[#DC2626] to-[#FF6B35]'}`} />
+  1044→                <CardHeader className="py-2 px-4">
   1045→                  <div className="flex items-center gap-2">
-  1046→                    <span className="text-2xl">{activeView === 'elite' ? '🌟' : '⚠️'}</span>
-  1047→                    <div>
-  1048→                      <CardTitle className={`text-xl font-bold ${activeView === 'elite' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#EF4444] dark:text-[#F87171]'}`}>
-  1049→                        {activeView === 'elite' ? t('wc.pulse_elite') : t('wc.crisis_radar')}
-  1050→                      </CardTitle>
-  1051→                      <CardDescription className="text-xs text-[#666] dark:text-[#CCCCCC]">
-  1052→                        {activeView === 'elite' ? t('wc.stars_of_week') : t('wc.flops_of_week')}
-  1053→                      </CardDescription>
-  1054→                    </div>
-  1055→                    <div className="ml-auto flex items-center gap-3">
-  1056→                      {/* Flag/Emoji Toggle Switch */}
-  1057→                      <div className="flex items-center gap-2">
-  1058→                        <span className={`text-[11px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Emoji</span>
-  1059→                        <Switch
-  1060→                          checked={flagMode === 'flag'}
-  1061→                          onCheckedChange={() => toggleFlag()}
-  1062→                          className="data-[state=checked]:bg-[#6C2BD9] data-[state=unchecked]:bg-[#6C2BD9]/40"
-  1063→                        />
-  1064→                        <span className={`text-[11px] font-bold transition-colors ${flagMode === 'flag' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Flag</span>
-  1065→                      </div>
-  1066→                      {stageStatus === 'completed' && (
-  1067→                        <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[10px]">
-  1068→                          <Lock className="size-3" /> 🔒 {t('wc.locked')}
-  1069→                        </Badge>
-  1070→                      )}
-  1071→                      {stageStatus === 'live' && <LiveBadge />}
-  1072→                    </div>
-  1073→                  </div>
-  1074→                </CardHeader>
-  1075→                <CardContent className="pb-4 pt-3">
-  1076→                  <div className={`pitch-bg relative ${activeView === 'crisis' ? 'crisis-pitch' : ''}`}>
-  1077→                    {/* Football Pitch Markings - SVG overlay */}
-  1078→                    <PitchMarkings crisis={activeView === 'crisis'} />
-  1079→
-  1080→                    {/* Player Formation Columns - landscape layout GK→DEF→MID→FWD */}
-  1081→                    <div className="relative z-10 px-2 sm:px-4 py-2 sm:py-3 flex justify-between items-center h-full">
-  1082→                      {organizeFormationLandscape(currentData.players).map((col, ci) => (
-  1083→                        <div key={ci} className="flex flex-col items-center gap-1 sm:gap-1.5">
-  1084→                          {col.map((player) => (
-  1085→                            <FormationPlayerCard
-  1086→                              key={player.id}
-  1087→                              player={player}
-  1088→                              type={activeView}
-  1089→                              stageStatus={stageStatus}
-  1090→                            />
-  1091→                          ))}
-  1092→                        </div>
-  1093→                      ))}
-  1094→                    </div>
-  1095→                  </div>
-  1096→                </CardContent>
-  1097→              </Card>
-  1098→            </motion.div>
-  1099→          )}
-  1100→
-  1101→          {/* Stats bar */}
-  1102→          {eliteData && crisisData && (
-  1103→            <motion.div
-  1104→              initial={{ opacity: 0 }}
-  1105→              animate={{ opacity: 1 }}
-  1106→              transition={{ delay: 0.4 }}
-  1107→              className="grid grid-cols-2 gap-3 sm:grid-cols-4"
-  1108→            >
-  1109→              {[
-  1110→                { label: t('wc.elite_avg'), value: (eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length / 10).toFixed(1), icon: TrendingUp, color: 'text-[#6C2BD9]', emoji: '🤩' },
-  1111→                { label: t('wc.crisis_avg'), value: (crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length / 10).toFixed(1), icon: TrendingDown, color: 'text-[#EF4444]', emoji: '😟' },
-  1112→                { label: t('wc.live_players'), value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-[#FF6B35]', emoji: '' },
-  1113→                { label: t('wc.total_votes'), value: '1.2M', icon: Users, color: 'text-[#1A1A1A] dark:text-white', emoji: '' },
-  1114→              ].map((stat, i) => (
-  1115→                <Card key={i} className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
-  1116→                  <CardContent className="p-3 text-center">
-  1117→                    <stat.icon className={`mx-auto size-4 mb-1.5 ${stat.color}`} />
-  1118→                    <p className={`text-lg font-black ${stat.color}`}>{stat.emoji} {stat.value}</p>
-  1119→                    <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
-  1120→                  </CardContent>
-  1121→                </Card>
-  1122→              ))}
-  1123→            </motion.div>
-  1124→          )}
-  1125→        </>
-  1126→      )}
-  1127→    </div>
-  1128→  )
-  1129→}
+  1046→                    <span className="text-lg">{activeView === 'elite' ? '🌟' : '⚠️'}</span>
+  1047→                    <CardTitle className={`text-sm font-bold ${activeView === 'elite' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#EF4444] dark:text-[#F87171]'}`}>
+  1048→                      {activeView === 'elite' ? t('wc.pulse_elite') : t('wc.crisis_radar')}
+  1049→                    </CardTitle>
+  1050→                    <div className="ml-auto flex items-center gap-2">
+  1051→                      {/* Flag/Emoji Toggle Switch */}
+  1052→                      <div className="flex items-center gap-1.5">
+  1053→                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Emoji</span>
+  1054→                        <Switch
+  1055→                          checked={flagMode === 'flag'}
+  1056→                          onCheckedChange={() => toggleFlag()}
+  1057→                          className="data-[state=checked]:bg-[#6C2BD9] data-[state=unchecked]:bg-[#6C2BD9]/40 scale-75"
+  1058→                        />
+  1059→                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'flag' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Flag</span>
+  1060→                      </div>
+  1061→                      {stageStatus === 'completed' && (
+  1062→                        <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[9px] px-1.5 py-0">
+  1063→                          <Lock className="size-2.5" /> 🔒
+  1064→                        </Badge>
+  1065→                      )}
+  1066→                      {stageStatus === 'live' && <LiveBadge />}
+  1067→                    </div>
+  1068→                  </div>
+  1069→                </CardHeader>
+  1070→                <CardContent className="pb-3 pt-0 px-4">
+  1071→                  <div className="mx-auto max-w-[520px]">
+  1072→                    {/* Formation Pitch - compact landscape */}
+  1073→                    <div className={`pitch-bg relative ${activeView === 'crisis' ? 'crisis-pitch' : ''}`}>
+  1074→                      {/* Football Pitch Markings - SVG overlay */}
+  1075→                      <PitchMarkings crisis={activeView === 'crisis'} />
+  1076→
+  1077→                      {/* Player Formation Columns - landscape layout GK→DEF→MID→FWD */}
+  1078→                      <div className="relative z-10 px-1.5 py-1 flex justify-between items-center h-full">
+  1079→                        {organizeFormationLandscape(currentData.players).map((col, ci) => (
+  1080→                          <div key={ci} className="flex flex-col items-center gap-0.5">
+  1081→                            {col.map((player) => (
+  1082→                              <FormationPlayerCard
+  1083→                                key={player.id}
+  1084→                                player={player}
+  1085→                                type={activeView}
+  1086→                                stageStatus={stageStatus}
+  1087→                              />
+  1088→                            ))}
+  1089→                          </div>
+  1090→                        ))}
+  1091→                      </div>
+  1092→                    </div>
+  1093→                  </div>
+  1094→                </CardContent>
+  1095→              </Card>
+  1096→            </motion.div>
+  1097→          )}
+  1098→
+  1099→          {/* Stats bar */}
+  1100→          {eliteData && crisisData && (
+  1101→            <motion.div
+  1102→              initial={{ opacity: 0 }}
+  1103→              animate={{ opacity: 1 }}
+  1104→              transition={{ delay: 0.4 }}
+  1105→              className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+  1106→            >
+  1107→              {[
+  1108→                { label: t('wc.elite_avg'), value: (eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length / 10).toFixed(1), icon: TrendingUp, color: 'text-[#6C2BD9]', emoji: '🤩' },
+  1109→                { label: t('wc.crisis_avg'), value: (crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length / 10).toFixed(1), icon: TrendingDown, color: 'text-[#EF4444]', emoji: '😟' },
+  1110→                { label: t('wc.live_players'), value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-[#FF6B35]', emoji: '' },
+  1111→                { label: t('wc.total_votes'), value: '1.2M', icon: Users, color: 'text-[#1A1A1A] dark:text-white', emoji: '' },
+  1112→              ].map((stat, i) => (
+  1113→                <Card key={i} className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+  1114→                  <CardContent className="p-3 text-center">
+  1115→                    <stat.icon className={`mx-auto size-4 mb-1.5 ${stat.color}`} />
+  1116→                    <p className={`text-lg font-black ${stat.color}`}>{stat.emoji} {stat.value}</p>
+  1117→                    <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
+  1118→                  </CardContent>
+  1119→                </Card>
+  1120→              ))}
+  1121→            </motion.div>
+  1122→          )}
+  1123→        </>
+  1124→      )}
+  1125→    </div>
+  1126→  )
+  1127→}
+  1128→
+  1129→// ── Paused Tab Overlay ──────────────────────────────────────
   1130→
-  1131→// ── Paused Tab Overlay ──────────────────────────────────────
-  1132→
-  1133→function PausedTabOverlay({ tabName }: { tabName: string }) {
-  1134→  return (
-  1135→    <div className="flex flex-col items-center justify-center py-24 text-center">
-  1136→      <div className="flex items-center justify-center size-20 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 mb-6">
-  1137→        <Lock className="size-8 text-[#FF6B35]" />
-  1138→      </div>
-  1139→      <h3 className="text-xl font-bold text-[#1A1A1A] dark:text-white mb-2">{tabName}</h3>
-  1140→      <p className="text-sm text-[#666] dark:text-[#CCCCCC] mb-4 max-w-xs">This feature is coming soon. We&apos;re working hard to bring you the best experience.</p>
-  1141→      <Badge className="bg-[#FF6B35]/15 text-[#FF6B35] border-0 gap-1.5 px-3 py-1.5 text-xs font-bold">
-  1142→        <Clock className="size-3.5" />
-  1143→        COMING SOON
-  1144→      </Badge>
-  1145→    </div>
-  1146→  )
-  1147→}
+  1131→function PausedTabOverlay({ tabName }: { tabName: string }) {
+  1132→  return (
+  1133→    <div className="flex flex-col items-center justify-center py-24 text-center">
+  1134→      <div className="flex items-center justify-center size-20 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 mb-6">
+  1135→        <Lock className="size-8 text-[#FF6B35]" />
+  1136→      </div>
+  1137→      <h3 className="text-xl font-bold text-[#1A1A1A] dark:text-white mb-2">{tabName}</h3>
+  1138→      <p className="text-sm text-[#666] dark:text-[#CCCCCC] mb-4 max-w-xs">This feature is coming soon. We&apos;re working hard to bring you the best experience.</p>
+  1139→      <Badge className="bg-[#FF6B35]/15 text-[#FF6B35] border-0 gap-1.5 px-3 py-1.5 text-xs font-bold">
+  1140→        <Clock className="size-3.5" />
+  1141→        COMING SOON
+  1142→      </Badge>
+  1143→    </div>
+  1144→  )
+  1145→}
+  1146→
+  1147→// ── Pitch Markings SVG Overlay ──────────────────────────────
   1148→
-  1149→// ── Pitch Markings SVG Overlay ──────────────────────────────
-  1150→
-  1151→function PitchMarkings({ crisis }: { crisis: boolean }) {
-  1152→  const lineColor = crisis ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.35)'
-  1153→  const dotFill = crisis ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.35)'
-  1154→
-  1155→  return (
-  1156→    <svg
-  1157→      className="absolute inset-0 w-full h-full pointer-events-none"
-  1158→      viewBox="0 0 400 300"
-  1159→      preserveAspectRatio="xMidYMid slice"
-  1160→      xmlns="http://www.w3.org/2000/svg"
-  1161→    >
-  1162→      <g stroke={lineColor} strokeWidth="1.5" fill="none">
-  1163→        {/* Outer boundary */}
-  1164→        <rect x="6" y="6" width="388" height="288" rx="3" />
-  1165→        {/* Halfway line (vertical) */}
-  1166→        <line x1="200" y1="6" x2="200" y2="294" />
-  1167→        {/* Center circle */}
-  1168→        <circle cx="200" cy="150" r="36" />
-  1169→        <circle cx="200" cy="150" r="3" fill={dotFill} />
-  1170→        {/* Left penalty area */}
-  1171→        <rect x="6" y="70" width="60" height="160" />
-  1172→        <rect x="6" y="105" width="25" height="90" />
-  1173→        <path d="M 66 110 A 36 36 0 0 1 66 190" />
-  1174→        <circle cx="40" cy="150" r="3" fill={dotFill} />
-  1175→        {/* Right penalty area */}
-  1176→        <rect x="334" y="70" width="60" height="160" />
-  1177→        <rect x="369" y="105" width="25" height="90" />
-  1178→        <path d="M 334 110 A 36 36 0 0 0 334 190" />
-  1179→        <circle cx="360" cy="150" r="3" fill={dotFill} />
-  1180→        {/* Corner arcs */}
-  1181→        <path d="M 6 16 A 10 10 0 0 1 16 6" />
-  1182→        <path d="M 384 6 A 10 10 0 0 1 394 16" />
-  1183→        <path d="M 6 284 A 10 10 0 0 0 16 294" />
-  1184→        <path d="M 384 294 A 10 10 0 0 0 394 284" />
-  1185→        {/* Goals (dashed) */}
-  1186→        <rect x="0" y="115" width="6" height="70" strokeDasharray="4 3" />
-  1187→        <rect x="394" y="115" width="6" height="70" strokeDasharray="4 3" />
-  1188→      </g>
-  1189→    </svg>
-  1190→  )
-  1191→}
+  1149→function PitchMarkings({ crisis }: { crisis: boolean }) {
+  1150→  const lineColor = crisis ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.35)'
+  1151→  const dotFill = crisis ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.35)'
+  1152→
+  1153→  return (
+  1154→    <svg
+  1155→      className="absolute inset-0 w-full h-full pointer-events-none"
+  1156→      viewBox="0 0 400 300"
+  1157→      preserveAspectRatio="xMidYMid slice"
+  1158→      xmlns="http://www.w3.org/2000/svg"
+  1159→    >
+  1160→      <g stroke={lineColor} strokeWidth="1.5" fill="none">
+  1161→        {/* Outer boundary */}
+  1162→        <rect x="6" y="6" width="388" height="288" rx="3" />
+  1163→        {/* Halfway line (vertical) */}
+  1164→        <line x1="200" y1="6" x2="200" y2="294" />
+  1165→        {/* Center circle */}
+  1166→        <circle cx="200" cy="150" r="36" />
+  1167→        <circle cx="200" cy="150" r="3" fill={dotFill} />
+  1168→        {/* Left penalty area */}
+  1169→        <rect x="6" y="70" width="60" height="160" />
+  1170→        <rect x="6" y="105" width="25" height="90" />
+  1171→        <path d="M 66 110 A 36 36 0 0 1 66 190" />
+  1172→        <circle cx="40" cy="150" r="3" fill={dotFill} />
+  1173→        {/* Right penalty area */}
+  1174→        <rect x="334" y="70" width="60" height="160" />
+  1175→        <rect x="369" y="105" width="25" height="90" />
+  1176→        <path d="M 334 110 A 36 36 0 0 0 334 190" />
+  1177→        <circle cx="360" cy="150" r="3" fill={dotFill} />
+  1178→        {/* Corner arcs */}
+  1179→        <path d="M 6 16 A 10 10 0 0 1 16 6" />
+  1180→        <path d="M 384 6 A 10 10 0 0 1 394 16" />
+  1181→        <path d="M 6 284 A 10 10 0 0 0 16 294" />
+  1182→        <path d="M 384 294 A 10 10 0 0 0 394 284" />
+  1183→        {/* Goals (dashed) */}
+  1184→        <rect x="0" y="115" width="6" height="70" strokeDasharray="4 3" />
+  1185→        <rect x="394" y="115" width="6" height="70" strokeDasharray="4 3" />
+  1186→      </g>
+  1187→    </svg>
+  1188→  )
+  1189→}
+  1190→
+  1191→// ── Main Page ────────────────────────────────────────────────
   1192→
-  1193→// ── Main Page ────────────────────────────────────────────────
-  1194→
-  1195→export default function Home() {
-  1196→  const [activeTab, setActiveTab] = useState<TabId>('home')
-  1197→  const [stages, setStages] = useState<WCStage[]>([])
-  1198→
-  1199→  useEffect(() => {
-  1200→    async function init() {
-  1201→      try {
-  1202→        await fetch('/api/world-cup/seed', { method: 'POST' })
-  1203→
-  1204→        const res = await fetch('/api/world-cup/stages')
-  1205→        if (res.ok) {
-  1206→          const data = await res.json()
-  1207→          setStages(data.stages || [])
-  1208→        }
-  1209→      } catch (err) {
-  1210→        console.error('Init failed:', err)
-  1211→      }
-  1212→    }
-  1213→    init()
-  1214→  }, [])
-  1215→
-  1216→  return (
-  1217→    <div className="min-h-screen bg-white dark:bg-[#1A1A1A]">
-  1218→      <div className="flex">
-  1219→        {/* Sidebar */}
-  1220→        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
-  1221→
-  1222→        {/* Main content area */}
-  1223→        <div className="flex-1 md:ml-60">
-  1224→          <TopHeader activeTab={activeTab} />
-  1225→
-  1226→          <main className="mx-auto max-w-5xl px-4 py-6 pb-24 md:pb-6">
-  1227→            <AnimatePresence mode="wait">
-  1228→              <motion.div
-  1229→                key={activeTab}
-  1230→                initial={{ opacity: 0, y: 10 }}
-  1231→                animate={{ opacity: 1, y: 0 }}
-  1232→                exit={{ opacity: 0, y: -10 }}
-  1233→                transition={{ duration: 0.25 }}
-  1234→              >
-  1235→                {activeTab === 'home' && <HomeTab />}
-  1236→                {activeTab === 'sentiments' && <PausedTabOverlay tabName="Sentiments" />}
-  1237→                {activeTab === 'rate' && <PausedTabOverlay tabName="Rate" />}
-  1238→                {activeTab === 'goals' && <PausedTabOverlay tabName="Goals" />}
-  1239→                {activeTab === 'totw' && <PausedTabOverlay tabName="Team of the Week" />}
-  1240→                {activeTab === 'worldcup' && <WorldCupTab stages={stages} />}
-  1241→              </motion.div>
-  1242→            </AnimatePresence>
-  1243→          </main>
-  1244→        </div>
-  1245→      </div>
-  1246→    </div>
-  1247→  )
-  1248→}
-  1249→
+  1193→export default function Home() {
+  1194→  const [activeTab, setActiveTab] = useState<TabId>('home')
+  1195→  const [stages, setStages] = useState<WCStage[]>([])
+  1196→
+  1197→  useEffect(() => {
+  1198→    async function init() {
+  1199→      try {
+  1200→        await fetch('/api/world-cup/seed', { method: 'POST' })
+  1201→
+  1202→        const res = await fetch('/api/world-cup/stages')
+  1203→        if (res.ok) {
+  1204→          const data = await res.json()
+  1205→          setStages(data.stages || [])
+  1206→        }
+  1207→      } catch (err) {
+  1208→        console.error('Init failed:', err)
+  1209→      }
+  1210→    }
+  1211→    init()
+  1212→  }, [])
+  1213→
+  1214→  return (
+  1215→    <div className="min-h-screen bg-white dark:bg-[#1A1A1A]">
+  1216→      <div className="flex">
+  1217→        {/* Sidebar */}
+  1218→        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+  1219→
+  1220→        {/* Main content area */}
+  1221→        <div className="flex-1 md:ml-60">
+  1222→          <TopHeader activeTab={activeTab} />
+  1223→
+  1224→          <main className="mx-auto max-w-5xl px-4 py-6 pb-24 md:pb-6">
+  1225→            <AnimatePresence mode="wait">
+  1226→              <motion.div
+  1227→                key={activeTab}
+  1228→                initial={{ opacity: 0, y: 10 }}
+  1229→                animate={{ opacity: 1, y: 0 }}
+  1230→                exit={{ opacity: 0, y: -10 }}
+  1231→                transition={{ duration: 0.25 }}
+  1232→              >
+  1233→                {activeTab === 'home' && <HomeTab />}
+  1234→                {activeTab === 'sentiments' && <PausedTabOverlay tabName="Sentiments" />}
+  1235→                {activeTab === 'rate' && <PausedTabOverlay tabName="Rate" />}
+  1236→                {activeTab === 'goals' && <PausedTabOverlay tabName="Goals" />}
+  1237→                {activeTab === 'totw' && <PausedTabOverlay tabName="Team of the Week" />}
+  1238→                {activeTab === 'worldcup' && <WorldCupTab stages={stages} />}
+  1239→              </motion.div>
+  1240→            </AnimatePresence>
+  1241→          </main>
+  1242→        </div>
+  1243→      </div>
+  1244→    </div>
+  1245→  )
+  1246→}
+  1247→

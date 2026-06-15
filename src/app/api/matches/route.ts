@@ -5,33 +5,36 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
+    const league = searchParams.get('league')
 
     const where: Record<string, unknown> = {}
     if (status && status !== 'all') {
       where.status = status
     }
+    if (league && league !== 'all') {
+      where.league = league
+    }
 
     const matches = await db.match.findMany({
       where,
       orderBy: [
-        { status: 'asc' }, // live first
-        { startedAt: 'desc' },
+        { matchDate: 'desc' },
       ],
     })
 
-    // Transform DB records to API response
+    // Transform DB records to API response with proper team info
     const result = matches.map(m => ({
       id: m.id,
       homeTeam: {
-        code: m.homeCode,
-        name: m.homeCode, // Will be enriched by national-teams on client
-        flag: '', // Will be enriched by national-teams on client
+        code: m.homeTeamCode,
+        name: m.homeTeamName,
+        flag: m.homeTeamFlag,
         sentiment: m.homeSentiment,
       },
       awayTeam: {
-        code: m.awayCode,
-        name: m.awayCode,
-        flag: '',
+        code: m.awayTeamCode,
+        name: m.awayTeamName,
+        flag: m.awayTeamFlag,
         sentiment: m.awaySentiment,
       },
       homeScore: m.homeScore,
@@ -39,7 +42,9 @@ export async function GET(request: NextRequest) {
       score: `${m.homeScore} - ${m.awayScore}`,
       status: m.status,
       league: m.league,
+      group: m.group,
       minute: m.minute,
+      matchDate: m.matchDate?.toISOString() ?? null,
     }))
 
     return NextResponse.json({ matches: result })

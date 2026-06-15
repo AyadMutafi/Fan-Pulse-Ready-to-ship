@@ -246,11 +246,43 @@ function PsycheButton() {
 
 function HomeTab() {
   const { t } = useLanguage()
-  const [matchFilter, setMatchFilter] = useState<'ALL' | 'Friendly' | 'WC'>('ALL')
+  const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('WC')
+  const [apiMatches, setApiMatches] = useState<Array<{
+    id: string; home: string; away: string; homeFlag: string; awayFlag: string
+    score: string; homeSentiment: number; awaySentiment: number; live: boolean; league: string
+  }>>([])
 
-  const filteredMatches = matchFilter === 'ALL'
-    ? MOCK_MATCHES
-    : MOCK_MATCHES.filter(m => matchFilter === 'Friendly' ? m.league === 'Friendly' : m.league.startsWith('WC'))
+  useEffect(() => {
+    async function fetchMatches() {
+      try {
+        const res = await fetch('/api/matches?league=WC')
+        if (res.ok) {
+          const data = await res.json()
+          const mapped = (data.matches || []).map((m: any) => ({
+            id: m.id,
+            home: m.homeTeam.code,
+            away: m.awayTeam.code,
+            homeFlag: m.homeTeam.flag || '',
+            awayFlag: m.awayTeam.flag || '',
+            score: m.score,
+            homeSentiment: Math.round(m.homeTeam.sentiment),
+            awaySentiment: Math.round(m.awayTeam.sentiment),
+            live: m.status === 'live',
+            league: m.league === 'WC' ? `WC Group ${m.group}` : m.league,
+          }))
+          setApiMatches(mapped)
+        }
+      } catch (err) {
+        console.error('Failed to fetch matches:', err)
+      }
+    }
+    fetchMatches()
+  }, [])
+
+  const filteredMatches = (matchFilter === 'ALL'
+    ? apiMatches
+    : apiMatches.filter(m => m.league.startsWith('WC'))
+  ).slice(0, 24) // Limit to 24 cards max for performance
 
   return (
     <div className="space-y-6">
@@ -276,7 +308,7 @@ function HomeTab() {
           </div>
           <div className="flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-3 py-1.5 text-xs font-semibold text-[#EF4444]">
             <Activity className="size-3.5" />
-            {MOCK_MATCHES.filter(m => m.live).length} {t('home.live')}
+            {apiMatches.filter(m => m.live).length} {t('home.live')}
           </div>
         </div>
       </motion.div>
@@ -288,7 +320,7 @@ function HomeTab() {
             {t('home.featured')}
           </h3>
           <div className="flex gap-1.5">
-            {(['ALL', 'Friendly', 'WC'] as const).map((filter) => (
+            {(['WC', 'ALL'] as const).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setMatchFilter(filter)}
@@ -300,7 +332,7 @@ function HomeTab() {
                   }
                 `}
               >
-                {filter === 'ALL' ? '⚽ All' : filter === 'Friendly' ? '🤝 Friendlies' : '🏆 World Cup'}
+                {filter === 'ALL' ? '⚽ All' : '🏆 World Cup'}
               </button>
             ))}
           </div>
@@ -379,13 +411,13 @@ function HomeTab() {
         <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
           <CardContent className="p-4 space-y-3">
             {[
-              { icon: Sparkles, text: 'Doué brace vs Colombia sends France into World Cup brimming with confidence', time: '2m ago', color: 'text-[#6C2BD9]' },
-              { icon: BarChart3, text: 'Morocco fans buzzing after 1-1 draw with Brazil in Group C opener', time: '8m ago', color: 'text-[#FF6B35]' },
+              { icon: Sparkles, text: 'Germany demolition of Curaçao 6-0 shows pros and cons of expanded World Cup', time: '2m ago', color: 'text-[#6C2BD9]' },
+              { icon: BarChart3, text: 'Morocco hold Brazil 1-1 in Group C — Bouaddi makes Casemiro look old', time: '8m ago', color: 'text-[#FF6B35]' },
               { icon: Users, text: '1.2M fan votes tallied for World Cup 2026 Group Stage Elite XI', time: '15m ago', color: 'text-[#10B981]' },
-              { icon: Timer, text: 'Reyna trivela stuns Paraguay as USA dominate 4-1 in Group D', time: '22m ago', color: 'text-[#EF4444]' },
-              { icon: Flame, text: 'Messi returns with goal as Argentina beat Iceland 3-0 in warm-up', time: '35m ago', color: 'text-[#6C2BD9]' },
-              { icon: Activity, text: 'Olise hat-trick vs Northern Ireland — France\'s deadliest weapon emerges', time: '1h ago', color: 'text-[#FF6B35]' },
-              { icon: Trophy, text: 'Julián Quiñones scores FIRST GOAL of 2026 FIFA World Cup™ vs South Africa', time: '3h ago', color: 'text-[#10B981]' },
+              { icon: Timer, text: 'USMNT thrash Paraguay 3-0 — Balogun, Pulisic, Tillman shine in opener', time: '22m ago', color: 'text-[#EF4444]' },
+              { icon: Flame, text: 'Mbappé and Messi both score as France and Argentina dominate Group openers', time: '35m ago', color: 'text-[#6C2BD9]' },
+              { icon: Activity, text: 'Bellingham and Saka lead England past Uruguay 3-0 in Group J', time: '1h ago', color: 'text-[#FF6B35]' },
+              { icon: Trophy, text: 'Mexico kick off World Cup 2026 with 2-0 win over South Africa', time: '3h ago', color: 'text-[#10B981]' },
             ].map((item, i) => (
               <motion.div
                 key={i}

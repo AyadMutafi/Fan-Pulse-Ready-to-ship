@@ -1,0 +1,526 @@
+     1→import { NextResponse } from 'next/server'
+     2→import { db } from '@/lib/db'
+     3→
+     4→// ── Team info helper ─────────────────────────────────────────────────────────
+     5→const TEAM_INFO: Record<string, { name: string; flag: string }> = {
+     6→  QAT: { name: 'Qatar', flag: '🇶🇦' },
+     7→  ECU: { name: 'Ecuador', flag: '🇪🇨' },
+     8→  SEN: { name: 'Senegal', flag: '🇸🇳' },
+     9→  NED: { name: 'Netherlands', flag: '🇳🇱' },
+    10→  ENG: { name: 'England', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+    11→  IRN: { name: 'Iran', flag: '🇮🇷' },
+    12→  USA: { name: 'United States', flag: '🇺🇸' },
+    13→  WAL: { name: 'Wales', flag: '🏴󠁧󠁢󠁷󠁬󠁳󠁿' },
+    14→  ARG: { name: 'Argentina', flag: '🇦🇷' },
+    15→  KSA: { name: 'Saudi Arabia', flag: '🇸🇦' },
+    16→  MEX: { name: 'Mexico', flag: '🇲🇽' },
+    17→  POL: { name: 'Poland', flag: '🇵🇱' },
+    18→  FRA: { name: 'France', flag: '🇫🇷' },
+    19→  AUS: { name: 'Australia', flag: '🇦🇺' },
+    20→  DEN: { name: 'Denmark', flag: '🇩🇰' },
+    21→  TUN: { name: 'Tunisia', flag: '🇹🇳' },
+    22→  ESP: { name: 'Spain', flag: '🇪🇸' },
+    23→  CRC: { name: 'Costa Rica', flag: '🇨🇷' },
+    24→  GER: { name: 'Germany', flag: '🇩🇪' },
+    25→  JPN: { name: 'Japan', flag: '🇯🇵' },
+    26→  BEL: { name: 'Belgium', flag: '🇧🇪' },
+    27→  CAN: { name: 'Canada', flag: '🇨🇦' },
+    28→  MAR: { name: 'Morocco', flag: '🇲🇦' },
+    29→  CRO: { name: 'Croatia', flag: '🇭🇷' },
+    30→  BRA: { name: 'Brazil', flag: '🇧🇷' },
+    31→  SRB: { name: 'Serbia', flag: '🇷🇸' },
+    32→  SUI: { name: 'Switzerland', flag: '🇨🇭' },
+    33→  CMR: { name: 'Cameroon', flag: '🇨🇲' },
+    34→  POR: { name: 'Portugal', flag: '🇵🇹' },
+    35→  GHA: { name: 'Ghana', flag: '🇬🇭' },
+    36→  URU: { name: 'Uruguay', flag: '🇺🇾' },
+    37→  KOR: { name: 'South Korea', flag: '🇰🇷' },
+    38→}
+    39→
+    40→// ── Match data: ALL 64 World Cup 2022 matches ────────────────────────────────
+    41→const MATCHES_DATA: Array<{
+    42→  homeCode: string; awayCode: string
+    43→  homeScore: number; awayScore: number
+    44→  group: string; matchDate: string
+    45→  homeSentiment: number; awaySentiment: number
+    46→}> = [
+    47→  // ── Group A ──
+    48→  { homeCode: 'ECU', awayCode: 'QAT', homeScore: 0, awayScore: 2, group: 'A', matchDate: '2022-11-20', homeSentiment: 28, awaySentiment: 72 },
+    49→  { homeCode: 'SEN', awayCode: 'NED', homeScore: 2, awayScore: 3, group: 'A', matchDate: '2022-11-21', homeSentiment: 42, awaySentiment: 75 },
+    50→  { homeCode: 'QAT', awayCode: 'SEN', homeScore: 1, awayScore: 3, group: 'A', matchDate: '2022-11-25', homeSentiment: 22, awaySentiment: 80 },
+    51→  { homeCode: 'NED', awayCode: 'ECU', homeScore: 1, awayScore: 1, group: 'A', matchDate: '2022-11-25', homeSentiment: 55, awaySentiment: 55 },
+    52→  { homeCode: 'NED', awayCode: 'QAT', homeScore: 2, awayScore: 0, group: 'A', matchDate: '2022-11-29', homeSentiment: 82, awaySentiment: 20 },
+    53→  { homeCode: 'ECU', awayCode: 'SEN', homeScore: 1, awayScore: 2, group: 'A', matchDate: '2022-11-29', homeSentiment: 38, awaySentiment: 72 },
+    54→
+    55→  // ── Group B ──
+    56→  { homeCode: 'ENG', awayCode: 'IRN', homeScore: 6, awayScore: 2, group: 'B', matchDate: '2022-11-21', homeSentiment: 92, awaySentiment: 28 },
+    57→  { homeCode: 'USA', awayCode: 'WAL', homeScore: 1, awayScore: 1, group: 'B', matchDate: '2022-11-21', homeSentiment: 52, awaySentiment: 52 },
+    58→  { homeCode: 'WAL', awayCode: 'IRN', homeScore: 0, awayScore: 2, group: 'B', matchDate: '2022-11-25', homeSentiment: 22, awaySentiment: 70 },
+    59→  { homeCode: 'ENG', awayCode: 'USA', homeScore: 0, awayScore: 0, group: 'B', matchDate: '2022-11-25', homeSentiment: 48, awaySentiment: 55 },
+    60→  { homeCode: 'WAL', awayCode: 'ENG', homeScore: 0, awayScore: 3, group: 'B', matchDate: '2022-11-29', homeSentiment: 15, awaySentiment: 88 },
+    61→  { homeCode: 'IRN', awayCode: 'USA', homeScore: 0, awayScore: 1, group: 'B', matchDate: '2022-11-29', homeSentiment: 25, awaySentiment: 68 },
+    62→
+    63→  // ── Group C ──
+    64→  { homeCode: 'ARG', awayCode: 'KSA', homeScore: 1, awayScore: 2, group: 'C', matchDate: '2022-11-22', homeSentiment: 30, awaySentiment: 95 },
+    65→  { homeCode: 'MEX', awayCode: 'POL', homeScore: 0, awayScore: 0, group: 'C', matchDate: '2022-11-22', homeSentiment: 45, awaySentiment: 50 },
+    66→  { homeCode: 'POL', awayCode: 'KSA', homeScore: 2, awayScore: 0, group: 'C', matchDate: '2022-11-26', homeSentiment: 72, awaySentiment: 28 },
+    67→  { homeCode: 'ARG', awayCode: 'MEX', homeScore: 2, awayScore: 0, group: 'C', matchDate: '2022-11-26', homeSentiment: 85, awaySentiment: 25 },
+    68→  { homeCode: 'ARG', awayCode: 'POL', homeScore: 2, awayScore: 0, group: 'C', matchDate: '2022-11-30', homeSentiment: 88, awaySentiment: 30 },
+    69→  { homeCode: 'KSA', awayCode: 'MEX', homeScore: 1, awayScore: 2, group: 'C', matchDate: '2022-11-30', homeSentiment: 32, awaySentiment: 65 },
+    70→
+    71→  // ── Group D ──
+    72→  { homeCode: 'DEN', awayCode: 'TUN', homeScore: 0, awayScore: 0, group: 'D', matchDate: '2022-11-22', homeSentiment: 48, awaySentiment: 52 },
+    73→  { homeCode: 'FRA', awayCode: 'AUS', homeScore: 4, awayScore: 1, group: 'D', matchDate: '2022-11-22', homeSentiment: 90, awaySentiment: 28 },
+    74→  { homeCode: 'FRA', awayCode: 'DEN', homeScore: 2, awayScore: 1, group: 'D', matchDate: '2022-11-26', homeSentiment: 78, awaySentiment: 35 },
+    75→  { homeCode: 'AUS', awayCode: 'TUN', homeScore: 1, awayScore: 0, group: 'D', matchDate: '2022-11-26', homeSentiment: 70, awaySentiment: 32 },
+    76→  { homeCode: 'AUS', awayCode: 'DEN', homeScore: 0, awayScore: 1, group: 'D', matchDate: '2022-11-30', homeSentiment: 35, awaySentiment: 55 },
+    77→  { homeCode: 'TUN', awayCode: 'FRA', homeScore: 1, awayScore: 0, group: 'D', matchDate: '2022-11-30', homeSentiment: 75, awaySentiment: 40 },
+    78→
+    79→  // ── Group E ──
+    80→  { homeCode: 'GER', awayCode: 'JPN', homeScore: 1, awayScore: 2, group: 'E', matchDate: '2022-11-23', homeSentiment: 25, awaySentiment: 92 },
+    81→  { homeCode: 'ESP', awayCode: 'CRC', homeScore: 7, awayScore: 0, group: 'E', matchDate: '2022-11-23', homeSentiment: 95, awaySentiment: 10 },
+    82→  { homeCode: 'JPN', awayCode: 'CRC', homeScore: 0, awayScore: 1, group: 'E', matchDate: '2022-11-27', homeSentiment: 30, awaySentiment: 68 },
+    83→  { homeCode: 'ESP', awayCode: 'GER', homeScore: 1, awayScore: 1, group: 'E', matchDate: '2022-11-27', homeSentiment: 55, awaySentiment: 52 },
+    84→  { homeCode: 'JPN', awayCode: 'ESP', homeScore: 2, awayScore: 1, group: 'E', matchDate: '2022-11-27', homeSentiment: 88, awaySentiment: 35 },
+    85→  { homeCode: 'CRC', awayCode: 'GER', homeScore: 2, awayScore: 4, group: 'E', matchDate: '2022-12-01', homeSentiment: 28, awaySentiment: 72 },
+    86→
+    87→  // ── Group F ──
+    88→  { homeCode: 'MAR', awayCode: 'CRO', homeScore: 0, awayScore: 0, group: 'F', matchDate: '2022-11-23', homeSentiment: 50, awaySentiment: 52 },
+    89→  { homeCode: 'BEL', awayCode: 'CAN', homeScore: 1, awayScore: 0, group: 'F', matchDate: '2022-11-23', homeSentiment: 60, awaySentiment: 40 },
+    90→  { homeCode: 'BEL', awayCode: 'MAR', homeScore: 0, awayScore: 2, group: 'F', matchDate: '2022-11-27', homeSentiment: 22, awaySentiment: 82 },
+    91→  { homeCode: 'CRO', awayCode: 'CAN', homeScore: 4, awayScore: 1, group: 'F', matchDate: '2022-11-27', homeSentiment: 88, awaySentiment: 20 },
+    92→  { homeCode: 'CRO', awayCode: 'BEL', homeScore: 0, awayScore: 0, group: 'F', matchDate: '2022-12-01', homeSentiment: 55, awaySentiment: 35 },
+    93→  { homeCode: 'CAN', awayCode: 'MAR', homeScore: 1, awayScore: 2, group: 'F', matchDate: '2022-12-01', homeSentiment: 30, awaySentiment: 78 },
+    94→
+    95→  // ── Group G ──
+    96→  { homeCode: 'SUI', awayCode: 'CMR', homeScore: 1, awayScore: 0, group: 'G', matchDate: '2022-11-24', homeSentiment: 65, awaySentiment: 38 },
+    97→  { homeCode: 'BRA', awayCode: 'SRB', homeScore: 2, awayScore: 0, group: 'G', matchDate: '2022-11-24', homeSentiment: 85, awaySentiment: 25 },
+    98→  { homeCode: 'CMR', awayCode: 'SRB', homeScore: 3, awayScore: 3, group: 'G', matchDate: '2022-11-28', homeSentiment: 55, awaySentiment: 55 },
+    99→  { homeCode: 'BRA', awayCode: 'SUI', homeScore: 1, awayScore: 0, group: 'G', matchDate: '2022-11-28', homeSentiment: 78, awaySentiment: 38 },
+   100→  { homeCode: 'SRB', awayCode: 'SUI', homeScore: 2, awayScore: 3, group: 'G', matchDate: '2022-12-02', homeSentiment: 32, awaySentiment: 75 },
+   101→  { homeCode: 'CMR', awayCode: 'BRA', homeScore: 1, awayScore: 0, group: 'G', matchDate: '2022-12-02', homeSentiment: 82, awaySentiment: 42 },
+   102→
+   103→  // ── Group H ──
+   104→  { homeCode: 'URU', awayCode: 'KOR', homeScore: 0, awayScore: 0, group: 'H', matchDate: '2022-11-24', homeSentiment: 45, awaySentiment: 55 },
+   105→  { homeCode: 'POR', awayCode: 'GHA', homeScore: 3, awayScore: 2, group: 'H', matchDate: '2022-11-24', homeSentiment: 75, awaySentiment: 45 },
+   106→  { homeCode: 'KOR', awayCode: 'GHA', homeScore: 2, awayScore: 3, group: 'H', matchDate: '2022-11-28', homeSentiment: 35, awaySentiment: 72 },
+   107→  { homeCode: 'POR', awayCode: 'URU', homeScore: 2, awayScore: 0, group: 'H', matchDate: '2022-11-28', homeSentiment: 80, awaySentiment: 25 },
+   108→  { homeCode: 'GHA', awayCode: 'URU', homeScore: 0, awayScore: 2, group: 'H', matchDate: '2022-12-02', homeSentiment: 22, awaySentiment: 78 },
+   109→  { homeCode: 'KOR', awayCode: 'POR', homeScore: 2, awayScore: 1, group: 'H', matchDate: '2022-12-02', homeSentiment: 78, awaySentiment: 38 },
+   110→
+   111→  // ── Round of 16 ──
+   112→  { homeCode: 'NED', awayCode: 'USA', homeScore: 3, awayScore: 1, group: 'R16', matchDate: '2022-12-03', homeSentiment: 85, awaySentiment: 30 },
+   113→  { homeCode: 'ARG', awayCode: 'AUS', homeScore: 2, awayScore: 1, group: 'R16', matchDate: '2022-12-04', homeSentiment: 82, awaySentiment: 38 },
+   114→  { homeCode: 'FRA', awayCode: 'POL', homeScore: 3, awayScore: 1, group: 'R16', matchDate: '2022-12-04', homeSentiment: 85, awaySentiment: 30 },
+   115→  { homeCode: 'ENG', awayCode: 'SEN', homeScore: 3, awayScore: 0, group: 'R16', matchDate: '2022-12-05', homeSentiment: 88, awaySentiment: 22 },
+   116→  { homeCode: 'JPN', awayCode: 'CRO', homeScore: 1, awayScore: 1, group: 'R16', matchDate: '2022-12-05', homeSentiment: 48, awaySentiment: 62 },
+   117→  { homeCode: 'BRA', awayCode: 'KOR', homeScore: 4, awayScore: 1, group: 'R16', matchDate: '2022-12-06', homeSentiment: 92, awaySentiment: 22 },
+   118→  { homeCode: 'MAR', awayCode: 'ESP', homeScore: 0, awayScore: 0, group: 'R16', matchDate: '2022-12-06', homeSentiment: 72, awaySentiment: 30 },
+   119→  { homeCode: 'POR', awayCode: 'SUI', homeScore: 6, awayScore: 1, group: 'R16', matchDate: '2022-12-07', homeSentiment: 95, awaySentiment: 15 },
+   120→
+   121→  // ── Quarter Finals ──
+   122→  { homeCode: 'CRO', awayCode: 'BRA', homeScore: 1, awayScore: 1, group: 'QF', matchDate: '2022-12-09', homeSentiment: 78, awaySentiment: 45 },
+   123→  { homeCode: 'NED', awayCode: 'ARG', homeScore: 2, awayScore: 2, group: 'QF', matchDate: '2022-12-09', homeSentiment: 40, awaySentiment: 80 },
+   124→  { homeCode: 'MAR', awayCode: 'POR', homeScore: 1, awayScore: 0, group: 'QF', matchDate: '2022-12-10', homeSentiment: 85, awaySentiment: 28 },
+   125→  { homeCode: 'FRA', awayCode: 'ENG', homeScore: 2, awayScore: 1, group: 'QF', matchDate: '2022-12-10', homeSentiment: 80, awaySentiment: 35 },
+   126→
+   127→  // ── Semi Finals ──
+   128→  { homeCode: 'ARG', awayCode: 'CRO', homeScore: 3, awayScore: 0, group: 'SF', matchDate: '2022-12-13', homeSentiment: 95, awaySentiment: 25 },
+   129→  { homeCode: 'FRA', awayCode: 'MAR', homeScore: 2, awayScore: 0, group: 'SF', matchDate: '2022-12-14', homeSentiment: 82, awaySentiment: 38 },
+   130→
+   131→  // ── Third Place ──
+   132→  { homeCode: 'CRO', awayCode: 'MAR', homeScore: 2, awayScore: 1, group: '3rd', matchDate: '2022-12-17', homeSentiment: 75, awaySentiment: 42 },
+   133→
+   134→  // ── Final ──
+   135→  { homeCode: 'ARG', awayCode: 'FRA', homeScore: 3, awayScore: 3, group: 'Final', matchDate: '2022-12-18', homeSentiment: 88, awaySentiment: 78 },
+   136→]
+   137→
+   138→// ── Player type ──────────────────────────────────────────────────────────────
+   139→type PlayerData = {
+   140→  name: string; nationCode: string; position: string
+   141→  pulseScore: number; sentiment: number; trend: string
+   142→  isLive: boolean; matchInfo: string; order: number
+   143→}
+   144→
+   145→// ── Elite players per stage key ──────────────────────────────────────────────
+   146→const ELITE_PLAYERS: Record<string, PlayerData[]> = {
+   147→  'group-stage': [
+   148→    // ── 4-3-3: 1 GK + 4 DEF + 3 MID + 3 FWD = 11 ──
+   149→    // GK
+   150→    { name: 'Livaković', nationCode: 'CRO', position: 'GK', pulseScore: 82, sentiment: 80, trend: 'rising', isLive: false, matchInfo: 'CRO 0-0 MAR / CRO 4-1 CAN', order: 0 },
+   151→    // DEF
+   152→    { name: 'Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 83, sentiment: 81, trend: 'rising', isLive: false, matchInfo: 'MAR 0-0 CRO / MAR 2-0 BEL', order: 2 },
+   153→    { name: 'Van Dijk', nationCode: 'NED', position: 'CB', pulseScore: 85, sentiment: 82, trend: 'stable', isLive: false, matchInfo: 'NED 3-2 SEN / NED 2-0 QAT', order: 3 },
+   154→    { name: 'Varane', nationCode: 'FRA', position: 'CB', pulseScore: 82, sentiment: 79, trend: 'stable', isLive: false, matchInfo: 'FRA 4-1 AUS / FRA 2-1 DEN', order: 3 },
+   155→    { name: 'Theo Hernández', nationCode: 'FRA', position: 'LB', pulseScore: 84, sentiment: 83, trend: 'rising', isLive: false, matchInfo: 'FRA 4-1 AUS / FRA 2-1 DEN', order: 1 },
+   156→    // MID
+   157→    { name: 'Bellingham', nationCode: 'ENG', position: 'CM', pulseScore: 86, sentiment: 87, trend: 'rising', isLive: false, matchInfo: 'ENG 6-2 IRN / ENG 3-0 WAL', order: 5 },
+   158→    { name: 'Modrić', nationCode: 'CRO', position: 'CM', pulseScore: 84, sentiment: 82, trend: 'stable', isLive: false, matchInfo: 'CRO 4-1 CAN / CRO 0-0 BEL', order: 5 },
+   159→    { name: 'Gakpo', nationCode: 'NED', position: 'CAM', pulseScore: 87, sentiment: 86, trend: 'rising', isLive: false, matchInfo: 'NED 3-2 SEN / NED 1-1 ECU (3 group goals)', order: 6 },
+   160→    // FWD
+   161→    { name: 'Mbappé', nationCode: 'FRA', position: 'LW', pulseScore: 93, sentiment: 92, trend: 'rising', isLive: false, matchInfo: 'FRA 4-1 AUS / FRA 2-1 DEN', order: 7 },
+   162→    { name: 'Messi', nationCode: 'ARG', position: 'ST', pulseScore: 95, sentiment: 94, trend: 'rising', isLive: false, matchInfo: 'ARG 1-2 KSA / ARG 2-0 MEX / ARG 2-0 POL', order: 9 },
+   163→    { name: 'Richarlison', nationCode: 'BRA', position: 'RW', pulseScore: 88, sentiment: 87, trend: 'rising', isLive: false, matchInfo: 'BRA 2-0 SRB (bicycle kick!) / BRA 1-0 SUI', order: 8 },
+   164→  ],
+   165→
+   166→  'round-of-16': [
+   167→    // GK
+   168→    { name: 'Livaković', nationCode: 'CRO', position: 'GK', pulseScore: 90, sentiment: 88, trend: 'rising', isLive: false, matchInfo: 'CRO beat JPN on penalties (3 saves)', order: 0 },
+   169→    // DEF
+   170→    { name: 'Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 86, sentiment: 84, trend: 'rising', isLive: false, matchInfo: 'MAR 0-0 ESP (pen win)', order: 2 },
+   171→    { name: 'Varane', nationCode: 'FRA', position: 'CB', pulseScore: 84, sentiment: 80, trend: 'stable', isLive: false, matchInfo: 'FRA 3-1 POL', order: 3 },
+   172→    { name: 'Dias', nationCode: 'POR', position: 'CB', pulseScore: 82, sentiment: 78, trend: 'stable', isLive: false, matchInfo: 'POR 6-1 SUI', order: 3 },
+   173→    { name: 'Theo Hernández', nationCode: 'FRA', position: 'LB', pulseScore: 85, sentiment: 83, trend: 'rising', isLive: false, matchInfo: 'FRA 3-1 POL', order: 1 },
+   174→    // MID
+   175→    { name: 'Bellingham', nationCode: 'ENG', position: 'CM', pulseScore: 85, sentiment: 84, trend: 'stable', isLive: false, matchInfo: 'ENG 3-0 SEN', order: 5 },
+   176→    { name: 'Modrić', nationCode: 'CRO', position: 'CM', pulseScore: 85, sentiment: 83, trend: 'stable', isLive: false, matchInfo: 'CRO beat JPN on pens', order: 5 },
+   177→    { name: 'Gakpo', nationCode: 'NED', position: 'CAM', pulseScore: 87, sentiment: 85, trend: 'rising', isLive: false, matchInfo: 'NED 3-1 USA (opened scoring)', order: 6 },
+   178→    // FWD
+   179→    { name: 'Mbappé', nationCode: 'FRA', position: 'LW', pulseScore: 96, sentiment: 95, trend: 'rising', isLive: false, matchInfo: 'FRA 3-1 POL (2 goals, 1 assist)', order: 7 },
+   180→    { name: 'Messi', nationCode: 'ARG', position: 'ST', pulseScore: 94, sentiment: 93, trend: 'rising', isLive: false, matchInfo: 'ARG 2-1 AUS (goal + assist)', order: 9 },
+   181→    { name: 'Gonçalo Ramos', nationCode: 'POR', position: 'RW', pulseScore: 90, sentiment: 89, trend: 'rising', isLive: false, matchInfo: 'POR 6-1 SUI (hat-trick!)', order: 8 },
+   182→  ],
+   183→
+   184→  'quarter-finals': [
+   185→    // GK
+   186→    { name: 'Livaković', nationCode: 'CRO', position: 'GK', pulseScore: 92, sentiment: 90, trend: 'rising', isLive: false, matchInfo: 'CRO beat BRA on pens (2 saves)', order: 0 },
+   187→    // DEF
+   188→    { name: 'Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 87, sentiment: 86, trend: 'rising', isLive: false, matchInfo: 'MAR 1-0 POR (historic QF win)', order: 2 },
+   189→    { name: 'Agüerd', nationCode: 'MAR', position: 'CB', pulseScore: 83, sentiment: 80, trend: 'rising', isLive: false, matchInfo: 'MAR 1-0 POR (solid defense)', order: 3 },
+   190→    { name: 'Varane', nationCode: 'FRA', position: 'CB', pulseScore: 84, sentiment: 81, trend: 'stable', isLive: false, matchInfo: 'FRA 2-1 ENG', order: 3 },
+   191→    { name: 'Theo Hernández', nationCode: 'FRA', position: 'LB', pulseScore: 85, sentiment: 83, trend: 'stable', isLive: false, matchInfo: 'FRA 2-1 ENG', order: 1 },
+   192→    // MID
+   193→    { name: 'Modrić', nationCode: 'CRO', position: 'CM', pulseScore: 88, sentiment: 87, trend: 'rising', isLive: false, matchInfo: 'CRO beat BRA on pens (bossed midfield)', order: 5 },
+   194→    { name: 'Enzo Fernández', nationCode: 'ARG', position: 'CM', pulseScore: 86, sentiment: 84, trend: 'rising', isLive: false, matchInfo: 'ARG beat NED on pens', order: 5 },
+   195→    { name: 'Tchouaméni', nationCode: 'FRA', position: 'CAM', pulseScore: 83, sentiment: 80, trend: 'rising', isLive: false, matchInfo: 'FRA 2-1 ENG', order: 6 },
+   196→    // FWD
+   197→    { name: 'Messi', nationCode: 'ARG', position: 'LW', pulseScore: 97, sentiment: 96, trend: 'rising', isLive: false, matchInfo: 'ARG beat NED on pens (goal + assist)', order: 7 },
+   198→    { name: 'Álvarez', nationCode: 'ARG', position: 'ST', pulseScore: 89, sentiment: 88, trend: 'rising', isLive: false, matchInfo: 'ARG beat NED (2 goals)', order: 9 },
+   199→    { name: 'Giroud', nationCode: 'FRA', position: 'RW', pulseScore: 86, sentiment: 84, trend: 'rising', isLive: false, matchInfo: 'FRA 2-1 ENG (winning goal)', order: 8 },
+   200→  ],
+   201→
+   202→  'semi-finals': [
+   203→    // GK
+   204→    { name: 'Emi Martínez', nationCode: 'ARG', position: 'GK', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: false, matchInfo: 'ARG 3-0 CRO (clean sheet)', order: 0 },
+   205→    // DEF
+   206→    { name: 'Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 82, sentiment: 78, trend: 'stable', isLive: false, matchInfo: 'MAR 0-2 FRA', order: 2 },
+   207→    { name: 'Otamendi', nationCode: 'ARG', position: 'CB', pulseScore: 85, sentiment: 82, trend: 'rising', isLive: false, matchInfo: 'ARG 3-0 CRO (solid)', order: 3 },
+   208→    { name: 'Varane', nationCode: 'FRA', position: 'CB', pulseScore: 84, sentiment: 81, trend: 'stable', isLive: false, matchInfo: 'FRA 2-0 MAR', order: 3 },
+   209→    { name: 'Theo Hernández', nationCode: 'FRA', position: 'LB', pulseScore: 87, sentiment: 85, trend: 'rising', isLive: false, matchInfo: 'FRA 2-0 MAR (opened scoring)', order: 1 },
+   210→    // MID
+   211→    { name: 'Modrić', nationCode: 'CRO', position: 'CM', pulseScore: 85, sentiment: 82, trend: 'stable', isLive: false, matchInfo: 'CRO 0-3 ARG (gave everything)', order: 5 },
+   212→    { name: 'Enzo Fernández', nationCode: 'ARG', position: 'CM', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: false, matchInfo: 'ARG 3-0 CRO (dominant)', order: 5 },
+   213→    { name: 'Griezmann', nationCode: 'FRA', position: 'CAM', pulseScore: 84, sentiment: 82, trend: 'stable', isLive: false, matchInfo: 'FRA 2-0 MAR (key playmaker)', order: 6 },
+   214→    // FWD
+   215→    { name: 'Messi', nationCode: 'ARG', position: 'LW', pulseScore: 98, sentiment: 97, trend: 'rising', isLive: false, matchInfo: 'ARG 3-0 CRO (goal + assist - bossed it)', order: 7 },
+   216→    { name: 'Álvarez', nationCode: 'ARG', position: 'ST', pulseScore: 90, sentiment: 88, trend: 'rising', isLive: false, matchInfo: 'ARG 3-0 CRO (2 goals)', order: 9 },
+   217→    { name: 'Mbappé', nationCode: 'FRA', position: 'RW', pulseScore: 96, sentiment: 95, trend: 'rising', isLive: false, matchInfo: 'FRA 2-0 MAR', order: 8 },
+   218→  ],
+   219→
+   220→  'third-place': [
+   221→    // GK
+   222→    { name: 'Livaković', nationCode: 'CRO', position: 'GK', pulseScore: 84, sentiment: 82, trend: 'stable', isLive: false, matchInfo: 'CRO 2-1 MAR', order: 0 },
+   223→    // DEF
+   224→    { name: 'Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 80, sentiment: 76, trend: 'stable', isLive: false, matchInfo: 'MAR 1-2 CRO', order: 2 },
+   225→    { name: 'Gvardiol', nationCode: 'CRO', position: 'CB', pulseScore: 86, sentiment: 84, trend: 'rising', isLive: false, matchInfo: 'CRO 2-1 MAR (scored opening goal!)', order: 3 },
+   226→    { name: 'Dægli', nationCode: 'MAR', position: 'CB', pulseScore: 78, sentiment: 75, trend: 'stable', isLive: false, matchInfo: 'MAR 1-2 CRO', order: 3 },
+   227→    { name: 'Juranović', nationCode: 'CRO', position: 'LB', pulseScore: 82, sentiment: 80, trend: 'stable', isLive: false, matchInfo: 'CRO 2-1 MAR', order: 1 },
+   228→    // MID
+   229→    { name: 'Modrić', nationCode: 'CRO', position: 'CM', pulseScore: 86, sentiment: 84, trend: 'stable', isLive: false, matchInfo: 'CRO 2-1 MAR (orchestrated midfield)', order: 5 },
+   230→    { name: 'Amrabat', nationCode: 'MAR', position: 'CM', pulseScore: 84, sentiment: 82, trend: 'stable', isLive: false, matchInfo: 'MAR 1-2 CRO (tireless)', order: 5 },
+   231→    { name: 'Majer', nationCode: 'CRO', position: 'CAM', pulseScore: 81, sentiment: 78, trend: 'stable', isLive: false, matchInfo: 'CRO 2-1 MAR', order: 6 },
+   232→    // FWD
+   233→    { name: 'Oršić', nationCode: 'CRO', position: 'LW', pulseScore: 85, sentiment: 83, trend: 'rising', isLive: false, matchInfo: 'CRO 2-1 MAR (winner!)', order: 7 },
+   234→    { name: 'Majer', nationCode: 'CRO', position: 'ST', pulseScore: 80, sentiment: 77, trend: 'stable', isLive: false, matchInfo: 'CRO 2-1 MAR', order: 9 },
+   235→    { name: 'Ziyech', nationCode: 'MAR', position: 'RW', pulseScore: 82, sentiment: 80, trend: 'stable', isLive: false, matchInfo: 'MAR 1-2 CRO', order: 8 },
+   236→  ],
+   237→
+   238→  'final': [
+   239→    // GK
+   240→    { name: 'Emi Martínez', nationCode: 'ARG', position: 'GK', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: false, matchInfo: 'ARG 3-3 FRA (pens: key save on Kolo Muani)', order: 0 },
+   241→    // DEF
+   242→    { name: 'Molina', nationCode: 'ARG', position: 'RB', pulseScore: 83, sentiment: 80, trend: 'rising', isLive: false, matchInfo: 'ARG 3-3 FRA (pens win)', order: 2 },
+   243→    { name: 'Otamendi', nationCode: 'ARG', position: 'CB', pulseScore: 82, sentiment: 79, trend: 'stable', isLive: false, matchInfo: 'ARG 3-3 FRA (pens win)', order: 3 },
+   244→    { name: 'Romero', nationCode: 'ARG', position: 'CB', pulseScore: 84, sentiment: 81, trend: 'stable', isLive: false, matchInfo: 'ARG 3-3 FRA (pens win)', order: 3 },
+   245→    { name: 'Acuña', nationCode: 'ARG', position: 'LB', pulseScore: 81, sentiment: 78, trend: 'stable', isLive: false, matchInfo: 'ARG 3-3 FRA (pens win)', order: 1 },
+   246→    // MID
+   247→    { name: 'Enzo Fernández', nationCode: 'ARG', position: 'CM', pulseScore: 89, sentiment: 87, trend: 'rising', isLive: false, matchInfo: 'ARG 3-3 FRA (Young Player of Tournament)', order: 5 },
+   248→    { name: 'Mac Allister', nationCode: 'ARG', position: 'CM', pulseScore: 86, sentiment: 84, trend: 'rising', isLive: false, matchInfo: 'ARG 3-3 FRA (key assist for 2nd goal)', order: 5 },
+   249→    { name: 'Griezmann', nationCode: 'FRA', position: 'CAM', pulseScore: 82, sentiment: 78, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (quiet in final)', order: 6 },
+   250→    // FWD
+   251→    { name: 'Messi', nationCode: 'ARG', position: 'LW', pulseScore: 99, sentiment: 98, trend: 'rising', isLive: false, matchInfo: 'ARG 3-3 FRA (2 goals - Golden Ball winner!)', order: 7 },
+   252→    { name: 'Mbappé', nationCode: 'FRA', position: 'ST', pulseScore: 97, sentiment: 95, trend: 'rising', isLive: false, matchInfo: 'FRA 3-3 ARG (hat-trick! Golden Boot)', order: 9 },
+   253→    { name: 'Di María', nationCode: 'ARG', position: 'RW', pulseScore: 91, sentiment: 90, trend: 'rising', isLive: false, matchInfo: 'ARG 3-3 FRA (stunning goal + won penalty)', order: 8 },
+   254→  ],
+   255→}
+   256→
+   257→// ── Crisis players per stage key ─────────────────────────────────────────────
+   258→const CRISIS_PLAYERS: Record<string, PlayerData[]> = {
+   259→  'group-stage': [
+   260→    // ── 4-3-3: 1 GK + 4 DEF + 3 MID + 3 FWD = 11 ──
+   261→    // GK
+   262→    { name: 'Navas', nationCode: 'CRC', position: 'GK', pulseScore: 18, sentiment: 12, trend: 'falling', isLive: false, matchInfo: 'CRC 0-7 ESP (conceded 7!)', order: 0 },
+   263→    // DEF
+   264→    { name: 'Süle', nationCode: 'GER', position: 'RB', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'GER 1-2 JPN (exposed on counter)', order: 2 },
+   265→    { name: 'Rüdiger', nationCode: 'GER', position: 'CB', pulseScore: 30, sentiment: 24, trend: 'falling', isLive: false, matchInfo: 'GER 1-2 JPN / GER eliminated', order: 3 },
+   266→    { name: 'Mendy', nationCode: 'FRA', position: 'CB', pulseScore: 25, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'FRA vs DEN (error-prone)', order: 3 },
+   267→    { name: 'Cancelo', nationCode: 'POR', position: 'LB', pulseScore: 30, sentiment: 25, trend: 'falling', isLive: false, matchInfo: 'POR group stage (benched)', order: 1 },
+   268→    // MID
+   269→    { name: 'Goretzka', nationCode: 'GER', position: 'CM', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'GER 1-2 JPN (anonymous)', order: 5 },
+   270→    { name: 'Müller', nationCode: 'GER', position: 'CAM', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'GER group stage (no goals, no impact)', order: 6 },
+   271→    { name: 'Eriksen', nationCode: 'DEN', position: 'CM', pulseScore: 30, sentiment: 25, trend: 'falling', isLive: false, matchInfo: 'DEN eliminated in groups', order: 5 },
+   272→    // FWD
+   273→    { name: 'Lukaku', nationCode: 'BEL', position: 'LW', pulseScore: 15, sentiment: 8, trend: 'falling', isLive: false, matchInfo: 'BEL vs CRO (missed 4 sitters!)', order: 7 },
+   274→    { name: 'Sané', nationCode: 'GER', position: 'ST', pulseScore: 24, sentiment: 18, trend: 'falling', isLive: false, matchInfo: 'GER group stage (ineffective)', order: 9 },
+   275→    { name: 'Hazard', nationCode: 'BEL', position: 'RW', pulseScore: 20, sentiment: 14, trend: 'falling', isLive: false, matchInfo: 'BEL group stage (shadow of himself)', order: 8 },
+   276→  ],
+   277→
+   278→  'round-of-16': [
+   279→    // GK
+   280→    { name: 'Sommer', nationCode: 'SUI', position: 'GK', pulseScore: 22, sentiment: 18, trend: 'falling', isLive: false, matchInfo: 'SUI 1-6 POR (conceded 6)', order: 0 },
+   281→    // DEF
+   282→    { name: 'Shaw', nationCode: 'ENG', position: 'RB', pulseScore: 35, sentiment: 28, trend: 'falling', isLive: false, matchInfo: 'ENG 3-0 SEN (quiet game)', order: 2 },
+   283→    { name: 'Akanji', nationCode: 'SUI', position: 'CB', pulseScore: 20, sentiment: 15, trend: 'falling', isLive: false, matchInfo: 'SUI 1-6 POR (overrun)', order: 3 },
+   284→    { name: 'El Yamiq', nationCode: 'MAR', position: 'CB', pulseScore: 32, sentiment: 28, trend: 'stable', isLive: false, matchInfo: 'MAR 0-0 ESP (survived)', order: 3 },
+   285→    { name: 'Robinson', nationCode: 'USA', position: 'LB', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'USA 1-3 NED (exposed)', order: 1 },
+   286→    // MID
+   287→    { name: 'Kimmich', nationCode: 'GER', position: 'CM', pulseScore: 25, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'GER already out', order: 5 },
+   288→    { name: 'Pedri', nationCode: 'ESP', position: 'CAM', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'ESP 0-0 MAR (eliminated on pens)', order: 6 },
+   289→    { name: 'McKennie', nationCode: 'USA', position: 'CM', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'USA 1-3 NED (overrun)', order: 5 },
+   290→    // FWD
+   291→    { name: 'Lukaku', nationCode: 'BEL', position: 'LW', pulseScore: 18, sentiment: 12, trend: 'falling', isLive: false, matchInfo: 'BEL already out', order: 7 },
+   292→    { name: 'Morata', nationCode: 'ESP', position: 'ST', pulseScore: 30, sentiment: 24, trend: 'falling', isLive: false, matchInfo: 'ESP 0-0 MAR (couldn\'t score)', order: 9 },
+   293→    { name: 'Ferran Torres', nationCode: 'ESP', position: 'RW', pulseScore: 25, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'ESP 0-0 MAR (anonymous)', order: 8 },
+   294→  ],
+   295→
+   296→  'quarter-finals': [
+   297→    // GK
+   298→    { name: 'Alisson', nationCode: 'BRA', position: 'GK', pulseScore: 32, sentiment: 28, trend: 'falling', isLive: false, matchInfo: 'BRA 1-1 CRO (eliminated on pens)', order: 0 },
+   299→    // DEF
+   300→    { name: 'Militão', nationCode: 'BRA', position: 'RB', pulseScore: 30, sentiment: 25, trend: 'falling', isLive: false, matchInfo: 'BRA 1-1 CRO (struggled)', order: 2 },
+   301→    { name: 'Marquinhos', nationCode: 'BRA', position: 'CB', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'BRA 1-1 CRO (hit post in ET)', order: 3 },
+   302→    { name: 'Stones', nationCode: 'ENG', position: 'CB', pulseScore: 30, sentiment: 25, trend: 'falling', isLive: false, matchInfo: 'ENG 1-2 FRA (eliminated)', order: 3 },
+   303→    { name: 'Shaw', nationCode: 'ENG', position: 'LB', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'ENG 1-2 FRA (poor game)', order: 1 },
+   304→    // MID
+   305→    { name: 'Casemiro', nationCode: 'BRA', position: 'CM', pulseScore: 32, sentiment: 26, trend: 'falling', isLive: false, matchInfo: 'BRA 1-1 CRO (outplayed by Modrić)', order: 5 },
+   306→    { name: 'Neymar', nationCode: 'BRA', position: 'CAM', pulseScore: 35, sentiment: 28, trend: 'falling', isLive: false, matchInfo: 'BRA 1-1 CRO (scored but missed pen)', order: 6 },
+   307→    { name: 'Bellingham', nationCode: 'ENG', position: 'CM', pulseScore: 32, sentiment: 26, trend: 'falling', isLive: false, matchInfo: 'ENG 1-2 FRA (couldn\'t influence)', order: 5 },
+   308→    // FWD
+   309→    { name: 'Vinícius Jr', nationCode: 'BRA', position: 'LW', pulseScore: 30, sentiment: 24, trend: 'falling', isLive: false, matchInfo: 'BRA 1-1 CRO (frustrated)', order: 7 },
+   310→    { name: 'Kane', nationCode: 'ENG', position: 'ST', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'ENG 1-2 FRA (missed crucial penalty!)', order: 9 },
+   311→    { name: 'Raphinha', nationCode: 'BRA', position: 'RW', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'BRA 1-1 CRO (ineffective)', order: 8 },
+   312→  ],
+   313→
+   314→  'semi-finals': [
+   315→    // GK
+   316→    { name: 'Bounou', nationCode: 'MAR', position: 'GK', pulseScore: 35, sentiment: 30, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA (beaten twice)', order: 0 },
+   317→    // DEF
+   318→    { name: 'Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 32, sentiment: 28, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA (contained)', order: 2 },
+   319→    { name: 'Agüerd', nationCode: 'MAR', position: 'CB', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA (struggled vs Mbappé)', order: 3 },
+   320→    { name: 'Dægli', nationCode: 'MAR', position: 'CB', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA', order: 3 },
+   321→    { name: 'Mazraoui', nationCode: 'MAR', position: 'LB', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA (injured)', order: 1 },
+   322→    // MID
+   323→    { name: 'Amrabat', nationCode: 'MAR', position: 'CM', pulseScore: 32, sentiment: 28, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA (finally tired)', order: 5 },
+   324→    { name: 'Saïss', nationCode: 'MAR', position: 'CM', pulseScore: 24, sentiment: 18, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA (injured early)', order: 5 },
+   325→    { name: 'Ziyech', nationCode: 'MAR', position: 'CAM', pulseScore: 30, sentiment: 24, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA (couldn\'t create)', order: 6 },
+   326→    // FWD
+   327→    { name: 'Boufal', nationCode: 'MAR', position: 'LW', pulseScore: 22, sentiment: 16, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA (invisible)', order: 7 },
+   328→    { name: 'En-Nesyri', nationCode: 'MAR', position: 'ST', pulseScore: 25, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA (isolated)', order: 9 },
+   329→    { name: 'Attiat-Allah', nationCode: 'MAR', position: 'RW', pulseScore: 24, sentiment: 18, trend: 'falling', isLive: false, matchInfo: 'MAR 0-2 FRA', order: 8 },
+   330→  ],
+   331→
+   332→  'third-place': [
+   333→    // GK
+   334→    { name: 'Bounou', nationCode: 'MAR', position: 'GK', pulseScore: 30, sentiment: 24, trend: 'falling', isLive: false, matchInfo: 'MAR 1-2 CRO (beaten twice)', order: 0 },
+   335→    // DEF
+   336→    { name: 'Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 32, sentiment: 26, trend: 'stable', isLive: false, matchInfo: 'MAR 1-2 CRO', order: 2 },
+   337→    { name: 'Agüerd', nationCode: 'MAR', position: 'CB', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'MAR 1-2 CRO', order: 3 },
+   338→    { name: 'Dægli', nationCode: 'MAR', position: 'CB', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'MAR 1-2 CRO', order: 3 },
+   339→    { name: 'Mazraoui', nationCode: 'MAR', position: 'LB', pulseScore: 25, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'MAR 1-2 CRO (still injured)', order: 1 },
+   340→    // MID
+   341→    { name: 'Amrabat', nationCode: 'MAR', position: 'CM', pulseScore: 30, sentiment: 24, trend: 'stable', isLive: false, matchInfo: 'MAR 1-2 CRO (exhausted)', order: 5 },
+   342→    { name: 'Saïss', nationCode: 'MAR', position: 'CM', pulseScore: 22, sentiment: 16, trend: 'falling', isLive: false, matchInfo: 'MAR 1-2 CRO', order: 5 },
+   343→    { name: 'Ziyech', nationCode: 'MAR', position: 'CAM', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'MAR 1-2 CRO (couldn\'t deliver)', order: 6 },
+   344→    // FWD
+   345→    { name: 'Boufal', nationCode: 'MAR', position: 'LW', pulseScore: 20, sentiment: 14, trend: 'falling', isLive: false, matchInfo: 'MAR 1-2 CRO', order: 7 },
+   346→    { name: 'En-Nesyri', nationCode: 'MAR', position: 'ST', pulseScore: 24, sentiment: 18, trend: 'falling', isLive: false, matchInfo: 'MAR 1-2 CRO (scored but not enough)', order: 9 },
+   347→    { name: 'Krama', nationCode: 'MAR', position: 'RW', pulseScore: 22, sentiment: 16, trend: 'falling', isLive: false, matchInfo: 'MAR 1-2 CRO', order: 8 },
+   348→  ],
+   349→
+   350→  'final': [
+   351→    // GK
+   352→    { name: 'Lloris', nationCode: 'FRA', position: 'GK', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (beaten 3 times, lost on pens)', order: 0 },
+   353→    // DEF
+   354→    { name: 'Koundé', nationCode: 'FRA', position: 'RB', pulseScore: 30, sentiment: 24, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (exposed by Di María)', order: 2 },
+   355→    { name: 'Upamecano', nationCode: 'FRA', position: 'CB', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (struggled)', order: 3 },
+   356→    { name: 'Konaté', nationCode: 'FRA', position: 'CB', pulseScore: 30, sentiment: 24, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (beaten in air)', order: 3 },
+   357→    { name: 'Theo Hernández', nationCode: 'FRA', position: 'LB', pulseScore: 32, sentiment: 26, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (poor defensively)', order: 1 },
+   358→    // MID
+   359→    { name: 'Tchouaméni', nationCode: 'FRA', position: 'CM', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (missed penalty in shootout!)', order: 5 },
+   360→    { name: 'Rabiot', nationCode: 'FRA', position: 'CM', pulseScore: 30, sentiment: 24, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (overrun first 80 min)', order: 5 },
+   361→    { name: 'Griezmann', nationCode: 'FRA', position: 'CAM', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (anonymous for 80 min)', order: 6 },
+   362→    // FWD
+   363→    { name: 'Giroud', nationCode: 'FRA', position: 'LW', pulseScore: 22, sentiment: 16, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (0 shots, subbed off)', order: 7 },
+   364→    { name: 'Dembélé', nationCode: 'FRA', position: 'ST', pulseScore: 20, sentiment: 14, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (gave away penalty, subbed off)', order: 9 },
+   365→    { name: 'Coman', nationCode: 'FRA', position: 'RW', pulseScore: 24, sentiment: 18, trend: 'falling', isLive: false, matchInfo: 'FRA 3-3 ARG (missed penalty in shootout)', order: 8 },
+   366→  ],
+   367→}
+   368→
+   369→// ── Seed handler ─────────────────────────────────────────────────────────────
+   370→export async function POST() {
+   371→  try {
+   372→    // ── 1. Clean up existing data ──
+   373→    await db.wCSelectionPlayer.deleteMany()
+   374→    await db.wCSelection.deleteMany()
+   375→    await db.wCStage.deleteMany()
+   376→    await db.match.deleteMany()
+   377→
+   378→    // ── 2. Create 6 stages — all completed (WC 2022 is over) ──
+   379→    const stagesData = [
+   380→      { name: 'Group Stage', nameAr: 'دور المجموعات', order: 1, status: 'completed', key: 'group-stage', startedAt: new Date('2022-11-20'), completedAt: new Date('2022-12-02') },
+   381→      { name: 'Round of 16', nameAr: 'دور الـ 16', order: 2, status: 'completed', key: 'round-of-16', startedAt: new Date('2022-12-03'), completedAt: new Date('2022-12-07') },
+   382→      { name: 'Quarter Finals', nameAr: 'ربع النهائي', order: 3, status: 'completed', key: 'quarter-finals', startedAt: new Date('2022-12-09'), completedAt: new Date('2022-12-10') },
+   383→      { name: 'Semi Finals', nameAr: 'نصف النهائي', order: 4, status: 'completed', key: 'semi-finals', startedAt: new Date('2022-12-13'), completedAt: new Date('2022-12-14') },
+   384→      { name: 'Third Place', nameAr: 'المركز الثالث', order: 5, status: 'completed', key: 'third-place', startedAt: new Date('2022-12-17'), completedAt: new Date('2022-12-17') },
+   385→      { name: 'Final', nameAr: 'النهائي', order: 6, status: 'completed', key: 'final', startedAt: new Date('2022-12-18'), completedAt: new Date('2022-12-18') },
+   386→    ]
+   387→
+   388→    const stages: Array<{ id: string; name: string; order: number; status: string; key: string }> = []
+   389→    for (const sd of stagesData) {
+   390→      const stage = await db.wCStage.create({
+   391→        data: {
+   392→          name: sd.name,
+   393→          nameAr: sd.nameAr,
+   394→          order: sd.order,
+   395→          status: sd.status,
+   396→          startedAt: sd.startedAt,
+   397→          completedAt: sd.completedAt,
+   398→        }
+   399→      })
+   400→      stages.push({ ...stage, key: sd.key })
+   401→    }
+   402→
+   403→    // ── 3. Seed national teams ──
+   404→    const { NATIONAL_TEAMS } = await import('@/lib/national-teams')
+   405→    for (const team of NATIONAL_TEAMS) {
+   406→      await db.nationalTeam.upsert({
+   407→        where: { code: team.code },
+   408→        update: {},
+   409→        create: {
+   410→          id: team.id,
+   411→          name: team.name,
+   412→          nameAr: team.nameAr,
+   413→          code: team.code,
+   414→          flag: team.flag,
+   415→          group: team.group,
+   416→          fifaRank: team.fifaRank,
+   417→          primaryColor: team.primaryColor,
+   418→          region: team.region,
+   419→        }
+   420→      })
+   421→    }
+   422→
+   423→    // ── 4. Seed ALL 64 WC 2022 matches ──
+   424→    for (const m of MATCHES_DATA) {
+   425→      const homeInfo = TEAM_INFO[m.homeCode]
+   426→      const awayInfo = TEAM_INFO[m.awayCode]
+   427→      if (!homeInfo || !awayInfo) {
+   428→        console.warn(`Skipping match: unknown team code ${m.homeCode} or ${m.awayCode}`)
+   429→        continue
+   430→      }
+   431→
+   432→      await db.match.create({
+   433→        data: {
+   434→          homeTeamCode: m.homeCode,
+   435→          homeTeamName: homeInfo.name,
+   436→          homeTeamFlag: homeInfo.flag,
+   437→          awayTeamCode: m.awayCode,
+   438→          awayTeamName: awayInfo.name,
+   439→          awayTeamFlag: awayInfo.flag,
+   440→          homeScore: m.homeScore,
+   441→          awayScore: m.awayScore,
+   442→          status: 'completed',
+   443→          league: 'WC',
+   444→          group: m.group,
+   445→          matchDate: new Date(m.matchDate),
+   446→          homeSentiment: m.homeSentiment,
+   447→          awaySentiment: m.awaySentiment,
+   448→        }
+   449→      })
+   450→    }
+   451→
+   452→    // ── 5. Seed Elite & Crisis selections + players for each stage ──
+   453→    for (const stage of stages) {
+   454→      const elitePool = ELITE_PLAYERS[stage.key]
+   455→      const crisisPool = CRISIS_PLAYERS[stage.key]
+   456→
+   457→      if (elitePool && elitePool.length > 0) {
+   458→        const eliteSelection = await db.wCSelection.create({
+   459→          data: {
+   460→            type: 'elite',
+   461→            stageId: stage.id,
+   462→            formation: '4-3-3',
+   463→            locked: true, // all stages are completed
+   464→          }
+   465→        })
+   466→
+   467→        for (const p of elitePool) {
+   468→          await db.wCSelectionPlayer.create({
+   469→            data: {
+   470→              selectionId: eliteSelection.id,
+   471→              playerName: p.name,
+   472→              nationCode: p.nationCode,
+   473→              position: p.position,
+   474→              pulseScore: p.pulseScore,
+   475→              sentiment: p.sentiment,
+   476→              trend: p.trend,
+   477→              isLive: p.isLive,
+   478→              matchInfo: p.matchInfo,
+   479→              order: p.order,
+   480→            }
+   481→          })
+   482→        }
+   483→      }
+   484→
+   485→      if (crisisPool && crisisPool.length > 0) {
+   486→        const crisisSelection = await db.wCSelection.create({
+   487→          data: {
+   488→            type: 'crisis',
+   489→            stageId: stage.id,
+   490→            formation: '4-3-3',
+   491→            locked: true, // all stages are completed
+   492→          }
+   493→        })
+   494→
+   495→        for (const p of crisisPool) {
+   496→          await db.wCSelectionPlayer.create({
+   497→            data: {
+   498→              selectionId: crisisSelection.id,
+   499→              playerName: p.name,
+   500→              nationCode: p.nationCode,
+   501→              position: p.position,
+   502→              pulseScore: p.pulseScore,
+   503→              sentiment: p.sentiment,
+   504→              trend: p.trend,
+   505→              isLive: p.isLive,
+   506→              matchInfo: p.matchInfo,
+   507→              order: p.order,
+   508→            }
+   509→          })
+   510→        }
+   511→      }
+   512→    }
+   513→
+   514→    return NextResponse.json({
+   515→      success: true,
+   516→      message: 'Database seeded with real World Cup 2022 Qatar data',
+   517→      stages: stages.length,
+   518→      nationalTeams: NATIONAL_TEAMS.length,
+   519→      matches: MATCHES_DATA.length,
+   520→    })
+   521→  } catch (error) {
+   522→    console.error('Seed failed:', error)
+   523→    return NextResponse.json({ error: 'Seed failed', details: String(error) }, { status: 500 })
+   524→  }
+   525→}
+   526→
