@@ -253,7 +253,7 @@
 /* ── Pitch Background ─────────────────────────────────────── */
 .pitch-bg {
   position: relative;
-  aspect-ratio: 3 / 4.2;
+  aspect-ratio: 4 / 3;
   background: linear-gradient(
     to bottom,
     #2a7d45 0%,
@@ -272,8 +272,8 @@
     #2f8c4e 91%,
     #2a7d45 100%
   );
-  border: 3px solid rgba(255, 255, 255, 0.35);
-  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
   overflow: hidden;
   box-shadow:
     inset 0 0 30px rgba(0, 0, 0, 0.15),

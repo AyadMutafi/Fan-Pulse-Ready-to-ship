@@ -807,29 +807,29 @@ function FormationPlayerCard({
       {/* Player Circle - always shows face emoji */}
       <div
         className={`
-          relative flex size-14 sm:size-16 items-center justify-center rounded-full border-2 shadow-md overflow-hidden
-          border-white/70 bg-white/95 dark:bg-white/90 shadow-black/20
+          relative flex size-10 sm:size-12 items-center justify-center rounded-full border-2 shadow-md overflow-hidden
+          border-white/70 bg-white/95 dark:bg-white/90 shadow-black/15
           ${isLive ? 'animate-pulse-glow' : ''}
-          transition-all duration-300 hover:scale-110
+          transition-all duration-300
         `}
       >
-        <span className="text-2xl sm:text-3xl leading-none select-none">{faceEmoji}</span>
+        <span className="text-lg sm:text-xl leading-none select-none">{faceEmoji}</span>
         {isLive && (
-          <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
+          <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
         )}
         {isCompleted && (
-          <Lock className="absolute -right-0.5 -top-0.5 size-3 text-[#666] dark:text-[#CCCCCC]" />
+          <Lock className="absolute -right-0.5 -top-0.5 size-2.5 text-[#666] dark:text-[#CCCCCC]" />
         )}
       </div>
       {/* Player Name */}
-      <p className="mt-1 max-w-[72px] truncate text-[10px] sm:text-xs font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+      <p className="mt-0.5 max-w-[60px] truncate text-[9px] sm:text-[10px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
         {player.name}
       </p>
       {/* Position + Trend */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         <Badge
           variant="outline"
-          className={`text-[7px] sm:text-[8px] font-bold px-1 py-0 bg-white/90 backdrop-blur-sm ${
+          className={`text-[6px] sm:text-[7px] font-bold px-0.5 py-0 bg-white/90 backdrop-blur-sm ${
             isElite ? 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]' : 'border-[#EF4444]/30 text-[#EF4444] dark:border-[#F87171]/30 dark:text-[#F87171]'
           }`}
         >
@@ -838,24 +838,19 @@ function FormationPlayerCard({
         {getTrendIcon(player.trend)}
       </div>
       {/* Rating + Flag next to score */}
-      <div className="mt-1 flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         {flagMode === 'flag' ? (
-          <FlagImage nationCode={player.nationCode} size={18} fallbackEmoji={flagEmoji} />
+          <FlagImage nationCode={player.nationCode} size={12} fallbackEmoji={flagEmoji} />
         ) : (
-          <span className="text-sm leading-none">{flagEmoji}</span>
+          <span className="text-[10px] leading-none">{flagEmoji}</span>
         )}
         <span
-          className="text-[10px] sm:text-[11px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+          className="text-[9px] sm:text-[10px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
           style={{ color: ratingColor }}
         >
           {rating.toFixed(1)}
         </span>
       </div>
-      {player.matchInfo && (
-        <p className="mt-0.5 text-[8px] text-white/80 truncate max-w-[80px] text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
-          {player.matchInfo}
-        </p>
-      )}
     </motion.div>
   )
 }
@@ -930,12 +925,12 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
     }
   }
 
-  const organizeFormation = (players: WCSelectionPlayer[]) => {
+  const organizeFormationLandscape = (players: WCSelectionPlayer[]) => {
     const gk = players.filter(p => p.position === 'GK')
     const def = players.filter(p => ['CB', 'LB', 'RB'].includes(p.position))
     const mid = players.filter(p => ['CM', 'CAM', 'CDM'].includes(p.position))
     const fwd = players.filter(p => ['LW', 'RW', 'ST', 'CF'].includes(p.position))
-    return [fwd, mid, def, gk]  // FWD at top, GK at bottom
+    return [gk, def, mid, fwd]  // Landscape: GK on left, FWD on right
   }
 
   const currentData = activeView === 'elite' ? eliteData : crisisData
@@ -1077,16 +1072,16 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="pb-6">
+                <CardContent className="pb-4 pt-3">
                   <div className={`pitch-bg relative ${activeView === 'crisis' ? 'crisis-pitch' : ''}`}>
                     {/* Football Pitch Markings - SVG overlay */}
                     <PitchMarkings crisis={activeView === 'crisis'} />
 
-                    {/* Player Formation Rows */}
-                    <div className="relative z-10 px-3 py-5 sm:px-6 sm:py-8 flex flex-col justify-between h-full">
-                      {organizeFormation(currentData.players).map((row, ri) => (
-                        <div key={ri} className="flex justify-center gap-2 sm:gap-5">
-                          {row.map((player) => (
+                    {/* Player Formation Columns - landscape layout GK→DEF→MID→FWD */}
+                    <div className="relative z-10 px-2 sm:px-4 py-2 sm:py-3 flex justify-between items-center h-full">
+                      {organizeFormationLandscape(currentData.players).map((col, ci) => (
+                        <div key={ci} className="flex flex-col items-center gap-1 sm:gap-1.5">
+                          {col.map((player) => (
                             <FormationPlayerCard
                               key={player.id}
                               player={player}
@@ -1154,42 +1149,42 @@ function PausedTabOverlay({ tabName }: { tabName: string }) {
 // ── Pitch Markings SVG Overlay ──────────────────────────────
 
 function PitchMarkings({ crisis }: { crisis: boolean }) {
-  const lineColor = crisis ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.45)'
-  const dotFill = crisis ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.45)'
+  const lineColor = crisis ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.35)'
+  const dotFill = crisis ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.35)'
 
   return (
     <svg
       className="absolute inset-0 w-full h-full pointer-events-none"
-      viewBox="0 0 300 420"
+      viewBox="0 0 400 300"
       preserveAspectRatio="xMidYMid slice"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <g stroke={lineColor} strokeWidth="1.8" fill="none">
+      <g stroke={lineColor} strokeWidth="1.5" fill="none">
         {/* Outer boundary */}
-        <rect x="8" y="8" width="284" height="404" rx="3" />
-        {/* Halfway line */}
-        <line x1="8" y1="210" x2="292" y2="210" />
+        <rect x="6" y="6" width="388" height="288" rx="3" />
+        {/* Halfway line (vertical) */}
+        <line x1="200" y1="6" x2="200" y2="294" />
         {/* Center circle */}
-        <circle cx="150" cy="210" r="36" />
-        <circle cx="150" cy="210" r="3" fill={dotFill} />
-        {/* Top penalty area */}
-        <rect x="60" y="8" width="180" height="66" />
-        <rect x="95" y="8" width="110" height="30" />
-        <path d="M 110 74 A 36 36 0 0 0 190 74" />
-        <circle cx="150" cy="50" r="3" fill={dotFill} />
-        {/* Bottom penalty area */}
-        <rect x="60" y="346" width="180" height="66" />
-        <rect x="95" y="390" width="110" height="30" />
-        <path d="M 110 346 A 36 36 0 0 1 190 346" />
-        <circle cx="150" cy="370" r="3" fill={dotFill} />
+        <circle cx="200" cy="150" r="36" />
+        <circle cx="200" cy="150" r="3" fill={dotFill} />
+        {/* Left penalty area */}
+        <rect x="6" y="70" width="60" height="160" />
+        <rect x="6" y="105" width="25" height="90" />
+        <path d="M 66 110 A 36 36 0 0 1 66 190" />
+        <circle cx="40" cy="150" r="3" fill={dotFill} />
+        {/* Right penalty area */}
+        <rect x="334" y="70" width="60" height="160" />
+        <rect x="369" y="105" width="25" height="90" />
+        <path d="M 334 110 A 36 36 0 0 0 334 190" />
+        <circle cx="360" cy="150" r="3" fill={dotFill} />
         {/* Corner arcs */}
-        <path d="M 8 18 A 10 10 0 0 1 18 8" />
-        <path d="M 282 8 A 10 10 0 0 1 292 18" />
-        <path d="M 8 402 A 10 10 0 0 0 18 412" />
-        <path d="M 282 412 A 10 10 0 0 0 292 402" />
+        <path d="M 6 16 A 10 10 0 0 1 16 6" />
+        <path d="M 384 6 A 10 10 0 0 1 394 16" />
+        <path d="M 6 284 A 10 10 0 0 0 16 294" />
+        <path d="M 384 294 A 10 10 0 0 0 394 284" />
         {/* Goals (dashed) */}
-        <rect x="115" y="0" width="70" height="8" strokeDasharray="4 3" />
-        <rect x="115" y="412" width="70" height="8" strokeDasharray="4 3" />
+        <rect x="0" y="115" width="6" height="70" strokeDasharray="4 3" />
+        <rect x="394" y="115" width="6" height="70" strokeDasharray="4 3" />
       </g>
     </svg>
   )
