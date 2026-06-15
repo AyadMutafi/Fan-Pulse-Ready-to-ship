@@ -252,17 +252,82 @@
 
 /* ── Pitch Background ─────────────────────────────────────── */
 .pitch-bg {
-  background: var(--pitch);
   position: relative;
+  background: linear-gradient(
+    to bottom,
+    #2d8a4e 0%,
+    #34a058 8%,
+    #2d8a4e 16%,
+    #34a058 24%,
+    #2d8a4e 32%,
+    #34a058 40%,
+    #2d8a4e 48%,
+    #34a058 56%,
+    #2d8a4e 64%,
+    #34a058 72%,
+    #2d8a4e 80%,
+    #34a058 88%,
+    #2d8a4e 100%
+  );
+  border-radius: inherit;
+  overflow: hidden;
 }
 
-.pitch-bg::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1.5px dashed var(--pitch-line);
-  border-radius: inherit;
-  pointer-events: none;
+.dark .pitch-bg {
+  background: linear-gradient(
+    to bottom,
+    #1a5c35 0%,
+    #1f6b3e 8%,
+    #1a5c35 16%,
+    #1f6b3e 24%,
+    #1a5c35 32%,
+    #1f6b3e 40%,
+    #1a5c35 48%,
+    #1f6b3e 56%,
+    #1a5c35 64%,
+    #1f6b3e 72%,
+    #1a5c35 80%,
+    #1f6b3e 88%,
+    #1a5c35 100%
+  );
+}
+
+.pitch-bg.crisis-pitch {
+  background: linear-gradient(
+    to bottom,
+    #7a2e2e 0%,
+    #8a3636 8%,
+    #7a2e2e 16%,
+    #8a3636 24%,
+    #7a2e2e 32%,
+    #8a3636 40%,
+    #7a2e2e 48%,
+    #8a3636 56%,
+    #7a2e2e 64%,
+    #8a3636 72%,
+    #7a2e2e 80%,
+    #8a3636 88%,
+    #7a2e2e 100%
+  );
+}
+
+.dark .pitch-bg.crisis-pitch {
+  background: linear-gradient(
+    to bottom,
+    #5c1a1a 0%,
+    #6b2020 8%,
+    #5c1a1a 16%,
+    #6b2020 24%,
+    #5c1a1a 32%,
+    #6b2020 40%,
+    #5c1a1a 48%,
+    #6b2020 56%,
+    #5c1a1a 64%,
+    #6b2020 72%,
+    #5c1a1a 80%,
+    #6b2020 88%,
+    #5c1a1a 100%
+  );
 }
 
 /* ── Purple Glow Card (Elite/Pulse Elite) ─────────────────── */

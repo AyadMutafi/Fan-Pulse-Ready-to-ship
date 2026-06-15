@@ -6,21 +6,22 @@ const ELITE_PLAYERS: Record<string, Array<{
   name: string; nationCode: string; position: string; pulseScore: number; sentiment: number; trend: string; isLive: boolean; matchInfo: string; order: number
 }>> = {
   'group-stage-rd1': [
-    // ── Friendly Matches ──
-    { name: 'Désiré Doué', nationCode: 'FRA', position: 'RW', pulseScore: 95, sentiment: 93, trend: 'rising', isLive: false, matchInfo: 'COL 1-3 FRA', order: 8 },
-    { name: 'Michael Olise', nationCode: 'FRA', position: 'CAM', pulseScore: 93, sentiment: 91, trend: 'rising', isLive: false, matchInfo: 'FRA 3-0 NIR', order: 6 },
-    { name: 'Lionel Messi', nationCode: 'ARG', position: 'ST', pulseScore: 92, sentiment: 89, trend: 'rising', isLive: false, matchInfo: 'ARG 3-0 ISL', order: 9 },
-    // ── World Cup Group Stage ──
-    { name: 'Kylian Mbappé', nationCode: 'FRA', position: 'LW', pulseScore: 96, sentiment: 94, trend: 'rising', isLive: true, matchInfo: 'FRA 2-0 SEN', order: 7 },
-    { name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', pulseScore: 92, sentiment: 89, trend: 'rising', isLive: true, matchInfo: 'ENG 2-1 CRO', order: 5 },
-    { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 91, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'ESP 2-0 CPV', order: 8 },
-    { name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', pulseScore: 90, sentiment: 87, trend: 'rising', isLive: true, matchInfo: 'GER 3-0 CUW', order: 6 },
-    { name: 'Gio Reyna', nationCode: 'USA', position: 'CAM', pulseScore: 89, sentiment: 86, trend: 'rising', isLive: false, matchInfo: 'USA 4-1 PAR', order: 6 },
-    { name: 'Rodri', nationCode: 'ESP', position: 'CM', pulseScore: 88, sentiment: 85, trend: 'stable', isLive: true, matchInfo: 'ESP 2-0 CPV', order: 5 },
+    // ── 4-3-3 Formation: 1 GK + 4 DEF + 3 MID + 3 FWD = 11 players ──
+    // GK
+    { name: 'Alisson', nationCode: 'BRA', position: 'GK', pulseScore: 88, sentiment: 85, trend: 'stable', isLive: false, matchInfo: 'BRA 1-1 MAR', order: 0 },
+    // DEF
     { name: 'Achraf Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 87, sentiment: 84, trend: 'rising', isLive: false, matchInfo: 'BRA 1-1 MAR', order: 2 },
-    { name: 'Julián Álvarez', nationCode: 'ARG', position: 'ST', pulseScore: 86, sentiment: 83, trend: 'rising', isLive: true, matchInfo: 'ARG 3-0 ALG', order: 9 },
     { name: 'Virgil van Dijk', nationCode: 'NED', position: 'CB', pulseScore: 85, sentiment: 82, trend: 'stable', isLive: true, matchInfo: 'NED 1-1 JPN', order: 3 },
     { name: 'Rúben Dias', nationCode: 'POR', position: 'CB', pulseScore: 84, sentiment: 81, trend: 'stable', isLive: true, matchInfo: 'POR 1-0 COD', order: 3 },
+    { name: 'Theo Hernández', nationCode: 'FRA', position: 'LB', pulseScore: 86, sentiment: 83, trend: 'rising', isLive: true, matchInfo: 'FRA 2-0 SEN', order: 1 },
+    // MID
+    { name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', pulseScore: 92, sentiment: 89, trend: 'rising', isLive: true, matchInfo: 'ENG 2-1 CRO', order: 5 },
+    { name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', pulseScore: 90, sentiment: 87, trend: 'rising', isLive: true, matchInfo: 'GER 3-0 CUW', order: 6 },
+    { name: 'Rodri', nationCode: 'ESP', position: 'CM', pulseScore: 88, sentiment: 85, trend: 'stable', isLive: true, matchInfo: 'ESP 2-0 CPV', order: 5 },
+    // FWD
+    { name: 'Kylian Mbappé', nationCode: 'FRA', position: 'LW', pulseScore: 96, sentiment: 94, trend: 'rising', isLive: true, matchInfo: 'FRA 2-0 SEN', order: 7 },
+    { name: 'Lionel Messi', nationCode: 'ARG', position: 'ST', pulseScore: 92, sentiment: 89, trend: 'rising', isLive: false, matchInfo: 'ARG 3-0 ISL', order: 9 },
+    { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 91, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'ESP 2-0 CPV', order: 8 },
   ],
   'group-stage-rd2': [
     { name: 'Kylian Mbappé', nationCode: 'FRA', position: 'LW', pulseScore: 94, sentiment: 92, trend: 'rising', isLive: true, matchInfo: 'FRA vs NOR', order: 7 },
@@ -33,17 +34,22 @@ const CRISIS_PLAYERS: Record<string, Array<{
   name: string; nationCode: string; position: string; pulseScore: number; sentiment: number; trend: string; isLive: boolean; matchInfo: string; order: number
 }>> = {
   'group-stage-rd1': [
+    // ── 4-3-3 Formation: 1 GK + 4 DEF + 3 MID + 3 FWD = 11 players ──
+    // GK
     { name: 'Andre Onana', nationCode: 'CMR', position: 'GK', pulseScore: 15, sentiment: 11, trend: 'falling', isLive: false, matchInfo: 'CAM vs CMR', order: 0 },
-    { name: 'João Cancelo', nationCode: 'POR', position: 'LB', pulseScore: 28, sentiment: 23, trend: 'falling', isLive: true, matchInfo: 'POR 1-0 COD', order: 1 },
+    // DEF
+    { name: 'Joshua Kimmich', nationCode: 'GER', position: 'RB', pulseScore: 32, sentiment: 27, trend: 'stable', isLive: true, matchInfo: 'GER 3-0 CUW', order: 2 },
     { name: 'Harry Maguire', nationCode: 'ENG', position: 'CB', pulseScore: 24, sentiment: 19, trend: 'falling', isLive: true, matchInfo: 'ENG 2-1 CRO', order: 3 },
     { name: 'Sergio Ramos', nationCode: 'ESP', position: 'CB', pulseScore: 27, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'ESP 2-0 CPV', order: 3 },
-    { name: 'Joshua Kimmich', nationCode: 'GER', position: 'RB', pulseScore: 32, sentiment: 27, trend: 'stable', isLive: true, matchInfo: 'GER 3-0 CUW', order: 2 },
+    { name: 'João Cancelo', nationCode: 'POR', position: 'LB', pulseScore: 28, sentiment: 23, trend: 'falling', isLive: true, matchInfo: 'POR 1-0 COD', order: 1 },
+    // MID
     { name: 'Leon Goretzka', nationCode: 'GER', position: 'CM', pulseScore: 29, sentiment: 24, trend: 'falling', isLive: true, matchInfo: 'GER 3-0 CUW', order: 5 },
     { name: 'Antoine Griezmann', nationCode: 'FRA', position: 'CAM', pulseScore: 18, sentiment: 14, trend: 'falling', isLive: true, matchInfo: 'FRA 2-0 SEN', order: 6 },
+    { name: 'Marc Guéhi', nationCode: 'ENG', position: 'CM', pulseScore: 31, sentiment: 26, trend: 'stable', isLive: true, matchInfo: 'ENG 2-1 CRO', order: 5 },
+    // FWD
     { name: 'Nico Williams', nationCode: 'ESP', position: 'LW', pulseScore: 30, sentiment: 25, trend: 'stable', isLive: true, matchInfo: 'ESP 2-0 CPV', order: 7 },
     { name: 'Richarlison', nationCode: 'BRA', position: 'ST', pulseScore: 21, sentiment: 17, trend: 'falling', isLive: false, matchInfo: 'BRA 1-1 MAR', order: 9 },
     { name: 'Wout Weghorst', nationCode: 'NED', position: 'RW', pulseScore: 22, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'NED 1-1 JPN', order: 8 },
-    { name: 'Marc Guéhi', nationCode: 'ENG', position: 'CB', pulseScore: 31, sentiment: 26, trend: 'stable', isLive: true, matchInfo: 'ENG 2-1 CRO', order: 3 },
   ],
   'group-stage-rd2': [
     { name: 'Antoine Griezmann', nationCode: 'FRA', position: 'CAM', pulseScore: 22, sentiment: 17, trend: 'falling', isLive: true, matchInfo: 'FRA vs NOR', order: 6 },

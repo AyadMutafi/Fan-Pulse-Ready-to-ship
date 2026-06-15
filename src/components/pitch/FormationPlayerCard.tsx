@@ -39,11 +39,8 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
     >
       <div
         className={`
-          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 text-xl shadow-md
-          ${isElite
-            ? 'border-[#6C2BD9]/40 dark:border-[#8B5CF6]/40 bg-white dark:bg-[#2D2D2D] shadow-[#6C2BD9]/10'
-            : 'border-[#EF4444]/40 dark:border-[#F87171]/40 bg-white dark:bg-[#2D2D2D] shadow-[#EF4444]/10'
-          }
+          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 text-xl shadow-md overflow-hidden
+          border-white/60 bg-white/90 dark:bg-white/80 shadow-black/20
           ${isLive ? 'animate-pulse-glow' : ''}
           transition-all duration-300 hover:scale-110
         `}
@@ -56,13 +53,13 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
           <Lock className="absolute -right-0.5 -top-0.5 size-3 text-[#666] dark:text-[#CCCCCC]" />
         )}
       </div>
-      <p className="mt-1 max-w-[70px] truncate text-[10px] sm:text-xs font-bold text-[#1A1A1A] dark:text-white text-center">
+      <p className="mt-1 max-w-[70px] truncate text-[10px] sm:text-xs font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
         {player.name}
       </p>
       <div className="flex items-center gap-1">
         <Badge
           variant="outline"
-          className={`text-[7px] sm:text-[8px] font-bold px-1 py-0 ${
+          className={`text-[7px] sm:text-[8px] font-bold px-1 py-0 bg-white/90 backdrop-blur-sm ${
             isElite ? 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]' : 'border-[#EF4444]/30 text-[#EF4444] dark:border-[#F87171]/30 dark:text-[#F87171]'
           }`}
         >
@@ -74,14 +71,13 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
       <div className="mt-1 flex items-center gap-0.5">
         {showEmojiNextToRating && <span className="text-[10px]">{faceEmoji}</span>}
         <span
-          className="text-[9px] sm:text-[10px] font-black"
-          style={{ color: getRatingColor(player.pulseScore / 10) }}
+          className="text-[9px] sm:text-[10px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
         >
           {ratingValue}
         </span>
       </div>
       {player.matchInfo && (
-        <p className="mt-0.5 text-[8px] text-[#666] dark:text-[#CCCCCC] truncate max-w-[80px] text-center">
+        <p className="mt-0.5 text-[8px] text-white/80 truncate max-w-[80px] text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
           {player.matchInfo}
         </p>
       )}

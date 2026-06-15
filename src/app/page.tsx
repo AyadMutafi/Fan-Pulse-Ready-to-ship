@@ -719,7 +719,18 @@ function TOTWTab() {
 
       <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
         <CardContent className="p-4">
-          <div className="pitch-bg rounded-xl p-4 sm:p-6 space-y-5 sm:space-y-6">
+          <div className="pitch-bg rounded-xl relative p-4 sm:p-6">
+            {/* Football Pitch Markings Overlay */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"><g stroke="rgba(255,255,255,0.4)" stroke-width="1.5" fill="none"><rect x="6" y="6" width="188" height="288" rx="2"/><line x1="6" y1="150" x2="194" y2="150"/><circle cx="100" cy="150" r="26"/><circle cx="100" cy="150" r="2.5" fill="rgba(255,255,255,0.4)"/><rect x="40" y="6" width="120" height="48"/><rect x="62" y="6" width="76" height="22"/><circle cx="100" cy="35" r="2.5" fill="rgba(255,255,255,0.4)"/><path d="M 74 54 A 26 26 0 0 0 126 54"/><rect x="40" y="246" width="120" height="48"/><rect x="62" y="272" width="76" height="22"/><circle cx="100" cy="265" r="2.5" fill="rgba(255,255,255,0.4)"/><path d="M 74 246 A 26 26 0 0 1 126 246"/><path d="M 6 14 A 8 8 0 0 1 14 6"/><path d="M 186 6 A 8 8 0 0 1 194 14"/><path d="M 6 286 A 8 8 0 0 0 14 294"/><path d="M 186 294 A 8 8 0 0 0 194 286"/><rect x="78" y="0" width="44" height="6" stroke-dasharray="4 4"/><rect x="78" y="294" width="44" height="6" stroke-dasharray="4 4"/></g></svg>')}")`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
+              }}
+            />
+            <div className="relative z-10 space-y-5 sm:space-y-6">
             {FORMATION_ROWS.map((row, ri) => (
               <div key={ri} className="flex justify-center gap-4 sm:gap-8">
                 {row.map((slot, ci) => {
@@ -732,13 +743,13 @@ function TOTWTab() {
                       transition={{ duration: 0.3, delay: ri * 0.1 + ci * 0.05 }}
                       className="flex flex-col items-center"
                     >
-                      <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-[#6C2BD9]/30 dark:border-[#8B5CF6]/30 bg-white dark:bg-[#2D2D2D] text-lg shadow-md">
+                      <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-white/60 bg-white/90 dark:bg-white/80 text-lg shadow-md shadow-black/20">
                         {player ? getFlag(player.nationCode) : '👤'}
                       </div>
-                      <p className="mt-1 max-w-[60px] truncate text-[10px] font-bold text-[#1A1A1A] dark:text-white text-center">
+                      <p className="mt-1 max-w-[60px] truncate text-[10px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
                         {player?.name ?? slot.pos}
                       </p>
-                      <Badge variant="outline" className="mt-0.5 text-[8px] font-bold px-1 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                      <Badge variant="outline" className="mt-0.5 text-[8px] font-bold px-1 bg-white/90 backdrop-blur-sm border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
                         {slot.pos}
                       </Badge>
                       {player && (
@@ -751,6 +762,7 @@ function TOTWTab() {
                 })}
               </div>
             ))}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -797,10 +809,7 @@ function FormationPlayerCard({
       <div
         className={`
           relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 text-xl shadow-md
-          ${isElite
-            ? 'border-[#6C2BD9]/40 dark:border-[#8B5CF6]/40 bg-white dark:bg-[#2D2D2D] shadow-[#6C2BD9]/10'
-            : 'border-[#EF4444]/40 dark:border-[#F87171]/40 bg-white dark:bg-[#2D2D2D] shadow-[#EF4444]/10'
-          }
+          border-white/60 bg-white/90 dark:bg-white/80 shadow-black/20
           ${isLive ? 'animate-pulse-glow' : ''}
           transition-all duration-300 hover:scale-110
         `}
@@ -815,13 +824,13 @@ function FormationPlayerCard({
           <Lock className="absolute -right-0.5 -top-0.5 size-3 text-[#666] dark:text-[#CCCCCC]" />
         )}
       </div>
-      <p className="mt-1 max-w-[70px] truncate text-[10px] sm:text-xs font-bold text-[#1A1A1A] dark:text-white text-center">
+      <p className="mt-1 max-w-[70px] truncate text-[10px] sm:text-xs font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
         {player.playerName}
       </p>
       <div className="flex items-center gap-1">
         <Badge
           variant="outline"
-          className={`text-[7px] sm:text-[8px] font-bold px-1 py-0 ${
+          className={`text-[7px] sm:text-[8px] font-bold px-1 py-0 bg-white/90 backdrop-blur-sm ${
             isElite ? 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]' : 'border-[#EF4444]/30 text-[#EF4444] dark:border-[#F87171]/30 dark:text-[#F87171]'
           }`}
         >
@@ -829,18 +838,17 @@ function FormationPlayerCard({
         </Badge>
         {getTrendIcon(player.trend)}
       </div>
-      {/* Rating out of 10 - show face emoji only in flag mode (emoji is in the circle in emoji mode) */}
+      {/* Rating out of 10 */}
       <div className="mt-1 flex items-center gap-0.5">
         {showEmojiNextToRating && <span className="text-[10px]">{faceEmoji}</span>}
         <span
-          className="text-[9px] sm:text-[10px] font-black"
-          style={{ color: ratingColor }}
+          className="text-[9px] sm:text-[10px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
         >
           {rating.toFixed(1)}
         </span>
       </div>
       {player.matchInfo && (
-        <p className="mt-0.5 text-[8px] text-[#666] dark:text-[#CCCCCC] truncate max-w-[80px] text-center">
+        <p className="mt-0.5 text-[8px] text-white/80 truncate max-w-[80px] text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]">
           {player.matchInfo}
         </p>
       )}
@@ -1073,22 +1081,33 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                   </div>
                 </CardHeader>
                 <CardContent className="pb-6">
-                  <div
-                    className="pitch-bg rounded-xl p-4 sm:p-6 space-y-6 sm:space-y-8"
-                    style={activeView === 'crisis' ? { '--pitch': 'rgba(239, 68, 68, 0.04)', '--pitch-line': 'rgba(239, 68, 68, 0.15)' } as React.CSSProperties : undefined}
-                  >
-                    {organizeFormation(currentData.players).map((row, ri) => (
-                      <div key={ri} className="flex justify-center gap-4 sm:gap-8">
-                        {row.map((player) => (
-                          <FormationPlayerCard
-                            key={player.id}
-                            player={player}
-                            type={activeView}
-                            stageStatus={stageStatus}
-                          />
-                        ))}
-                      </div>
-                    ))}
+                  <div className={`pitch-bg rounded-xl relative ${activeView === 'crisis' ? 'crisis-pitch' : ''}`}>
+                    {/* Football Pitch Markings Overlay */}
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"><g stroke="rgba(255,255,255,0.4)" stroke-width="1.5" fill="none"><rect x="6" y="6" width="188" height="288" rx="2"/><line x1="6" y1="150" x2="194" y2="150"/><circle cx="100" cy="150" r="26"/><circle cx="100" cy="150" r="2.5" fill="rgba(255,255,255,0.4)"/><rect x="40" y="6" width="120" height="48"/><rect x="62" y="6" width="76" height="22"/><circle cx="100" cy="35" r="2.5" fill="rgba(255,255,255,0.4)"/><path d="M 74 54 A 26 26 0 0 0 126 54"/><rect x="40" y="246" width="120" height="48"/><rect x="62" y="272" width="76" height="22"/><circle cx="100" cy="265" r="2.5" fill="rgba(255,255,255,0.4)"/><path d="M 74 246 A 26 26 0 0 1 126 246"/><path d="M 6 14 A 8 8 0 0 1 14 6"/><path d="M 186 6 A 8 8 0 0 1 194 14"/><path d="M 6 286 A 8 8 0 0 0 14 294"/><path d="M 186 294 A 8 8 0 0 0 194 286"/><rect x="78" y="0" width="44" height="6" stroke-dasharray="4 4"/><rect x="78" y="294" width="44" height="6" stroke-dasharray="4 4"/></g></svg>')}")`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        backgroundRepeat: 'no-repeat',
+                      }}
+                    />
+
+                    {/* Player Formation Rows */}
+                    <div className="relative z-10 p-4 sm:p-6 space-y-5 sm:space-y-6">
+                      {organizeFormation(currentData.players).map((row, ri) => (
+                        <div key={ri} className="flex justify-center gap-3 sm:gap-6">
+                          {row.map((player) => (
+                            <FormationPlayerCard
+                              key={player.id}
+                              player={player}
+                              type={activeView}
+                              stageStatus={stageStatus}
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
