@@ -199,98 +199,63 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
             >
               <Card className={`overflow-hidden border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${activeView === 'elite' ? 'purple-glow' : 'red-glow'}`}>
                 {/* Top accent bar */}
-                <div className={`h-1 w-full ${activeView === 'elite' ? 'bg-gradient-to-r from-[#6C2BD9] via-[#8B5CF6] to-[#FF6B35]' : 'bg-gradient-to-r from-[#EF4444] via-[#DC2626] to-[#FF6B35]'}`} />
-                <CardHeader className="pb-2">
+                <div className={`h-0.5 w-full ${activeView === 'elite' ? 'bg-gradient-to-r from-[#6C2BD9] via-[#8B5CF6] to-[#FF6B35]' : 'bg-gradient-to-r from-[#EF4444] via-[#DC2626] to-[#FF6B35]'}`} />
+                <CardHeader className="py-2 px-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl">{activeView === 'elite' ? '🌟' : '⚠️'}</span>
-                    <div>
-                      <CardTitle className={`text-xl font-bold ${activeView === 'elite' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#EF4444] dark:text-[#F87171]'}`}>
-                        {activeView === 'elite' ? t('wc.pulse_elite') : t('wc.crisis_radar')}
-                      </CardTitle>
-                      <CardDescription className="text-xs text-[#666] dark:text-[#CCCCCC]">
-                        {activeView === 'elite' ? t('wc.stars_of_week') : t('wc.flops_of_week')}
-                      </CardDescription>
-                    </div>
-                    <div className="ml-auto flex items-center gap-3">
+                    <span className="text-lg">{activeView === 'elite' ? '🌟' : '⚠️'}</span>
+                    <CardTitle className={`text-sm font-bold ${activeView === 'elite' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#EF4444] dark:text-[#F87171]'}`}>
+                      {activeView === 'elite' ? t('wc.pulse_elite') : t('wc.crisis_radar')}
+                    </CardTitle>
+                    <div className="ml-auto flex items-center gap-2">
                       {/* Flag/Emoji Toggle Switch */}
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[11px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Emoji</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Emoji</span>
                         <Switch
                           checked={flagMode === 'flag'}
                           onCheckedChange={() => toggleFlag()}
-                          className="data-[state=checked]:bg-[#6C2BD9] data-[state=unchecked]:bg-[#6C2BD9]/40"
+                          className="data-[state=checked]:bg-[#6C2BD9] data-[state=unchecked]:bg-[#6C2BD9]/40 scale-75"
                         />
-                        <span className={`text-[11px] font-bold transition-colors ${flagMode === 'flag' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Flag</span>
+                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'flag' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Flag</span>
                       </div>
                       {stageStatus === 'completed' && (
-                        <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[10px]">
-                          <Lock className="size-3" /> 🔒 {t('wc.locked')}
+                        <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[9px] px-1.5 py-0">
+                          <Lock className="size-2.5" /> 🔒
                         </Badge>
                       )}
                       {stageStatus === 'live' && <LiveBadge />}
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="pb-4 pt-3">
-                  <div className="flex flex-col lg:flex-row gap-4">
-                    {/* Formation Pitch */}
-                    <div className="flex-1">
-                      <div className={`pitch-bg relative ${activeView === 'crisis' ? 'crisis-pitch' : ''}`}>
-                        {/* Football Pitch Markings - SVG overlay */}
-                        <PitchMarkings crisis={activeView === 'crisis'} />
+                <CardContent className="pb-3 pt-0 px-4">
+                  <div className="mx-auto max-w-[520px]">
+                    {/* Formation Pitch - compact landscape */}
+                    <div className={`pitch-bg relative ${activeView === 'crisis' ? 'crisis-pitch' : ''}`}>
+                      {/* Football Pitch Markings - SVG overlay */}
+                      <PitchMarkings crisis={activeView === 'crisis'} />
 
-                        {/* Player Formation Columns - landscape layout GK→DEF→MID→FWD */}
-                        <div className="relative z-10 px-2 sm:px-4 py-2 sm:py-3 flex justify-between items-center h-full">
-                          {organizeFormationLandscape(currentData.players).map((col, ci) => (
-                            <div key={ci} className="flex flex-col items-center gap-1 sm:gap-1.5">
-                              {col.map((player) => (
-                                <motion.div
-                                  key={player.id}
-                                  className="flex flex-col items-center cursor-pointer"
-                                  onClick={() => setSelectedPlayerId(player.id === selectedPlayerId ? null : player.id)}
-                                  whileHover={{ scale: 1.08 }}
-                                >
-                                  <FormationPlayerCardInline
-                                    player={player}
-                                    type={activeView}
-                                    stageStatus={stageStatus}
-                                    isSelected={player.id === selectedPlayerId}
-                                  />
-                                </motion.div>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
+                      {/* Player Formation Columns - landscape layout GK→DEF→MID→FWD */}
+                      <div className="relative z-10 px-1.5 py-1 flex justify-between items-center h-full">
+                        {organizeFormationLandscape(currentData.players).map((col, ci) => (
+                          <div key={ci} className="flex flex-col items-center gap-0.5">
+                            {col.map((player) => (
+                              <motion.div
+                                key={player.id}
+                                className="flex flex-col items-center cursor-pointer"
+                                onClick={() => setSelectedPlayerId(player.id === selectedPlayerId ? null : player.id)}
+                                whileHover={{ scale: 1.08 }}
+                              >
+                                <FormationPlayerCardInline
+                                  player={player}
+                                  type={activeView}
+                                  stageStatus={stageStatus}
+                                  isSelected={player.id === selectedPlayerId}
+                                />
+                              </motion.div>
+                            ))}
+                          </div>
+                        ))}
                       </div>
                     </div>
-
-                    {/* Pulse Score Detail Panel */}
-                    <AnimatePresence>
-                      {pulseScoreData && (
-                        <motion.div
-                          initial={{ opacity: 0, width: 0 }}
-                          animate={{ opacity: 1, width: 240 }}
-                          exit={{ opacity: 0, width: 0 }}
-                          className="shrink-0 hidden lg:block"
-                        >
-                          <Card className="border-[#E0E0E0]/50 dark:border-white/5 h-full">
-                            <CardContent className="p-3 flex flex-col items-center">
-                              <div className="flex items-center gap-2 mb-2">
-                                <FlagImage nationCode={pulseScoreData.player.nationCode} size={20} fallbackEmoji={findNationalTeam(pulseScoreData.player.nationCode)?.flag ?? '🏳️'} />
-                                <p className="text-xs font-bold text-[#1A1A1A] dark:text-white">
-                                  {pulseScoreData.player.name}
-                                </p>
-                              </div>
-                              <PulseScoreRing
-                                pulseScore={pulseScoreData.pulseScore}
-                                size={100}
-                                showBreakdown
-                              />
-                            </CardContent>
-                          </Card>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
                   </div>
                 </CardContent>
               </Card>
@@ -354,30 +319,30 @@ function FormationPlayerCardInline({
       {/* Player Circle - always shows face emoji */}
       <div
         className={`
-          relative flex size-10 sm:size-12 items-center justify-center rounded-full border-2 shadow-md overflow-hidden
-          border-white/70 bg-white/95 dark:bg-white/90 shadow-black/15
+          relative flex size-7 sm:size-8 items-center justify-center rounded-full border-[1.5px] shadow-sm overflow-hidden
+          border-white/70 bg-white/95 dark:bg-white/90 shadow-black/10
           ${isLive ? 'animate-pulse-glow' : ''}
-          ${isSelected ? 'ring-2 ring-[#6C2BD9] ring-offset-1 ring-offset-transparent' : ''}
+          ${isSelected ? 'ring-1.5 ring-[#6C2BD9] ring-offset-0.5 ring-offset-transparent' : ''}
           transition-all duration-300
         `}
       >
-        <span className="text-lg sm:text-xl leading-none select-none">{faceEmoji}</span>
+        <span className="text-xs sm:text-sm leading-none select-none">{faceEmoji}</span>
         {isLive && (
-          <span className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
+          <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-[#EF4444] shadow-sm shadow-[#EF4444]/50 animate-live-pulse" />
         )}
         {isCompleted && (
-          <Lock className="absolute -right-0.5 -top-0.5 size-2.5 text-[#666] dark:text-[#CCCCCC]" />
+          <Lock className="absolute -right-0.5 -top-0.5 size-2 text-[#666] dark:text-[#CCCCCC]" />
         )}
       </div>
       {/* Player Name */}
-      <p className="mt-0.5 max-w-[60px] truncate text-[9px] sm:text-[10px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+      <p className="mt-px max-w-[48px] truncate text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
         {player.name}
       </p>
-      {/* Position + Rating inline */}
-      <div className="flex items-center gap-0.5">
+      {/* Position + Trend */}
+      <div className="flex items-center gap-px">
         <Badge
           variant="outline"
-          className={`text-[6px] sm:text-[7px] font-bold px-0.5 py-0 bg-white/90 backdrop-blur-sm ${
+          className={`text-[5px] sm:text-[6px] font-bold px-0.5 py-0 bg-white/90 backdrop-blur-sm leading-tight ${
             isElite ? 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]' : 'border-[#EF4444]/30 text-[#EF4444] dark:border-[#F87171]/30 dark:text-[#F87171]'
           }`}
         >
@@ -393,7 +358,7 @@ function FormationPlayerCardInline({
           <span className="text-[10px] leading-none">{flagEmoji}</span>
         )}
         <span
-          className="text-[9px] sm:text-[10px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+          className="text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
         >
           {ratingValue}
         </span>
