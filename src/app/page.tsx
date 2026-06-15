@@ -789,6 +789,7 @@ function FormationPlayerCard({
 }) {
   const { mode: flagMode } = useFlagMode()
   const flagEmoji = getFlag(player.nationCode)
+  const faceEmoji = getPulseFaceEmoji(player.pulseScore)
   const isElite = type === 'elite'
   const isLive = player.isLive && stageStatus === 'live'
   const isCompleted = stageStatus === 'completed'
@@ -803,7 +804,7 @@ function FormationPlayerCard({
       transition={{ duration: 0.3 }}
       className="flex flex-col items-center"
     >
-      {/* Player Circle - shows national flag emoji or flag image */}
+      {/* Player Circle - always shows face emoji */}
       <div
         className={`
           relative flex size-14 sm:size-16 items-center justify-center rounded-full border-2 shadow-md overflow-hidden
@@ -812,11 +813,7 @@ function FormationPlayerCard({
           transition-all duration-300 hover:scale-110
         `}
       >
-        {flagMode === 'flag' ? (
-          <FlagImage nationCode={player.nationCode} size={40} fallbackEmoji={flagEmoji} />
-        ) : (
-          <span className="text-2xl sm:text-3xl leading-none select-none">{flagEmoji}</span>
-        )}
+        <span className="text-2xl sm:text-3xl leading-none select-none">{faceEmoji}</span>
         {isLive && (
           <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
         )}
@@ -843,9 +840,9 @@ function FormationPlayerCard({
       {/* Rating + Flag next to score */}
       <div className="mt-1 flex items-center gap-1">
         {flagMode === 'flag' ? (
-          <FlagImage nationCode={player.nationCode} size={14} fallbackEmoji={flagEmoji} />
+          <FlagImage nationCode={player.nationCode} size={18} fallbackEmoji={flagEmoji} />
         ) : (
-          <span className="text-[11px] leading-none">{flagEmoji}</span>
+          <span className="text-sm leading-none">{flagEmoji}</span>
         )}
         <span
           className="text-[10px] sm:text-[11px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"

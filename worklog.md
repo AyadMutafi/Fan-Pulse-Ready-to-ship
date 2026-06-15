@@ -76,10 +76,10 @@ Work Log:
 - VLM analysis confirms: toggle switch visible, flag emojis clear in circles, flag next to rating, player names visible
 
 Stage Summary:
-- Toggle switch with "Emoji" / "Flag" labels replaces old button in PULSE ELITE/CRISIS RADAR card header
-- Emoji mode: large national flag emoji (🇧🇷) in player circle, small flag emoji next to rating
-- Flag mode: flag image in player circle, small flag image next to rating
-- Player circles are larger (size-14/16) with clearer emojis (text-2xl/3xl)
-- Face emojis (🤩😊😐😟😵) removed from circles - replaced with national flag emojis
+- Toggle switch with "Emoji" / "Flag" labels in PULSE ELITE/CRISIS RADAR card header
+- Circle: Always shows face emojis (🤩😊😐😟😵) based on pulse score - large and clear (text-2xl/3xl)
+- Next to rating: Flag emoji (emoji mode) or flag image (flag mode) at 18px size
+- Player circles are larger (size-14/16) for better emoji visibility
+- CRISIS RADAR shows different face emojis (😟😵) for low scores
 - Both page.tsx and WorldCupTab.tsx updated consistently
 
