@@ -253,81 +253,97 @@
 /* ── Pitch Background ─────────────────────────────────────── */
 .pitch-bg {
   position: relative;
+  aspect-ratio: 3 / 4.2;
   background: linear-gradient(
     to bottom,
-    #2d8a4e 0%,
-    #34a058 8%,
-    #2d8a4e 16%,
-    #34a058 24%,
-    #2d8a4e 32%,
-    #34a058 40%,
-    #2d8a4e 48%,
-    #34a058 56%,
-    #2d8a4e 64%,
-    #34a058 72%,
-    #2d8a4e 80%,
-    #34a058 88%,
-    #2d8a4e 100%
+    #2a7d45 0%,
+    #2f8c4e 7%,
+    #2a7d45 14%,
+    #2f8c4e 21%,
+    #2a7d45 28%,
+    #2f8c4e 35%,
+    #2a7d45 42%,
+    #2f8c4e 49%,
+    #2a7d45 56%,
+    #2f8c4e 63%,
+    #2a7d45 70%,
+    #2f8c4e 77%,
+    #2a7d45 84%,
+    #2f8c4e 91%,
+    #2a7d45 100%
   );
-  border-radius: inherit;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow:
+    inset 0 0 30px rgba(0, 0, 0, 0.15),
+    0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .dark .pitch-bg {
   background: linear-gradient(
     to bottom,
     #1a5c35 0%,
-    #1f6b3e 8%,
-    #1a5c35 16%,
-    #1f6b3e 24%,
-    #1a5c35 32%,
-    #1f6b3e 40%,
-    #1a5c35 48%,
-    #1f6b3e 56%,
-    #1a5c35 64%,
-    #1f6b3e 72%,
-    #1a5c35 80%,
-    #1f6b3e 88%,
+    #1f6b3e 7%,
+    #1a5c35 14%,
+    #1f6b3e 21%,
+    #1a5c35 28%,
+    #1f6b3e 35%,
+    #1a5c35 42%,
+    #1f6b3e 49%,
+    #1a5c35 56%,
+    #1f6b3e 63%,
+    #1a5c35 70%,
+    #1f6b3e 77%,
+    #1a5c35 84%,
+    #1f6b3e 91%,
     #1a5c35 100%
   );
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .pitch-bg.crisis-pitch {
   background: linear-gradient(
     to bottom,
-    #7a2e2e 0%,
-    #8a3636 8%,
-    #7a2e2e 16%,
-    #8a3636 24%,
-    #7a2e2e 32%,
-    #8a3636 40%,
-    #7a2e2e 48%,
-    #8a3636 56%,
-    #7a2e2e 64%,
-    #8a3636 72%,
-    #7a2e2e 80%,
-    #8a3636 88%,
-    #7a2e2e 100%
+    #6e2828 0%,
+    #7a3030 7%,
+    #6e2828 14%,
+    #7a3030 21%,
+    #6e2828 28%,
+    #7a3030 35%,
+    #6e2828 42%,
+    #7a3030 49%,
+    #6e2828 56%,
+    #7a3030 63%,
+    #6e2828 70%,
+    #7a3030 77%,
+    #6e2828 84%,
+    #7a3030 91%,
+    #6e2828 100%
   );
+  border-color: rgba(255, 200, 200, 0.25);
 }
 
 .dark .pitch-bg.crisis-pitch {
   background: linear-gradient(
     to bottom,
     #5c1a1a 0%,
-    #6b2020 8%,
-    #5c1a1a 16%,
-    #6b2020 24%,
-    #5c1a1a 32%,
-    #6b2020 40%,
-    #5c1a1a 48%,
-    #6b2020 56%,
-    #5c1a1a 64%,
-    #6b2020 72%,
-    #5c1a1a 80%,
-    #6b2020 88%,
+    #6b2020 7%,
+    #5c1a1a 14%,
+    #6b2020 21%,
+    #5c1a1a 28%,
+    #6b2020 35%,
+    #5c1a1a 42%,
+    #6b2020 49%,
+    #5c1a1a 56%,
+    #6b2020 63%,
+    #5c1a1a 70%,
+    #6b2020 77%,
+    #5c1a1a 84%,
+    #6b2020 91%,
     #5c1a1a 100%
   );
+  border-color: rgba(255, 150, 150, 0.2);
 }
 
 /* ── Purple Glow Card (Elite/Pulse Elite) ─────────────────── */

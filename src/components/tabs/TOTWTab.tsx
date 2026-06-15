@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLanguage } from '@/context/LanguageContext'
 import { findNationalTeam } from '@/lib/national-teams'
+import FlagImage from '@/components/common/FlagImage'
 import { useWCStages } from '@/hooks/queries/use-wc-stages'
 import { useEliteCrisis } from '@/hooks/queries/use-elite-crisis'
 import type { Player, Position } from '@/types'
@@ -23,7 +24,7 @@ const FORMATION_ROWS: { pos: Position }[][] = [
 
 // ── Helpers ──────────────────────────────────────────────────
 
-function getFlag(nationCode: string): string {
+function getFlagEmoji(nationCode: string): string {
   const team = findNationalTeam(nationCode)
   return team?.flag ?? '🏳️'
 }
@@ -112,8 +113,12 @@ export default function TOTWTab() {
                         transition={{ duration: 0.3, delay: ri * 0.1 + ci * 0.05 }}
                         className="flex flex-col items-center"
                       >
-                        <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-[#6C2BD9]/30 dark:border-[#8B5CF6]/30 bg-white dark:bg-[#2D2D2D] text-lg shadow-md">
-                          {player ? getFlag(player.nationCode) : '👤'}
+                        <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-[#6C2BD9]/30 dark:border-[#8B5CF6]/30 bg-white dark:bg-[#2D2D2D] shadow-md overflow-hidden">
+                          {player ? (
+                            <FlagImage nationCode={player.nationCode} size={32} fallbackEmoji={getFlagEmoji(player.nationCode)} />
+                          ) : (
+                            <span className="text-lg">👤</span>
+                          )}
                         </div>
                         <p className="mt-1 max-w-[60px] truncate text-[10px] font-bold text-[#1A1A1A] dark:text-white text-center">
                           {player?.name ?? slot.pos}

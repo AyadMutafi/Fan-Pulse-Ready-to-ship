@@ -5,6 +5,7 @@ import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { findNationalTeam } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
+import FlagImage from '@/components/common/FlagImage'
 import { TrendIcon } from '@/components/common/TrendIcon'
 import type { Player, SelectionType, StageStatus, Position } from '@/types'
 import { getPulseFaceEmoji, getRatingColor } from '@/types'
@@ -25,11 +26,6 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
   const isLive = player.isLive && stageStatus === 'live'
   const isCompleted = stageStatus === 'completed'
 
-  // In flag mode: show country flag in circle, face emoji + rating below
-  // In emoji mode: show face emoji in circle, rating below (no duplicate emoji)
-  const circleContent = flagMode === 'flag' ? flagEmoji : faceEmoji
-  const showEmojiNextToRating = flagMode === 'flag'
-
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.85 }}
@@ -45,7 +41,11 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
           transition-all duration-300 hover:scale-110
         `}
       >
-        <span className="text-lg sm:text-xl leading-none">{circleContent}</span>
+        {flagMode === 'flag' ? (
+          <FlagImage nationCode={player.nationCode} size={36} fallbackEmoji={flagEmoji} />
+        ) : (
+          <span className="text-lg sm:text-xl leading-none">{faceEmoji}</span>
+        )}
         {isLive && (
           <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
         )}
@@ -67,9 +67,9 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
         </Badge>
         <TrendIcon trend={player.trend} />
       </div>
-      {/* Rating out of 10 - show face emoji only in flag mode */}
+      {/* Rating out of 10 */}
       <div className="mt-1 flex items-center gap-0.5">
-        {showEmojiNextToRating && <span className="text-[10px]">{faceEmoji}</span>}
+        {flagMode === 'flag' && <span className="text-[10px]">{faceEmoji}</span>}
         <span
           className="text-[9px] sm:text-[10px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
         >
