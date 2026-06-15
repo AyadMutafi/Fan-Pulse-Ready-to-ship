@@ -15,6 +15,7 @@ import TopHeader from '@/components/TopHeader'
 import Navigation, { type TabId } from '@/components/Navigation'
 import { useLanguage } from '@/context/LanguageContext'
 import { findNationalTeam } from '@/lib/national-teams'
+import { useFlagMode } from '@/lib/flag-mode'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -771,6 +772,7 @@ function FormationPlayerCard({
   type: 'elite' | 'crisis'
   stageStatus: string
 }) {
+  const { mode: flagMode } = useFlagMode()
   const flag = getFlag(player.nationCode)
   const isElite = type === 'elite'
   const isLive = player.isLive && stageStatus === 'live'
@@ -780,15 +782,10 @@ function FormationPlayerCard({
   const faceEmoji = getPulseFaceEmoji(player.pulseScore)
   const ratingColor = getRatingColor(rating)
 
-  // Toggle between flag and emoji display
-  const [showEmoji, setShowEmoji] = useState(() => playerDisplayMode.get(player.id) === 'emoji')
-  const toggleDisplay = () => {
-    setShowEmoji(prev => {
-      const next = !prev
-      playerDisplayMode.set(player.id, next ? 'emoji' : 'flag')
-      return next
-    })
-  }
+  // In flag mode: show country flag in circle, face emoji + rating below
+  // In emoji mode: show face emoji in circle, rating below (no duplicate emoji)
+  const circleContent = flagMode === 'flag' ? flag : faceEmoji
+  const showEmojiNextToRating = flagMode === 'flag'
 
   return (
     <motion.div
@@ -797,12 +794,9 @@ function FormationPlayerCard({
       transition={{ duration: 0.3 }}
       className="flex flex-col items-center"
     >
-      <button
-        type="button"
-        onClick={toggleDisplay}
-        title={showEmoji ? 'Click to show flag' : 'Click to show emoji'}
+      <div
         className={`
-          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 text-xl shadow-md cursor-pointer
+          relative flex size-13 sm:size-15 items-center justify-center rounded-full border-2 text-xl shadow-md
           ${isElite
             ? 'border-[#6C2BD9]/40 dark:border-[#8B5CF6]/40 bg-white dark:bg-[#2D2D2D] shadow-[#6C2BD9]/10'
             : 'border-[#EF4444]/40 dark:border-[#F87171]/40 bg-white dark:bg-[#2D2D2D] shadow-[#EF4444]/10'
@@ -810,10 +804,9 @@ function FormationPlayerCard({
           ${isLive ? 'animate-pulse-glow' : ''}
           transition-all duration-300 hover:scale-110
         `}
-        style={isLive ? { color: accentColor } : undefined}
       >
         <span className="text-lg sm:text-xl transition-all duration-200">
-          {showEmoji ? faceEmoji : flag}
+          {circleContent}
         </span>
         {isLive && (
           <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-[#EF4444] shadow-lg shadow-[#EF4444]/50 animate-live-pulse" />
@@ -821,7 +814,7 @@ function FormationPlayerCard({
         {isCompleted && (
           <Lock className="absolute -right-0.5 -top-0.5 size-3 text-[#666] dark:text-[#CCCCCC]" />
         )}
-      </button>
+      </div>
       <p className="mt-1 max-w-[70px] truncate text-[10px] sm:text-xs font-bold text-[#1A1A1A] dark:text-white text-center">
         {player.playerName}
       </p>
@@ -836,9 +829,9 @@ function FormationPlayerCard({
         </Badge>
         {getTrendIcon(player.trend)}
       </div>
-      {/* Rating out of 10 with face emoji */}
+      {/* Rating out of 10 - show face emoji only in flag mode (emoji is in the circle in emoji mode) */}
       <div className="mt-1 flex items-center gap-0.5">
-        <span className="text-[10px]">{faceEmoji}</span>
+        {showEmojiNextToRating && <span className="text-[10px]">{faceEmoji}</span>}
         <span
           className="text-[9px] sm:text-[10px] font-black"
           style={{ color: ratingColor }}
@@ -859,6 +852,7 @@ function FormationPlayerCard({
 
 function WorldCupTab({ stages }: { stages: WCStage[] }) {
   const { t, lang } = useLanguage()
+  const { mode: flagMode, toggle: toggleFlag } = useFlagMode()
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null)
   const [eliteData, setEliteData] = useState<WCSelection | null>(null)
   const [crisisData, setCrisisData] = useState<WCSelection | null>(null)
@@ -945,7 +939,26 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
         <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
           🏆 {t('wc.title')}
         </h2>
-        <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('wc.new_stage')}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('wc.new_stage')}</p>
+          {/* Flag/Emoji Toggle */}
+          <button
+            onClick={toggleFlag}
+            className="flex items-center gap-1.5 rounded-full bg-[#6C2BD9]/10 dark:bg-[#6C2BD9]/20 border border-[#6C2BD9]/30 px-3 py-1.5 text-[11px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/20 transition-colors"
+          >
+            {flagMode === 'flag' ? (
+              <>
+                <Globe className="size-3.5" />
+                <span>Flags</span>
+              </>
+            ) : (
+              <>
+                <Activity className="size-3.5" />
+                <span>Emoji</span>
+              </>
+            )}
+          </button>
+        </div>
       </motion.div>
 
       {/* Stage Selector */}
@@ -1112,6 +1125,24 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
   )
 }
 
+// ── Paused Tab Overlay ──────────────────────────────────────
+
+function PausedTabOverlay({ tabName }: { tabName: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="flex items-center justify-center size-20 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 mb-6">
+        <Lock className="size-8 text-[#FF6B35]" />
+      </div>
+      <h3 className="text-xl font-bold text-[#1A1A1A] dark:text-white mb-2">{tabName}</h3>
+      <p className="text-sm text-[#666] dark:text-[#CCCCCC] mb-4 max-w-xs">This feature is coming soon. We&apos;re working hard to bring you the best experience.</p>
+      <Badge className="bg-[#FF6B35]/15 text-[#FF6B35] border-0 gap-1.5 px-3 py-1.5 text-xs font-bold">
+        <Clock className="size-3.5" />
+        COMING SOON
+      </Badge>
+    </div>
+  )
+}
+
 // ── Main Page ────────────────────────────────────────────────
 
 export default function Home() {
@@ -1155,10 +1186,10 @@ export default function Home() {
                 transition={{ duration: 0.25 }}
               >
                 {activeTab === 'home' && <HomeTab />}
-                {activeTab === 'sentiments' && <SentimentsTab />}
-                {activeTab === 'rate' && <RateTab />}
-                {activeTab === 'goals' && <GoalsTab />}
-                {activeTab === 'totw' && <TOTWTab />}
+                {activeTab === 'sentiments' && <PausedTabOverlay tabName="Sentiments" />}
+                {activeTab === 'rate' && <PausedTabOverlay tabName="Rate" />}
+                {activeTab === 'goals' && <PausedTabOverlay tabName="Goals" />}
+                {activeTab === 'totw' && <PausedTabOverlay tabName="Team of the Week" />}
                 {activeTab === 'worldcup' && <WorldCupTab stages={stages} />}
               </motion.div>
             </AnimatePresence>

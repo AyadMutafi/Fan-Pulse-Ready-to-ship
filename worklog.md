@@ -26,3 +26,26 @@ Stage Summary:
 - France vs Colombia friendly shown with 1-3 score
 - Flag/emoji toggle verified working on player circles
 - All data sourced from real web search results
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix all pending issues - Flag/Emoji toggle, paused tabs, broken TeamLogo
+
+Work Log:
+- Fixed TeamLogo.tsx - removed broken getTeamFlagUrl import, simplified to show flag emoji or face emoji based on useFlagMode state
+- Updated FormationPlayerCardInline in WorldCupTab.tsx - implemented flag/emoji toggle where "flag" mode shows country flag in circle + face emoji next to rating, "emoji" mode shows face emoji in circle + rating only (no duplicate)
+- Updated FormationPlayerCard.tsx standalone component with same toggle behavior
+- Discovered page.tsx has its OWN inline WorldCupTab and FormationPlayerCard - all changes needed to be applied there too
+- Updated inline FormationPlayerCard in page.tsx to use useFlagMode Zustand store instead of per-player Map state
+- Added global Flag/Emoji toggle button in inline WorldCupTab in page.tsx
+- Added paused tab indicators - Navigation.tsx now shows "SOON" badges with Lock icon for SENTIMENTS, RATE, GOALS, TOTW tabs
+- Added PausedTabOverlay component in page.tsx with lock icon, "COMING SOON" badge, and descriptive text
+- Verified seed data already includes Argentina 3-0 Algeria (WC Group J, live) and France vs Colombia (Friendly)
+- Tested with Agent Browser - all features working correctly
+
+Stage Summary:
+- Flag/Emoji toggle works - switches ALL player cards between country flags and face emojis
+- Paused tabs show "SOON" badges in nav and "Coming Soon" overlay when selected
+- Ratings displayed as X.X/10 with face emojis (🤩😊😐😟😵) based on pulse score
+- Key discovery: page.tsx uses inline components, not the imported ones from components/tabs/
