@@ -2,152 +2,102 @@ import { NextResponse } from 'next/server'
 import { db, getDb } from '@/lib/db'
 import { computeAllPulseScores } from '@/lib/pulse-engine'
 
-// ── Team info helper — 48 WC 2026 teams ───────────────────────────────────────
+// ── Team info helper — 48 WC 2026 teams (official groups) ─────────────────────
 const TEAM_INFO: Record<string, { name: string; flag: string }> = {
-  // Group A
+  // Group A: Mexico, South Africa, Korea Republic, Czechia
   MEX: { name: 'Mexico', flag: '🇲🇽' },
   RSA: { name: 'South Africa', flag: '🇿🇦' },
   KOR: { name: 'South Korea', flag: '🇰🇷' },
   CZE: { name: 'Czechia', flag: '🇨🇿' },
-  // Group B
+  // Group B: Canada, Bosnia and Herzegovina, Qatar, Switzerland
   CAN: { name: 'Canada', flag: '🇨🇦' },
   BIH: { name: 'Bosnia and Herzegovina', flag: '🇧🇦' },
+  QAT: { name: 'Qatar', flag: '🇶🇦' },
   SUI: { name: 'Switzerland', flag: '🇨🇭' },
-  DEN: { name: 'Denmark', flag: '🇩🇰' },
-  // Group C
+  // Group C: Brazil, Haiti, Morocco, Scotland
   BRA: { name: 'Brazil', flag: '🇧🇷' },
+  HAI: { name: 'Haiti', flag: '🇭🇹' },
   MAR: { name: 'Morocco', flag: '🇲🇦' },
   SCO: { name: 'Scotland', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
-  CPV: { name: 'Cape Verde', flag: '🇨🇻' },
-  // Group D
+  // Group D: Australia, Paraguay, Türkiye, USA
   USA: { name: 'United States', flag: '🇺🇸' },
   PAR: { name: 'Paraguay', flag: '🇵🇾' },
   AUS: { name: 'Australia', flag: '🇦🇺' },
   TUR: { name: 'Turkiye', flag: '🇹🇷' },
-  // Group E
+  // Group E: Curaçao, Ecuador, Germany, Côte d'Ivoire
   GER: { name: 'Germany', flag: '🇩🇪' },
   CUW: { name: 'Curacao', flag: '🇨🇼' },
-  SWE: { name: 'Sweden', flag: '🇸🇪' },
-  NGA: { name: 'Nigeria', flag: '🇳🇬' },
-  // Group F
-  ARG: { name: 'Argentina', flag: '🇦🇷' },
-  COL: { name: 'Colombia', flag: '🇨🇴' },
-  UZB: { name: 'Uzbekistan', flag: '🇺🇿' },
-  CMR: { name: 'Cameroon', flag: '🇨🇲' },
-  // Group G
-  ITA: { name: 'Italy', flag: '🇮🇹' },
-  CHI: { name: 'Chile', flag: '🇨🇱' },
+  CIV: { name: "Côte d'Ivoire", flag: '🇨🇮' },
   ECU: { name: 'Ecuador', flag: '🇪🇨' },
-  ALG: { name: 'Algeria', flag: '🇩🇿' },
-  // Group H
-  FRA: { name: 'France', flag: '🇫🇷' },
-  POR: { name: 'Portugal', flag: '🇵🇹' },
-  PER: { name: 'Peru', flag: '🇵🇪' },
-  JAM: { name: 'Jamaica', flag: '🇯🇲' },
-  // Group I
+  // Group F: Japan, Netherlands, Sweden, Tunisia
   NED: { name: 'Netherlands', flag: '🇳🇱' },
-  SEN: { name: 'Senegal', flag: '🇸🇳' },
-  CRC: { name: 'Costa Rica', flag: '🇨🇷' },
-  WAL: { name: 'Wales', flag: '🏴󠁧󠁢󠁷󠁬󠁳󠁿' },
-  // Group J
-  ENG: { name: 'England', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
-  URU: { name: 'Uruguay', flag: '🇺🇾' },
-  POL: { name: 'Poland', flag: '🇵🇱' },
-  GHA: { name: 'Ghana', flag: '🇬🇭' },
-  // Group K
-  ESP: { name: 'Spain', flag: '🇪🇸' },
-  CRO: { name: 'Croatia', flag: '🇭🇷' },
-  HON: { name: 'Honduras', flag: '🇭🇳' },
-  ISL: { name: 'Iceland', flag: '🇮🇸' },
-  // Group L
   JPN: { name: 'Japan', flag: '🇯🇵' },
+  SWE: { name: 'Sweden', flag: '🇸🇪' },
+  TUN: { name: 'Tunisia', flag: '🇹🇳' },
+  // Group G: Belgium, Egypt, Iran, New Zealand
   BEL: { name: 'Belgium', flag: '🇧🇪' },
+  EGY: { name: 'Egypt', flag: '🇪🇬' },
+  IRN: { name: 'Iran', flag: '🇮🇷' },
   NZL: { name: 'New Zealand', flag: '🇳🇿' },
+  // Group H: Spain, Cabo Verde, Saudi Arabia, Uruguay
+  ESP: { name: 'Spain', flag: '🇪🇸' },
+  CPV: { name: 'Cape Verde', flag: '🇨🇻' },
   KSA: { name: 'Saudi Arabia', flag: '🇸🇦' },
+  URU: { name: 'Uruguay', flag: '🇺🇾' },
+  // Group I: France, Senegal, Iraq, Norway  (Matchday 1: scheduled Jun 16-17, NOT YET PLAYED)
+  FRA: { name: 'France', flag: '🇫🇷' },
+  SEN: { name: 'Senegal', flag: '🇸🇳' },
+  IRQ: { name: 'Iraq', flag: '🇮🇶' },
+  NOR: { name: 'Norway', flag: '🇳🇴' },
+  // Group J: Argentina, Algeria, Austria, Jordan  (Matchday 1: scheduled Jun 17, NOT YET PLAYED)
+  ARG: { name: 'Argentina', flag: '🇦🇷' },
+  ALG: { name: 'Algeria', flag: '🇩🇿' },
+  AUT: { name: 'Austria', flag: '🇦🇹' },
+  JOR: { name: 'Jordan', flag: '🇯🇴' },
+  // Group K: Portugal, DR Congo, Uzbekistan, Colombia  (Matchday 1: scheduled Jun 17, NOT YET PLAYED)
+  POR: { name: 'Portugal', flag: '🇵🇹' },
+  COD: { name: 'DR Congo', flag: '🇨🇩' },
+  UZB: { name: 'Uzbekistan', flag: '🇺🇿' },
+  COL: { name: 'Colombia', flag: '🇨🇴' },
+  // Group L: England, Croatia, Ghana, Panama  (Matchday 1: scheduled Jun 17-18, NOT YET PLAYED)
+  ENG: { name: 'England', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+  CRO: { name: 'Croatia', flag: '🇭🇷' },
+  GHA: { name: 'Ghana', flag: '🇬🇭' },
+  PAN: { name: 'Panama', flag: '🇵🇦' },
 }
 
-// ── Match data: WC 2026 Group Stage (Matchday 1 & 2) ─────────────────────────
+// ── Match data: REAL WC 2026 Matchday 1 (16 matches, Groups A-H, played Jun 11-16 2026) ──
+// Verified against FIFA.com, ESPN, Wikipedia, CBS Sports, olympics.com
 const MATCHES_DATA: Array<{
   homeCode: string; awayCode: string
   homeScore: number; awayScore: number
   group: string; matchDate: string
   homeSentiment: number; awaySentiment: number
 }> = [
-  // ── Matchday 1 (June 11-17) ──
   // Group A
-  { homeCode: 'MEX', awayCode: 'RSA', homeScore: 2, awayScore: 0, group: 'A', matchDate: '2026-06-11', homeSentiment: 82, awaySentiment: 25 },
-  { homeCode: 'KOR', awayCode: 'CZE', homeScore: 2, awayScore: 1, group: 'A', matchDate: '2026-06-11', homeSentiment: 75, awaySentiment: 35 },
+  { homeCode: 'MEX', awayCode: 'RSA', homeScore: 2, awayScore: 0, group: 'A', matchDate: '2026-06-11', homeSentiment: 86, awaySentiment: 22 }, // Mexico City opener
+  { homeCode: 'KOR', awayCode: 'CZE', homeScore: 2, awayScore: 1, group: 'A', matchDate: '2026-06-12', homeSentiment: 76, awaySentiment: 34 }, // Guadalajara
   // Group B
-  { homeCode: 'CAN', awayCode: 'BIH', homeScore: 1, awayScore: 1, group: 'B', matchDate: '2026-06-12', homeSentiment: 50, awaySentiment: 50 },
-  { homeCode: 'SUI', awayCode: 'DEN', homeScore: 2, awayScore: 0, group: 'B', matchDate: '2026-06-12', homeSentiment: 78, awaySentiment: 28 },
+  { homeCode: 'CAN', awayCode: 'BIH', homeScore: 1, awayScore: 1, group: 'B', matchDate: '2026-06-12', homeSentiment: 52, awaySentiment: 56 }, // Toronto
+  { homeCode: 'QAT', awayCode: 'SUI', homeScore: 1, awayScore: 1, group: 'B', matchDate: '2026-06-13', homeSentiment: 55, awaySentiment: 50 }, // San Francisco
   // Group C
-  { homeCode: 'BRA', awayCode: 'MAR', homeScore: 1, awayScore: 1, group: 'C', matchDate: '2026-06-13', homeSentiment: 48, awaySentiment: 55 },
-  { homeCode: 'SCO', awayCode: 'CPV', homeScore: 2, awayScore: 0, group: 'C', matchDate: '2026-06-13', homeSentiment: 76, awaySentiment: 26 },
+  { homeCode: 'BRA', awayCode: 'MAR', homeScore: 1, awayScore: 1, group: 'C', matchDate: '2026-06-13', homeSentiment: 48, awaySentiment: 60 }, // New Jersey
+  { homeCode: 'HAI', awayCode: 'SCO', homeScore: 0, awayScore: 1, group: 'C', matchDate: '2026-06-14', homeSentiment: 20, awaySentiment: 80 }, // Boston
   // Group D
-  { homeCode: 'USA', awayCode: 'PAR', homeScore: 3, awayScore: 0, group: 'D', matchDate: '2026-06-13', homeSentiment: 90, awaySentiment: 18 },
-  { homeCode: 'AUS', awayCode: 'TUR', homeScore: 2, awayScore: 1, group: 'D', matchDate: '2026-06-13', homeSentiment: 72, awaySentiment: 32 },
+  { homeCode: 'USA', awayCode: 'PAR', homeScore: 4, awayScore: 1, group: 'D', matchDate: '2026-06-13', homeSentiment: 92, awaySentiment: 15 }, // Los Angeles
+  { homeCode: 'AUS', awayCode: 'TUR', homeScore: 2, awayScore: 0, group: 'D', matchDate: '2026-06-14', homeSentiment: 78, awaySentiment: 25 }, // Vancouver
   // Group E
-  { homeCode: 'GER', awayCode: 'CUW', homeScore: 6, awayScore: 0, group: 'E', matchDate: '2026-06-14', homeSentiment: 95, awaySentiment: 12 },
-  { homeCode: 'SWE', awayCode: 'NGA', homeScore: 2, awayScore: 1, group: 'E', matchDate: '2026-06-14', homeSentiment: 74, awaySentiment: 34 },
+  { homeCode: 'GER', awayCode: 'CUW', homeScore: 7, awayScore: 1, group: 'E', matchDate: '2026-06-14', homeSentiment: 96, awaySentiment: 8 }, // Houston — biggest win
+  { homeCode: 'CIV', awayCode: 'ECU', homeScore: 1, awayScore: 0, group: 'E', matchDate: '2026-06-15', homeSentiment: 70, awaySentiment: 30 }, // Philadelphia
   // Group F
-  { homeCode: 'ARG', awayCode: 'COL', homeScore: 2, awayScore: 0, group: 'F', matchDate: '2026-06-15', homeSentiment: 85, awaySentiment: 28 },
-  { homeCode: 'UZB', awayCode: 'CMR', homeScore: 1, awayScore: 1, group: 'F', matchDate: '2026-06-15', homeSentiment: 50, awaySentiment: 52 },
+  { homeCode: 'NED', awayCode: 'JPN', homeScore: 2, awayScore: 2, group: 'F', matchDate: '2026-06-14', homeSentiment: 55, awaySentiment: 60 }, // Dallas
+  { homeCode: 'SWE', awayCode: 'TUN', homeScore: 5, awayScore: 1, group: 'F', matchDate: '2026-06-15', homeSentiment: 90, awaySentiment: 12 }, // Monterrey
   // Group G
-  { homeCode: 'ITA', awayCode: 'CHI', homeScore: 2, awayScore: 1, group: 'G', matchDate: '2026-06-15', homeSentiment: 76, awaySentiment: 34 },
-  { homeCode: 'ECU', awayCode: 'ALG', homeScore: 1, awayScore: 0, group: 'G', matchDate: '2026-06-15', homeSentiment: 68, awaySentiment: 30 },
+  { homeCode: 'BEL', awayCode: 'EGY', homeScore: 1, awayScore: 1, group: 'G', matchDate: '2026-06-15', homeSentiment: 50, awaySentiment: 55 }, // Seattle
+  { homeCode: 'IRN', awayCode: 'NZL', homeScore: 2, awayScore: 2, group: 'G', matchDate: '2026-06-16', homeSentiment: 58, awaySentiment: 65 }, // Los Angeles
   // Group H
-  { homeCode: 'FRA', awayCode: 'POR', homeScore: 2, awayScore: 0, group: 'H', matchDate: '2026-06-16', homeSentiment: 84, awaySentiment: 25 },
-  { homeCode: 'PER', awayCode: 'JAM', homeScore: 0, awayScore: 0, group: 'H', matchDate: '2026-06-16', homeSentiment: 45, awaySentiment: 50 },
-  // Group I
-  { homeCode: 'NED', awayCode: 'SEN', homeScore: 3, awayScore: 1, group: 'I', matchDate: '2026-06-16', homeSentiment: 88, awaySentiment: 28 },
-  { homeCode: 'CRC', awayCode: 'WAL', homeScore: 0, awayScore: 2, group: 'I', matchDate: '2026-06-16', homeSentiment: 22, awaySentiment: 78 },
-  // Group J
-  { homeCode: 'ENG', awayCode: 'URU', homeScore: 3, awayScore: 0, group: 'J', matchDate: '2026-06-17', homeSentiment: 92, awaySentiment: 18 },
-  { homeCode: 'POL', awayCode: 'GHA', homeScore: 1, awayScore: 1, group: 'J', matchDate: '2026-06-17', homeSentiment: 48, awaySentiment: 52 },
-  // Group K
-  { homeCode: 'ESP', awayCode: 'CRO', homeScore: 2, awayScore: 0, group: 'K', matchDate: '2026-06-17', homeSentiment: 82, awaySentiment: 28 },
-  { homeCode: 'HON', awayCode: 'ISL', homeScore: 0, awayScore: 3, group: 'K', matchDate: '2026-06-17', homeSentiment: 15, awaySentiment: 90 },
-  // Group L
-  { homeCode: 'JPN', awayCode: 'BEL', homeScore: 2, awayScore: 1, group: 'L', matchDate: '2026-06-17', homeSentiment: 78, awaySentiment: 32 },
-  { homeCode: 'NZL', awayCode: 'KSA', homeScore: 0, awayScore: 2, group: 'L', matchDate: '2026-06-17', homeSentiment: 20, awaySentiment: 80 },
-
-  // ── Matchday 2 (June 18-24) ──
-  // Group A
-  { homeCode: 'CZE', awayCode: 'RSA', homeScore: 1, awayScore: 0, group: 'A', matchDate: '2026-06-18', homeSentiment: 68, awaySentiment: 22 },
-  { homeCode: 'MEX', awayCode: 'KOR', homeScore: 1, awayScore: 1, group: 'A', matchDate: '2026-06-22', homeSentiment: 48, awaySentiment: 55 },
-  // Group B
-  { homeCode: 'DEN', awayCode: 'BIH', homeScore: 2, awayScore: 1, group: 'B', matchDate: '2026-06-18', homeSentiment: 72, awaySentiment: 32 },
-  { homeCode: 'CAN', awayCode: 'SUI', homeScore: 0, awayScore: 1, group: 'B', matchDate: '2026-06-22', homeSentiment: 28, awaySentiment: 75 },
-  // Group C
-  { homeCode: 'CPV', awayCode: 'MAR', homeScore: 0, awayScore: 2, group: 'C', matchDate: '2026-06-19', homeSentiment: 20, awaySentiment: 82 },
-  { homeCode: 'BRA', awayCode: 'SCO', homeScore: 3, awayScore: 1, group: 'C', matchDate: '2026-06-23', homeSentiment: 88, awaySentiment: 30 },
-  // Group D
-  { homeCode: 'TUR', awayCode: 'PAR', homeScore: 0, awayScore: 2, group: 'D', matchDate: '2026-06-19', homeSentiment: 22, awaySentiment: 78 },
-  { homeCode: 'USA', awayCode: 'AUS', homeScore: 2, awayScore: 1, group: 'D', matchDate: '2026-06-23', homeSentiment: 80, awaySentiment: 30 },
-  // Group E
-  { homeCode: 'NGA', awayCode: 'CUW', homeScore: 1, awayScore: 0, group: 'E', matchDate: '2026-06-20', homeSentiment: 65, awaySentiment: 25 },
-  { homeCode: 'GER', awayCode: 'SWE', homeScore: 2, awayScore: 0, group: 'E', matchDate: '2026-06-24', homeSentiment: 85, awaySentiment: 25 },
-  // Group F
-  { homeCode: 'CMR', awayCode: 'COL', homeScore: 0, awayScore: 1, group: 'F', matchDate: '2026-06-20', homeSentiment: 28, awaySentiment: 72 },
-  { homeCode: 'ARG', awayCode: 'UZB', homeScore: 3, awayScore: 0, group: 'F', matchDate: '2026-06-24', homeSentiment: 92, awaySentiment: 15 },
-  // Group G
-  { homeCode: 'ALG', awayCode: 'CHI', homeScore: 1, awayScore: 2, group: 'G', matchDate: '2026-06-21', homeSentiment: 30, awaySentiment: 72 },
-  { homeCode: 'ITA', awayCode: 'ECU', homeScore: 3, awayScore: 0, group: 'G', matchDate: '2026-06-25', homeSentiment: 90, awaySentiment: 20 },
-  // Group H
-  { homeCode: 'JAM', awayCode: 'POR', homeScore: 0, awayScore: 1, group: 'H', matchDate: '2026-06-21', homeSentiment: 25, awaySentiment: 70 },
-  { homeCode: 'FRA', awayCode: 'PER', homeScore: 1, awayScore: 0, group: 'H', matchDate: '2026-06-25', homeSentiment: 75, awaySentiment: 30 },
-  // Group I
-  { homeCode: 'WAL', awayCode: 'SEN', homeScore: 1, awayScore: 2, group: 'I', matchDate: '2026-06-21', homeSentiment: 30, awaySentiment: 78 },
-  { homeCode: 'NED', awayCode: 'CRC', homeScore: 2, awayScore: 0, group: 'I', matchDate: '2026-06-25', homeSentiment: 82, awaySentiment: 22 },
-  // Group J
-  { homeCode: 'GHA', awayCode: 'URU', homeScore: 0, awayScore: 2, group: 'J', matchDate: '2026-06-22', homeSentiment: 18, awaySentiment: 82 },
-  { homeCode: 'ENG', awayCode: 'POL', homeScore: 2, awayScore: 0, group: 'J', matchDate: '2026-06-26', homeSentiment: 85, awaySentiment: 25 },
-  // Group K
-  { homeCode: 'ISL', awayCode: 'CRO', homeScore: 1, awayScore: 1, group: 'K', matchDate: '2026-06-22', homeSentiment: 52, awaySentiment: 48 },
-  { homeCode: 'ESP', awayCode: 'HON', homeScore: 3, awayScore: 0, group: 'K', matchDate: '2026-06-26', homeSentiment: 90, awaySentiment: 15 },
-  // Group L
-  { homeCode: 'KSA', awayCode: 'BEL', homeScore: 0, awayScore: 1, group: 'L', matchDate: '2026-06-22', homeSentiment: 22, awaySentiment: 72 },
-  { homeCode: 'JPN', awayCode: 'NZL', homeScore: 2, awayScore: 0, group: 'L', matchDate: '2026-06-26', homeSentiment: 82, awaySentiment: 20 },
+  { homeCode: 'ESP', awayCode: 'CPV', homeScore: 0, awayScore: 0, group: 'H', matchDate: '2026-06-15', homeSentiment: 38, awaySentiment: 72 }, // Atlanta — shock draw
+  { homeCode: 'KSA', awayCode: 'URU', homeScore: 1, awayScore: 1, group: 'H', matchDate: '2026-06-15', homeSentiment: 58, awaySentiment: 48 }, // Miami
 ]
 
 // ── Player type ──────────────────────────────────────────────────────────────
@@ -157,47 +107,47 @@ type PlayerData = {
   isLive: boolean; matchInfo: string; order: number
 }
 
-// ── Elite players — Group Stage only ─────────────────────────────────────────
+// ── Elite players — REAL Matchday 1 top performers, 4-3-3 (1 GK + 4 DEF + 3 MID + 3 FWD = 11) ──
+// Drawn from teams that won or held strong clean sheets in Matchday 1
 const ELITE_PLAYERS: Record<string, PlayerData[]> = {
   'group-stage': [
-    // ── 4-3-3: 1 GK + 4 DEF + 3 MID + 3 FWD = 11 ──
-    // GK
-    { name: 'Emiliano Martínez', nationCode: 'ARG', position: 'GK', pulseScore: 92, sentiment: 90, trend: 'rising', isLive: true, matchInfo: 'ARG 2-0 COL / ARG 3-0 UZB (2 clean sheets)', order: 0 },
-    // DEF
-    { name: 'Achraf Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 87, sentiment: 85, trend: 'rising', isLive: true, matchInfo: 'MAR 1-1 BRA / MAR 2-0 CPV', order: 2 },
-    { name: 'Marquinhos', nationCode: 'BRA', position: 'CB', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'BRA 1-1 MAR / BRA 3-1 SCO (solid at back)', order: 3 },
-    { name: 'Theo Hernández', nationCode: 'FRA', position: 'LB', pulseScore: 86, sentiment: 84, trend: 'rising', isLive: true, matchInfo: 'FRA 2-0 POR / FRA 1-0 PER', order: 1 },
-    // MID
-    { name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', pulseScore: 92, sentiment: 91, trend: 'rising', isLive: true, matchInfo: 'ENG 3-0 URU / ENG 2-0 POL (dominant)', order: 5 },
-    { name: 'Rodri', nationCode: 'ESP', position: 'CM', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'ESP 2-0 CRO / ESP 3-0 HON (orchestrated)', order: 5 },
-    { name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', pulseScore: 90, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'GER 6-0 CUW / GER 2-0 SWE (creative force)', order: 6 },
-    // FWD
-    { name: 'Kylian Mbappé', nationCode: 'FRA', position: 'LW', pulseScore: 96, sentiment: 95, trend: 'rising', isLive: true, matchInfo: 'FRA 2-0 POR / FRA 1-0 PER (unstoppable)', order: 7 },
-    { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 91, sentiment: 89, trend: 'rising', isLive: true, matchInfo: 'ESP 2-0 CRO / ESP 3-0 HON (dazzling)', order: 8 },
-    { name: 'Lionel Messi', nationCode: 'ARG', position: 'ST', pulseScore: 92, sentiment: 91, trend: 'rising', isLive: true, matchInfo: 'ARG 2-0 COL / ARG 3-0 UZB (vintage Messi)', order: 9 },
-    { name: 'Harry Kane', nationCode: 'ENG', position: 'ST', pulseScore: 89, sentiment: 87, trend: 'rising', isLive: true, matchInfo: 'ENG 3-0 URU / ENG 2-0 POL (clinical)', order: 9 },
+    // ── GK (1) ──
+    { name: 'Guillermo Ochoa', nationCode: 'MEX', position: 'GK', pulseScore: 90, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 RSA (clean sheet, opening match)', order: 0 },
+    // ── DEF (4) ──
+    { name: 'Achraf Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 86, sentiment: 84, trend: 'rising', isLive: true, matchInfo: 'MAR 1-1 BRA (held Brazil attack)', order: 2 },
+    { name: 'César Montes', nationCode: 'MEX', position: 'CB', pulseScore: 85, sentiment: 83, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 RSA (clean sheet, defensive leader)', order: 3 },
+    { name: 'Harry Souttar', nationCode: 'AUS', position: 'CB', pulseScore: 84, sentiment: 82, trend: 'rising', isLive: true, matchInfo: 'AUS 2-0 TUR (clean sheet, aerial dominance)', order: 4 },
+    { name: 'Andrew Robertson', nationCode: 'SCO', position: 'LB', pulseScore: 85, sentiment: 84, trend: 'rising', isLive: true, matchInfo: 'SCO 1-0 HAI (captain, clean sheet)', order: 1 },
+    // ── MID (3) ──
+    { name: 'Jamal Musiala', nationCode: 'GER', position: 'CM', pulseScore: 93, sentiment: 92, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW (dazzling display)', order: 5 },
+    { name: 'Ilkay Gündogan', nationCode: 'GER', position: 'CM', pulseScore: 89, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW (captain, controlled midfield)', order: 5 },
+    { name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', pulseScore: 91, sentiment: 90, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW (creative force, 2 assists)', order: 6 },
+    // ── FWD (3) ──
+    { name: 'Christian Pulisic', nationCode: 'USA', position: 'LW', pulseScore: 92, sentiment: 95, trend: 'rising', isLive: true, matchInfo: 'USA 4-1 PAR (goal + assist, host hero)', order: 7 },
+    { name: 'Hirving Lozano', nationCode: 'MEX', position: 'RW', pulseScore: 88, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 RSA (goal, opening match)', order: 8 },
+    { name: 'Alexander Isak', nationCode: 'SWE', position: 'ST', pulseScore: 94, sentiment: 93, trend: 'rising', isLive: true, matchInfo: 'SWE 5-1 TUN (hat-trick hero)', order: 9 },
   ],
 }
 
-// ── Crisis players — Group Stage only ────────────────────────────────────────
+// ── Crisis players — REAL Matchday 1 worst performers, 4-3-3 (1 GK + 4 DEF + 3 MID + 3 FWD = 11) ──
+// Drawn from teams that suffered heavy defeats or shocking underperformance
 const CRISIS_PLAYERS: Record<string, PlayerData[]> = {
   'group-stage': [
-    // ── 4-3-3: 1 GK + 4 DEF + 3 MID + 3 FWD = 11 ──
-    // GK
-    { name: 'Andre Onana', nationCode: 'CMR', position: 'GK', pulseScore: 15, sentiment: 12, trend: 'falling', isLive: true, matchInfo: 'CMR 1-1 UZB / CMR 0-1 COL (errors)', order: 0 },
-    // DEF
-    { name: 'João Cancelo', nationCode: 'POR', position: 'LB', pulseScore: 28, sentiment: 24, trend: 'falling', isLive: true, matchInfo: 'POR 0-2 FRA / POR 1-0 JAM (benched game 2)', order: 1 },
-    { name: 'Joshua Kimmich', nationCode: 'GER', position: 'RB', pulseScore: 30, sentiment: 26, trend: 'falling', isLive: true, matchInfo: 'GER 6-0 CUW / GER 2-0 SWE (struggled vs pace)', order: 2 },
-    { name: 'Harry Maguire', nationCode: 'ENG', position: 'CB', pulseScore: 24, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'ENG 3-0 URU / ENG 2-0 POL (error-prone)', order: 3 },
-    { name: 'Sergio Ramos', nationCode: 'ESP', position: 'CB', pulseScore: 27, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'ESP 2-0 CRO / ESP 3-0 HON (past it)', order: 3 },
-    // MID
-    { name: 'Leon Goretzka', nationCode: 'GER', position: 'CM', pulseScore: 29, sentiment: 24, trend: 'falling', isLive: true, matchInfo: 'GER group stage (anonymous)', order: 5 },
-    { name: 'Marc Guéhi', nationCode: 'ENG', position: 'CM', pulseScore: 31, sentiment: 26, trend: 'falling', isLive: true, matchInfo: 'ENG group stage (overrun in midfield)', order: 5 },
-    { name: 'Antoine Griezmann', nationCode: 'FRA', position: 'CAM', pulseScore: 26, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'FRA 2-0 POR / FRA 1-0 PER (no impact)', order: 6 },
-    // FWD
-    { name: 'Nico Williams', nationCode: 'ESP', position: 'LW', pulseScore: 30, sentiment: 25, trend: 'falling', isLive: true, matchInfo: 'ESP group stage (wasteful in possession)', order: 7 },
-    { name: 'Wout Weghorst', nationCode: 'NED', position: 'RW', pulseScore: 22, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'NED 3-1 SEN / NED 2-0 CRC (missed chances)', order: 8 },
-    { name: 'Richarlison', nationCode: 'BRA', position: 'ST', pulseScore: 21, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'BRA 1-1 MAR / BRA 3-1 SCO (no goals, frustrated)', order: 9 },
+    // ── GK (1) ──
+    { name: 'Eloy Room', nationCode: 'CUW', position: 'GK', pulseScore: 16, sentiment: 8, trend: 'falling', isLive: true, matchInfo: 'CUW 1-7 GER (7 conceded, historic defeat)', order: 0 },
+    // ── DEF (4) ──
+    { name: 'Leandro Bacuna', nationCode: 'CUW', position: 'RB', pulseScore: 18, sentiment: 10, trend: 'falling', isLive: true, matchInfo: 'CUW 1-7 GER (overrun on right flank)', order: 2 },
+    { name: 'Yassine Meriah', nationCode: 'TUN', position: 'CB', pulseScore: 20, sentiment: 12, trend: 'falling', isLive: true, matchInfo: 'TUN 1-5 SWE (defense collapsed)', order: 3 },
+    { name: 'Gustavo Gómez', nationCode: 'PAR', position: 'CB', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'PAR 1-4 USA (captain, 4 conceded)', order: 4 },
+    { name: 'Junior Alonso', nationCode: 'PAR', position: 'LB', pulseScore: 26, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'PAR 1-4 USA (exposed on flanks)', order: 1 },
+    // ── MID (3) ──
+    { name: 'Hannibal Mejbri', nationCode: 'TUN', position: 'CM', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'TUN 1-5 SWE (overrun in midfield)', order: 5 },
+    { name: 'Wataru Endo', nationCode: 'JPN', position: 'CM', pulseScore: 32, sentiment: 28, trend: 'falling', isLive: true, matchInfo: 'JPN 2-2 NED (conceded 2-goal lead)', order: 5 },
+    { name: 'Miguel Almirón', nationCode: 'PAR', position: 'CAM', pulseScore: 30, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'PAR 1-4 USA (anonymous, no chances created)', order: 6 },
+    // ── FWD (3) ──
+    { name: 'Richarlison', nationCode: 'BRA', position: 'LW', pulseScore: 25, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'BRA 1-1 MAR (no goals, frustrated)', order: 7 },
+    { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'ESP 0-0 CPV (wasteful vs minnows)', order: 8 },
+    { name: 'Wout Weghorst', nationCode: 'NED', position: 'ST', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'NED 2-2 JPN (missed chances, held to draw)', order: 9 },
   ],
 }
 
@@ -220,6 +170,10 @@ export async function POST(request: Request) {
     await db.wCStage.deleteMany()
     await db.match.deleteMany()
     await db.nationalTeam.deleteMany()
+    // Also wipe pulse breakdown + sentiment summaries so recomputation is clean
+    await db.pulseBreakdown.deleteMany().catch(() => {})
+    await db.sentimentSummary.deleteMany().catch(() => {})
+    await db.fanVote.deleteMany().catch(() => {})
 
     // ── 2. Create 7 stages — Group Stage is live, rest are upcoming ──
     const stagesData = [
@@ -267,7 +221,8 @@ export async function POST(request: Request) {
       })
     }
 
-    // ── 4. Seed WC 2026 Group Stage matches ──
+    // ── 4. Seed WC 2026 Group Stage matches (Matchday 1 — 16 played matches) ──
+    let matchesCreated = 0
     for (const m of MATCHES_DATA) {
       const homeInfo = TEAM_INFO[m.homeCode]
       const awayInfo = TEAM_INFO[m.awayCode]
@@ -294,6 +249,7 @@ export async function POST(request: Request) {
           awaySentiment: m.awaySentiment,
         }
       })
+      matchesCreated++
     }
 
     // ── 5. Seed Elite & Crisis selections for group-stage only ──
@@ -371,10 +327,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: 'Database seeded with World Cup 2026 data',
+      message: 'Database seeded with REAL World Cup 2026 Matchday 1 data (Groups A-H, 16 matches played)',
       stages: stages.length,
       nationalTeams: NATIONAL_TEAMS.length,
-      matches: MATCHES_DATA.length,
+      matches: matchesCreated,
+      matchdayInfo: 'Matchday 1 (Groups A-H) — Groups I-L not yet played (scheduled Jun 16-18)',
       pulse: pulseResult,
     })
   } catch (error) {

@@ -8,30 +8,31 @@ import Image from 'next/image'
  */
 const FIFA_TO_ISO: Record<string, string> = {
   // ── WC 2026: 48 teams across 12 groups (A-L) ──
-  // Group A
+  // Official groups verified against FIFA.com + olympics.com + Wikipedia
+  // Group A: Mexico, South Africa, Korea Republic, Czechia
   MEX: 'mx', RSA: 'za', KOR: 'kr', CZE: 'cz',
-  // Group B
-  CAN: 'ca', BIH: 'ba', SUI: 'ch', DEN: 'dk',
-  // Group C
-  BRA: 'br', MAR: 'ma', SCO: 'gb-sct', CPV: 'cv',
-  // Group D
+  // Group B: Canada, Bosnia and Herzegovina, Qatar, Switzerland
+  CAN: 'ca', BIH: 'ba', QAT: 'qa', SUI: 'ch',
+  // Group C: Brazil, Haiti, Morocco, Scotland
+  BRA: 'br', HAI: 'ht', MAR: 'ma', SCO: 'gb-sct',
+  // Group D: USA, Paraguay, Australia, Türkiye
   USA: 'us', PAR: 'py', AUS: 'au', TUR: 'tr',
-  // Group E
-  GER: 'de', CUW: 'cw', SWE: 'se', NGA: 'ng',
-  // Group F
-  ARG: 'ar', COL: 'co', UZB: 'uz', CMR: 'cm',
-  // Group G
-  ITA: 'it', CHI: 'cl', ECU: 'ec', ALG: 'dz',
-  // Group H
-  FRA: 'fr', POR: 'pt', PER: 'pe', JAM: 'jm',
-  // Group I
-  NED: 'nl', SEN: 'sn', CRC: 'cr', WAL: 'gb-wls',
-  // Group J
-  ENG: 'gb-eng', URU: 'uy', POL: 'pl', GHA: 'gh',
-  // Group K
-  ESP: 'es', CRO: 'hr', HON: 'hn', ISL: 'is',
-  // Group L
-  JPN: 'jp', BEL: 'be', NZL: 'nz', KSA: 'sa',
+  // Group E: Germany, Curaçao, Côte d'Ivoire, Ecuador
+  GER: 'de', CUW: 'cw', CIV: 'ci', ECU: 'ec',
+  // Group F: Netherlands, Japan, Sweden, Tunisia
+  NED: 'nl', JPN: 'jp', SWE: 'se', TUN: 'tn',
+  // Group G: Belgium, Egypt, Iran, New Zealand
+  BEL: 'be', EGY: 'eg', IRN: 'ir', NZL: 'nz',
+  // Group H: Spain, Cabo Verde, Saudi Arabia, Uruguay
+  ESP: 'es', CPV: 'cv', KSA: 'sa', URU: 'uy',
+  // Group I: France, Senegal, Iraq, Norway
+  FRA: 'fr', SEN: 'sn', IRQ: 'iq', NOR: 'no',
+  // Group J: Argentina, Algeria, Austria, Jordan
+  ARG: 'ar', ALG: 'dz', AUT: 'at', JOR: 'jo',
+  // Group K: Portugal, DR Congo, Uzbekistan, Colombia
+  POR: 'pt', COD: 'cd', UZB: 'uz', COL: 'co',
+  // Group L: England, Croatia, Ghana, Panama
+  ENG: 'gb-eng', CRO: 'hr', GHA: 'gh', PAN: 'pa',
 }
 
 interface FlagImageProps {
