@@ -120,7 +120,7 @@ const ELITE_PLAYERS: Record<string, PlayerData[]> = {
     { name: 'Andrew Robertson', nationCode: 'SCO', position: 'LB', pulseScore: 85, sentiment: 84, trend: 'rising', isLive: true, matchInfo: 'SCO 1-0 HAI (captain, clean sheet)', order: 1 },
     // ── MID (3) ──
     { name: 'Jamal Musiala', nationCode: 'GER', position: 'CM', pulseScore: 93, sentiment: 92, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW (dazzling display)', order: 5 },
-    { name: 'Ilkay Gündogan', nationCode: 'GER', position: 'CM', pulseScore: 89, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW (captain, controlled midfield)', order: 5 },
+    { name: 'Joshua Kimmich', nationCode: 'GER', position: 'CM', pulseScore: 89, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW (captain, controlled midfield)', order: 5 },
     { name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', pulseScore: 91, sentiment: 90, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW (creative force, 2 assists)', order: 6 },
     // ── FWD (3) ──
     { name: 'Christian Pulisic', nationCode: 'USA', position: 'LW', pulseScore: 92, sentiment: 95, trend: 'rising', isLive: true, matchInfo: 'USA 4-1 PAR (goal + assist, host hero)', order: 7 },
