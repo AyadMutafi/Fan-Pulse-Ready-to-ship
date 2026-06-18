@@ -57,6 +57,7 @@ model WCSelectionPlayer {
   order        Int      @default(0) // position in formation
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  pulseBreakdown PulseBreakdown?
 }
 
 model NationalTeam {
@@ -92,4 +93,102 @@ model Match {
   awaySentiment  Float    @default(50) // 0-100
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+// ── Pulse Score Engine Models ────────────────────────────────────────────────
+
+/// Per-player breakdown of the 4 weighted Pulse Score components.
+/// 1:1 with WCSelectionPlayer. Computed by computeAllPulseScores() in pulse-engine.
+model PulseBreakdown {
+  id                   String   @id @default(cuid())
+  playerId             String   @unique
+  player               WCSelectionPlayer @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  matchPerformance     Float    @default(50) // 0-100, weight 40%
+  fanSentiment         Float    @default(50) // 0-100, weight 25%
+  aiNarrative          Float    @default(50) // 0-100, weight 20%
+  momentumTrend        Float    @default(50) // 0-100, weight 15%
+  matchPerformanceNote String   @default("")
+  fanSentimentNote     String   @default("")
+  aiNarrativeNote      String   @default("")
+  momentumTrendNote    String   @default("")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// ── Social Sentiment Models (fed by /api/social-sentiment) ───────────────────
+
+/// A single scraped social post (Reddit/Twitter/web) about a team.
+model SocialPost {
+  id          String   @id @default(cuid())
+  platform    String   // "reddit" | "twitter" | "web"
+  postId      String
+  author      String   @default("")
+  content     String   @default("")
+  language    String   @default("en")
+  sentiment   Float    @default(50) // 0-100, LLM-scored
+  likes       Int      @default(0)
+  replies     Int      @default(0)
+  shares      Int      @default(0)
+  teamTag     String   @default("")
+  searchQuery String   @default("")
+  postedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([platform, postId])
+}
+
+/// Aggregated fan sentiment per team/language/platform/period.
+/// Feeds the Pulse Score fanSentiment component and the FAN MOOD UI.
+model SentimentSummary {
+  id            String   @id @default(cuid())
+  teamCode      String
+  language      String
+  avgSentiment  Float    @default(50) // 0-100
+  postCount     Int      @default(0)
+  positiveRatio Float    @default(0.5) // 0-1
+  topTopics     String   @default("[]") // JSON-stringified array
+  platform      String   @default("all") // "all" | "reddit" | "twitter" | "web"
+  period        String   @default("24h")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([teamCode, language, platform, period])
+}
+
+// ── Fan Voting Models ────────────────────────────────────────────────────────
+
+/// A fan's vote on a team's mood (0-100). One vote per session per team.
+model FanVote {
+  id        String   @id @default(cuid())
+  teamCode  String
+  score     Int      // 0-100
+  sessionId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamCode, sessionId])
+}
+
+/// Aggregated fan ratings per player (1-10 scale). For the Rate tab.
+model FanRating {
+  id           String   @id @default(cuid())
+  playerId     String
+  playerName   String
+  nationCode   String
+  position     String
+  avgRating    Float    @default(0) // 1-10
+  totalRatings Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// A single user's rating submission for a player.
+model UserRating {
+  id        String   @id @default(cuid())
+  sessionId String   @default("anonymous")
+  playerId  String
+  rating    Int      // 1-10
+  comment   String?
+  createdAt DateTime @default(now())
 }

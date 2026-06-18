@@ -1,7 +1,7 @@
 'use client'
 
 import { useLanguage } from '@/context/LanguageContext'
-import { Home, Activity, Star, Flame, Trophy, Globe, Zap, Crown, Radio, Lock } from 'lucide-react'
+import { Home, Activity, Globe, Zap, Crown, Radio } from 'lucide-react'
 
 export type TabId = 'home' | 'sentiments' | 'rate' | 'goals' | 'totw' | 'worldcup'
 
@@ -10,12 +10,9 @@ interface NavigationProps {
   onTabChange: (tab: TabId) => void
 }
 
-const tabs: { id: TabId; icon: typeof Home; labelKey: string; isNew?: boolean; paused?: boolean }[] = [
+const tabs: { id: TabId; icon: typeof Home; labelKey: string; isNew?: boolean }[] = [
   { id: 'home', icon: Home, labelKey: 'nav.home' },
-  { id: 'sentiments', icon: Activity, labelKey: 'nav.sentiments', paused: true },
-  { id: 'rate', icon: Star, labelKey: 'nav.rate', paused: true },
-  { id: 'goals', icon: Flame, labelKey: 'nav.goals', paused: true },
-  { id: 'totw', icon: Trophy, labelKey: 'nav.totw', paused: true },
+  { id: 'sentiments', icon: Activity, labelKey: 'nav.sentiments' },
   { id: 'worldcup', icon: Globe, labelKey: 'nav.worldcup', isNew: true },
 ]
 
@@ -64,17 +61,11 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                     }
                   `}
                 >
-                  <Icon className={`size-[18px] ${isActive ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : ''} ${tab.paused ? 'opacity-50' : ''}`} />
-                  <span className={tab.paused ? 'opacity-50' : ''}>{t(tab.labelKey)}</span>
+                  <Icon className={`size-[18px] ${isActive ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : ''}`} />
+                  <span>{t(tab.labelKey)}</span>
                   {tab.isNew && (
                     <span className="ml-auto inline-flex items-center rounded-full bg-[#6C2BD9]/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#6C2BD9] dark:text-[#8B5CF6]">
                       NEW
-                    </span>
-                  )}
-                  {tab.paused && !tab.isNew && (
-                    <span className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-[#FF6B35]/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#FF6B35]">
-                      <Lock className="size-2.5" />
-                      SOON
                     </span>
                   )}
                 </button>
@@ -137,15 +128,12 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                 `}
               >
                 <div className="relative">
-                  <Icon className={`size-[18px] ${tab.paused ? 'opacity-50' : ''}`} />
+                  <Icon className="size-[18px]" />
                   {tab.isNew && (
                     <span className="absolute -top-1 -right-1.5 size-1.5 rounded-full bg-[#6C2BD9]" />
                   )}
-                  {tab.paused && (
-                    <span className="absolute -top-1 -right-1.5 size-1.5 rounded-full bg-[#FF6B35]" />
-                  )}
                 </div>
-                <span className={`text-[9px] font-semibold ${tab.paused ? 'opacity-50' : ''}`}>{t(tab.labelKey)}</span>
+                <span className="text-[9px] font-semibold">{t(tab.labelKey)}</span>
                 {isActive && (
                   <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-0.5 w-4 rounded-full bg-[#6C2BD9] dark:bg-[#8B5CF6]" />
                 )}

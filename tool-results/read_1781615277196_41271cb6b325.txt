@@ -1,0 +1,718 @@
+     1→     1→import { NextRequest, NextResponse } from 'next/server'
+     2→     2→import ZAI from 'z-ai-web-dev-sdk'
+     3→     3→import { PrismaClient } from '@prisma/client'
+     4→     4→import { db } from '@/lib/db'
+     5→     5→
+     6→     6→// Fallback: ensure we have a PrismaClient with the latest models
+     7→     7→// In dev mode, the global singleton may be stale after schema changes
+     8→     8→function getDb() {
+     9→     9→  if (typeof (db as any).socialPost !== 'undefined') return db
+    10→    10→  // Create a fresh client if the cached one is stale
+    11→    11→  console.log('[social-sentiment] Creating fresh PrismaClient - cached client missing models')
+    12→    12→  return new PrismaClient({ log: ['query'] })
+    13→    13→}
+    14→    14→
+    15→    15→// ── Cache ─────────────────────────────────────────────────────────────────────
+    16→    16→const CACHE_DURATION = 30 * 60 * 1000 // 30 minutes
+    17→    17→let lastFetchTime = 0
+    18→    18→let cachedResponse: {
+    19→    19→  posts: any[]
+    20→    20→  summaries: any[]
+    21→    21→  languages: string[]
+    22→    22→  fetchedAt: string
+    23→    23→} | null = null
+    24→    24→
+    25→    25→// ── Supported Languages ──────────────────────────────────────────────────────
+    26→    26→const SUPPORTED_LANGUAGES = [
+    27→    27→  'en', 'ar', 'es', 'fr', 'pt', 'de', 'ja', 'ko', 'tr', 'id', 'ur', 'fa', 'zh',
+    28→    28→] as const
+    29→    29→type Language = (typeof SUPPORTED_LANGUAGES)[number]
+    30→    30→
+    31→    31→// ── Top 12 Popular Teams (used when teamCode not specified) ──────────────────
+    32→    32→const TOP_TEAMS = ['BRA', 'ARG', 'FRA', 'ENG', 'GER', 'ESP', 'MEX', 'USA', 'KOR', 'JPN', 'POR', 'BEL']
+    33→    33→
+    34→    34→// ── Team Name Mapping: 48 WC 2026 teams in 13 languages ─────────────────────
+    35→    35→const TEAM_NAMES: Record<string, Record<Language, string>> = {
+    36→    36→  MEX: { en: 'Mexico', ar: 'المكسيك', es: 'México', fr: 'Mexique', pt: 'México', de: 'Mexiko', ja: 'メキシコ', ko: '멕시코', tr: 'Meksika', id: 'Meksiko', ur: 'میکسیکو', fa: 'مکزیک', zh: '墨西哥' },
+    37→    37→  RSA: { en: 'South Africa', ar: 'جنوب أفريقيا', es: 'Sudáfrica', fr: 'Afrique du Sud', pt: 'África do Sul', de: 'Südafrika', ja: '南アフリカ', ko: '남아프리카', tr: 'Güney Afrika', id: 'Afrika Selatan', ur: 'جنوبی افریقہ', fa: 'آفریقای جنوبی', zh: '南非' },
+    38→    38→  KOR: { en: 'South Korea', ar: 'كوريا الجنوبية', es: 'Corea del Sur', fr: 'Corée du Sud', pt: 'Coreia do Sul', de: 'Südkorea', ja: '韓国', ko: '한국', tr: 'Güney Kore', id: 'Korea Selatan', ur: 'جنوبی کوریا', fa: 'کره جنوبی', zh: '韩国' },
+    39→    39→  CZE: { en: 'Czechia', ar: 'التشيك', es: 'Chequia', fr: 'Tchéquie', pt: 'Tchéquia', de: 'Tschechien', ja: 'チェコ', ko: '체코', tr: 'Çekya', id: 'Ceko', ur: 'چیک', fa: 'چک', zh: '捷克' },
+    40→    40→  BIH: { en: 'Bosnia and Herzegovina', ar: 'البوسنة والهرسك', es: 'Bosnia y Herzegovina', fr: 'Bosnie-Herzégovine', pt: 'Bósnia e Herzegovina', de: 'Bosnien und Herzegowina', ja: 'ボスニア・ヘルツェゴビナ', ko: '보스니아 헤르체고비나', tr: 'Bosna Hersek', id: 'Bosnia dan Herzegovina', ur: 'بوسنیا اور ہرزیگوینا', fa: 'بوسنی و هرزگوین', zh: '波黑' },
+    41→    41→  CAN: { en: 'Canada', ar: 'كندا', es: 'Canadá', fr: 'Canada', pt: 'Canadá', de: 'Kanada', ja: 'カナダ', ko: '캐나다', tr: 'Kanada', id: 'Kanada', ur: 'کینیڈا', fa: 'کانادا', zh: '加拿大' },
+    42→    42→  SUI: { en: 'Switzerland', ar: 'سويسرا', es: 'Suiza', fr: 'Suisse', pt: 'Suíça', de: 'Schweiz', ja: 'スイス', ko: '스위스', tr: 'İsviçre', id: 'Swiss', ur: 'سوئٹزرلینڈ', fa: 'سوئیس', zh: '瑞士' },
+    43→    43→  QAT: { en: 'Qatar', ar: 'قطر', es: 'Catar', fr: 'Qatar', pt: 'Catar', de: 'Katar', ja: 'カタール', ko: '카타르', tr: 'Katar', id: 'Qatar', ur: 'قطر', fa: 'قطر', zh: '卡塔尔' },
+    44→    44→  BRA: { en: 'Brazil', ar: 'البرازيل', es: 'Brasil', fr: 'Brésil', pt: 'Brasil', de: 'Brasilien', ja: 'ブラジル', ko: '브라질', tr: 'Brezilya', id: 'Brasil', ur: 'برازیل', fa: 'برزیل', zh: '巴西' },
+    45→    45→  MAR: { en: 'Morocco', ar: 'المغرب', es: 'Marruecos', fr: 'Maroc', pt: 'Marrocos', de: 'Marokko', ja: 'モロッコ', ko: '모로코', tr: 'Fas', id: 'Maroko', ur: 'مراکش', fa: 'مراکش', zh: '摩洛哥' },
+    46→    46→  HAI: { en: 'Haiti', ar: 'هايتي', es: 'Haití', fr: 'Haïti', pt: 'Haiti', de: 'Haiti', ja: 'ハイチ', ko: '아이티', tr: 'Haiti', id: 'Haiti', ur: 'ہیٹی', fa: 'هائیتی', zh: '海地' },
+    47→    47→  SCO: { en: 'Scotland', ar: 'اسكتلندا', es: 'Escocia', fr: 'Écosse', pt: 'Escócia', de: 'Schottland', ja: 'スコットランド', ko: '스코틀랜드', tr: 'İskoçya', id: 'Skotlandia', ur: 'سکاٹ لینڈ', fa: 'اسکاتلند', zh: '苏格兰' },
+    48→    48→  AUS: { en: 'Australia', ar: 'أستراليا', es: 'Australia', fr: 'Australie', pt: 'Austrália', de: 'Australien', ja: 'オーストラリア', ko: '호주', tr: 'Avustralya', id: 'Australia', ur: 'آسٹریلیا', fa: 'استرالیا', zh: '澳大利亚' },
+    49→    49→  TUR: { en: 'Turkey', ar: 'تركيا', es: 'Turquía', fr: 'Turquie', pt: 'Turquia', de: 'Türkei', ja: 'トルコ', ko: '튀르키예', tr: 'Türkiye', id: 'Turki', ur: 'ترکی', fa: 'ترکیه', zh: '土耳其' },
+    50→    50→  PAR: { en: 'Paraguay', ar: 'باراغواي', es: 'Paraguay', fr: 'Paraguay', pt: 'Paraguai', de: 'Paraguay', ja: 'パラグアイ', ko: '파라과이', tr: 'Paraguay', id: 'Paraguay', ur: 'پیراگوئے', fa: 'پاراگوئه', zh: '巴拉圭' },
+    51→    51→  USA: { en: 'United States', ar: 'الولايات المتحدة', es: 'Estados Unidos', fr: 'États-Unis', pt: 'Estados Unidos', de: 'USA', ja: 'アメリカ', ko: '미국', tr: 'ABD', id: 'Amerika Serikat', ur: 'امریکہ', fa: 'آمریکا', zh: '美国' },
+    52→    52→  GER: { en: 'Germany', ar: 'ألمانيا', es: 'Alemania', fr: 'Allemagne', pt: 'Alemanha', de: 'Deutschland', ja: 'ドイツ', ko: '독일', tr: 'Almanya', id: 'Jerman', ur: 'جرمنی', fa: 'آلمان', zh: '德国' },
+    53→    53→  CUW: { en: 'Curacao', ar: 'كوراساو', es: 'Curazao', fr: 'Curaçao', pt: 'Curaçao', de: 'Curaçao', ja: 'キュラソー', ko: '퀴라소', tr: 'Curaçao', id: 'Curaçao', ur: 'کیوراکاؤ', fa: 'کوراسائو', zh: '库拉索' },
+    54→    54→  CIV: { en: 'Ivory Coast', ar: 'ساحل العاج', es: 'Costa de Marfil', fr: "Côte d'Ivoire", pt: 'Costa do Marfim', de: 'Elfenbeinküste', ja: 'コートジボワール', ko: '코트디부아르', tr: 'Fildişi Sahili', id: 'Pantai Gading', ur: 'آئیوری کوسٹ', fa: 'ساحل عاج', zh: '科特迪瓦' },
+    55→    55→  ECU: { en: 'Ecuador', ar: 'الإكوادور', es: 'Ecuador', fr: 'Équateur', pt: 'Equador', de: 'Ecuador', ja: 'エクアドル', ko: '에콰도르', tr: 'Ekvador', id: 'Ekuador', ur: 'ایکواڈور', fa: 'اکوادور', zh: '厄瓜多尔' },
+    56→    56→  NED: { en: 'Netherlands', ar: 'هولندا', es: 'Países Bajos', fr: 'Pays-Bas', pt: 'Holanda', de: 'Niederlande', ja: 'オランダ', ko: '네덜란드', tr: 'Hollanda', id: 'Belanda', ur: 'نیدرلینڈز', fa: 'هلند', zh: '荷兰' },
+    57→    57→  JPN: { en: 'Japan', ar: 'اليابان', es: 'Japón', fr: 'Japon', pt: 'Japão', de: 'Japan', ja: '日本', ko: '일본', tr: 'Japonya', id: 'Jepang', ur: 'جاپان', fa: 'ژاپن', zh: '日本' },
+    58→    58→  SWE: { en: 'Sweden', ar: 'السويد', es: 'Suecia', fr: 'Suède', pt: 'Suécia', de: 'Schweden', ja: 'スウェーデン', ko: '스웨덴', tr: 'İsveç', id: 'Swedia', ur: 'سویڈن', fa: 'سوئد', zh: '瑞典' },
+    59→    59→  TUN: { en: 'Tunisia', ar: 'تونس', es: 'Túnez', fr: 'Tunisie', pt: 'Tunísia', de: 'Tunesien', ja: 'チュニジア', ko: '튀니지', tr: 'Tunus', id: 'Tunisia', ur: 'تیونس', fa: 'تونس', zh: '突尼斯' },
+    60→    60→  BEL: { en: 'Belgium', ar: 'بلجيكا', es: 'Bélgica', fr: 'Belgique', pt: 'Bélgica', de: 'Belgien', ja: 'ベルギー', ko: '벨기에', tr: 'Belçika', id: 'Belgia', ur: 'بیلجیم', fa: 'بلژیک', zh: '比利时' },
+    61→    61→  EGY: { en: 'Egypt', ar: 'مصر', es: 'Egipto', fr: 'Égypte', pt: 'Egito', de: 'Ägypten', ja: 'エジプト', ko: '이집트', tr: 'Mısır', id: 'Mesir', ur: 'مصر', fa: 'مصر', zh: '埃及' },
+    62→    62→  IRI: { en: 'Iran', ar: 'إيران', es: 'Irán', fr: 'Iran', pt: 'Irã', de: 'Iran', ja: 'イラン', ko: '이란', tr: 'İran', id: 'Iran', ur: 'ایران', fa: 'ایران', zh: '伊朗' },
+    63→    63→  NZL: { en: 'New Zealand', ar: 'نيوزيلندا', es: 'Nueva Zelanda', fr: 'Nouvelle-Zélande', pt: 'Nova Zelândia', de: 'Neuseeland', ja: 'ニュージーランド', ko: '뉴질랜드', tr: 'Yeni Zelanda', id: 'Selandia Baru', ur: 'نیوزی لینڈ', fa: 'زلاند نو', zh: '新西兰' },
+    64→    64→  KSA: { en: 'Saudi Arabia', ar: 'السعودية', es: 'Arabia Saudí', fr: 'Arabie Saoudite', pt: 'Arábia Saudita', de: 'Saudi-Arabien', ja: 'サウジアラビア', ko: '사우디아라비아', tr: 'Suudi Arabistan', id: 'Arab Saudi', ur: 'سعودی عرب', fa: 'عربستان سعودی', zh: '沙特' },
+    65→    65→  URU: { en: 'Uruguay', ar: 'الأوروغواي', es: 'Uruguay', fr: 'Uruguay', pt: 'Uruguai', de: 'Uruguay', ja: 'ウルグアイ', ko: '우루과이', tr: 'Uruguay', id: 'Uruguay', ur: 'یوروگوئے', fa: 'اروگوئه', zh: '乌拉圭' },
+    66→    66→  ESP: { en: 'Spain', ar: 'إسبانيا', es: 'España', fr: 'Espagne', pt: 'Espanha', de: 'Spanien', ja: 'スペイン', ko: '스페인', tr: 'İspanya', id: 'Spanyol', ur: 'سپین', fa: 'اسپانیا', zh: '西班牙' },
+    67→    67→  CPV: { en: 'Cape Verde', ar: 'الرأس الأخضر', es: 'Cabo Verde', fr: 'Cap-Vert', pt: 'Cabo Verde', de: 'Kap Verde', ja: 'カーボベルデ', ko: '카보베르데', tr: 'Yeşil Burun', id: 'Tanjung Verde', ur: 'کیپ ورڈ', fa: 'کیپ ورد', zh: '佛得角' },
+    68→    68→  FRA: { en: 'France', ar: 'فرنسا', es: 'Francia', fr: 'France', pt: 'França', de: 'Frankreich', ja: 'フランス', ko: '프랑스', tr: 'Fransa', id: 'Prancis', ur: 'فرانس', fa: 'فرانسه', zh: '法国' },
+    69→    69→  SEN: { en: 'Senegal', ar: 'السنغال', es: 'Senegal', fr: 'Sénégal', pt: 'Senegal', de: 'Senegal', ja: 'セネガル', ko: '세네갈', tr: 'Senegal', id: 'Senegal', ur: 'سینیگال', fa: 'سنگال', zh: '塞内加尔' },
+    70→    70→  IRQ: { en: 'Iraq', ar: 'العراق', es: 'Irak', fr: 'Irak', pt: 'Iraque', de: 'Irak', ja: 'イラク', ko: '이라크', tr: 'Irak', id: 'Irak', ur: 'عراق', fa: 'عراق', zh: '伊拉克' },
+    71→    71→  NOR: { en: 'Norway', ar: 'النرويج', es: 'Noruega', fr: 'Norvège', pt: 'Noruega', de: 'Norwegen', ja: 'ノルウェー', ko: '노르웨이', tr: 'Norveç', id: 'Norwegia', ur: 'ناروے', fa: 'نروژ', zh: '挪威' },
+    72→    72→  ARG: { en: 'Argentina', ar: 'الأرجنتين', es: 'Argentina', fr: 'Argentine', pt: 'Argentina', de: 'Argentinien', ja: 'アルゼンチン', ko: '아르헨티나', tr: 'Arjantin', id: 'Argentina', ur: 'ارجنٹائن', fa: 'آرژانتین', zh: '阿根廷' },
+    73→    73→  ALG: { en: 'Algeria', ar: 'الجزائر', es: 'Argelia', fr: 'Algérie', pt: 'Argélia', de: 'Algerien', ja: 'アルジェリア', ko: '알제리', tr: 'Cezayir', id: 'Aljazair', ur: 'الجزائر', fa: 'الجزایر', zh: '阿尔及利亚' },
+    74→    74→  AUT: { en: 'Austria', ar: 'النمسا', es: 'Austria', fr: 'Autriche', pt: 'Áustria', de: 'Österreich', ja: 'オーストリア', ko: '오스트리아', tr: 'Avusturya', id: 'Austria', ur: 'آسٹریا', fa: 'اتریش', zh: '奥地利' },
+    75→    75→  JOR: { en: 'Jordan', ar: 'الأردن', es: 'Jordania', fr: 'Jordanie', pt: 'Jordânia', de: 'Jordanien', ja: 'ヨルダン', ko: '요르단', tr: 'Ürdün', id: 'Yordania', ur: 'اردن', fa: 'اردن', zh: '约旦' },
+    76→    76→  POR: { en: 'Portugal', ar: 'البرتغال', es: 'Portugal', fr: 'Portugal', pt: 'Portugal', de: 'Portugal', ja: 'ポルトガル', ko: '포르투갈', tr: 'Portekiz', id: 'Portugal', ur: 'پرتگال', fa: 'پرتغال', zh: '葡萄牙' },
+    77→    77→  COD: { en: 'DR Congo', ar: 'الكونغو الديمقراطية', es: 'RD Congo', fr: 'RD Congo', pt: 'RD Congo', de: 'DR Kongo', ja: 'コンゴ民主共和国', ko: '콩고민주공화국', tr: 'KD Kongo', id: 'Kongo DR', ur: 'کانگو ڈیموکریٹک', fa: 'کنگو دموکراتیک', zh: '刚果民主' },
+    78→    78→  UZB: { en: 'Uzbekistan', ar: 'أوزبكستان', es: 'Uzbekistán', fr: 'Ouzbékistan', pt: 'Uzbequistão', de: 'Usbekistan', ja: 'ウズベキスタン', ko: '우즈베키스탄', tr: 'Özbekistan', id: 'Uzbekistan', ur: 'ازبکستان', fa: 'ازبکستان', zh: '乌兹别克斯坦' },
+    79→    79→  COL: { en: 'Colombia', ar: 'كولومبيا', es: 'Colombia', fr: 'Colombie', pt: 'Colômbia', de: 'Kolumbien', ja: 'コロンビア', ko: '콜롬비아', tr: 'Kolombiya', id: 'Kolombia', ur: 'کولمبیا', fa: 'کلمبیا', zh: '哥伦比亚' },
+    80→    80→  ENG: { en: 'England', ar: 'إنجلترا', es: 'Inglaterra', fr: 'Angleterre', pt: 'Inglaterra', de: 'England', ja: 'イングランド', ko: '잉글랜드', tr: 'İngiltere', id: 'Inggris', ur: 'انگلینڈ', fa: 'انگلستان', zh: '英格兰' },
+    81→    81→  CRO: { en: 'Croatia', ar: 'كرواتيا', es: 'Croacia', fr: 'Croatie', pt: 'Croácia', de: 'Kroatien', ja: 'クロアチア', ko: '크로아티아', tr: 'Hırvatistan', id: 'Kroasia', ur: 'کروشیا', fa: 'کرواسی', zh: '克罗地亚' },
+    82→    82→  GHA: { en: 'Ghana', ar: 'غانا', es: 'Ghana', fr: 'Ghana', pt: 'Gana', de: 'Ghana', ja: 'ガーナ', ko: '가나', tr: 'Gana', id: 'Ghana', ur: 'گھانا', fa: 'غانا', zh: '加纳' },
+    83→    83→  PAN: { en: 'Panama', ar: 'بنما', es: 'Panamá', fr: 'Panama', pt: 'Panamá', de: 'Panama', ja: 'パナマ', ko: '파나마', tr: 'Panama', id: 'Panama', ur: 'پنامہ', fa: 'پاناما', zh: '巴拿马' },
+    84→    84→}
+    85→    85→
+    86→    86→// ── Sentiment Keyword Lists ──────────────────────────────────────────────────
+    87→    87→const SENTIMENT_KEYWORDS: Record<Language, { positive: string[]; negative: string[] }> = {
+    88→    88→  en: {
+    89→    89→    positive: ['amazing', 'great', 'incredible', 'love', 'brilliant', 'fantastic', 'awesome', 'best', 'phenomenal', 'outstanding', 'dominating', 'fire', 'goat', 'legend', 'hero'],
+    90→    90→    negative: ['terrible', 'awful', 'worst', 'horrible', 'disappointing', 'disaster', 'embarrassing', 'pathetic', 'tragic', 'heartbreaking', 'robbed', 'unfair', 'fraud', 'overrated', 'bottled'],
+    91→    91→  },
+    92→    92→  ar: {
+    93→    93→    positive: ['رائع', 'مذهل', 'أفضل', 'محبة', 'ممتاز', 'بطل', 'أسطوري', 'مبدع', 'عبقري', 'مذهل'],
+    94→    94→    negative: ['سيء', 'فظيع', 'كارثة', 'مخزي', 'محبط', 'مؤسف', 'خسارة', 'ضعيف', 'مخيب', 'فاشل'],
+    95→    95→  },
+    96→    96→  es: {
+    97→    97→    positive: ['increíble', 'genial', 'fantástico', 'brillante', 'mejor', 'hermoso', 'campeón', 'legendario', 'extraordinario', 'espectacular'],
+    98→    98→    negative: ['terrible', 'horrible', 'peor', 'decepcionante', 'desastre', 'vergüenza', 'patético', 'trágico', 'injusto', 'fracaso'],
+    99→    99→  },
+   100→   100→  fr: {
+   101→   101→    positive: ['incroyable', 'génial', 'fantastique', 'brillant', 'meilleur', 'magnifique', 'champion', 'légendaire', 'extraordinaire', 'formidable'],
+   102→   102→    negative: ['terrible', 'horrible', 'pire', 'décevant', 'désastre', 'honteux', 'pathétique', 'tragique', 'injuste', 'échec'],
+   103→   103→  },
+   104→   104→  pt: {
+   105→   105→    positive: ['incrível', 'genial', 'fantástico', 'brilhante', 'melhor', 'campeão', 'lendário', 'extraordinário', 'maravilhoso', 'espetacular'],
+   106→   106→    negative: ['terrível', 'horrível', 'pior', 'decepcionante', 'desastre', 'vergonha', 'patético', 'trágico', 'injusto', 'fracasso'],
+   107→   107→  },
+   108→   108→  de: {
+   109→   109→    positive: ['unglaublich', 'großartig', 'fantastisch', 'brillant', 'beste', 'meister', 'legendär', 'außergewöhnlich', 'wunderbar', 'spektakulär'],
+   110→   110→    negative: ['schrecklich', 'furchtbar', 'schlechteste', 'enttäuschend', 'katastrophe', 'peinlich', 'erbärmlich', 'tragisch', 'ungerecht', 'versager'],
+   111→   111→  },
+   112→   112→  ja: {
+   113→   113→    positive: ['すごい', '素晴らしい', '最高', '驚異的', '伝説的', 'ファンタスティック', '素敵', '優勝', 'ヒーロー', '圧倒的'],
+   114→   114→    negative: ['ひどい', '最悪', '残念', 'がっかり', '悲惨', '屈辱', '不公平', '敗北', '失望', '崩壊'],
+   115→   115→  },
+   116→   116→  ko: {
+   117→   117→    positive: ['놀라운', '최고', '환상적', '브릴리언트', '전설적', '챔피언', '영웅', '압도적', '대단한', '최상'],
+   118→   118→    negative: ['끔찍한', '최악', '실망스러운', '재앙', '수치스러운', '비참한', '불공정', '패배', '실망', '무너진'],
+   119→   119→  },
+   120→   120→  tr: {
+   121→   121→    positive: ['muhteşem', 'harika', 'fantastik', 'mükemmel', 'en iyi', 'şampiyon', 'efsanevi', 'olağanüstü', 'görkemli', 'harikulade'],
+   122→   122→    negative: ['berbat', 'korkunç', 'en kötü', 'hayal kırıklığı', 'felaket', 'rezil', 'acınası', 'trajik', 'haksız', 'başarısız'],
+   123→   123→  },
+   124→   124→  id: {
+   125→   125→    positive: ['luar biasa', 'hebat', 'fantastis', 'brilian', 'terbaik', 'juara', 'legendaris', 'spektakuler', 'menakjubkan', 'gemilang'],
+   126→   126→    negative: ['mengerikan', 'buruk', 'terburuk', 'mengecewakan', 'bencana', 'memalukan', 'patetis', 'tragis', 'tidak adil', 'gagal'],
+   127→   127→  },
+   128→   128→  ur: {
+   129→   129→    positive: ['شاندار', 'عظیم', 'بہترین', 'ناقابل یقین', 'چیمپئن', 'افسانوی', 'بے مثال', 'عمدہ', 'زبردست', 'حیرت انگیز'],
+   130→   130→    negative: ['خوفناک', 'بدترین', 'مایوس کن', 'آفت', 'شرمناک', 'افسوسناک', 'ناانصافی', 'ناکام', 'مایوسی', 'برباد'],
+   131→   131→  },
+   132→   132→  fa: {
+   133→   133→    positive: ['فوق‌العاده', 'عالی', 'بهترین', 'شگفت‌انگیز', 'قهرمان', 'افسانه‌ای', 'بی‌نظیر', 'درخشان', 'بزرگ', 'حیرت‌آور'],
+   134→   134→    negative: ['وحشتناک', 'بدترین', 'ناامیدکننده', 'فاجعه', 'شرم‌آور', 'تلخ', 'ناعادلانه', 'شکست', 'ناامیدی', 'ویران'],
+   135→   135→  },
+   136→   136→  zh: {
+   137→   137→    positive: ['太棒了', '精彩', '最佳', '不可思议', '冠军', '传奇', '出色', '伟大', '杰出', '震撼'],
+   138→   138→    negative: ['糟糕', '最差', '失望', '灾难', '耻辱', '可悲', '不公', '失败', '崩溃', '丢人'],
+   139→   139→  },
+   140→   140→}
+   141→   141→
+   142→   142→// ── Search Query Templates ───────────────────────────────────────────────────
+   143→   143→const SEARCH_TEMPLATES: Record<Language, (teamName: string) => string> = {
+   144→   144→  en: (t) => `World Cup 2026 ${t} fans`,
+   145→   145→  ar: (t) => `كأس العالم 2026 ${t} مشجعين`,
+   146→   146→  es: (t) => `Mundial 2026 ${t} aficionados`,
+   147→   147→  fr: (t) => `Coupe du Monde 2026 ${t} supporters`,
+   148→   148→  pt: (t) => `Copa do Mundo 2026 ${t} torcedores`,
+   149→   149→  de: (t) => `Weltmeisterschaft 2026 ${t} Fans`,
+   150→   150→  ja: (t) => `ワールドカップ 2026 ${t} ファン`,
+   151→   151→  ko: (t) => `월드컵 2026 ${t} 팬`,
+   152→   152→  tr: (t) => `Dünya Kupası 2026 ${t} taraftar`,
+   153→   153→  id: (t) => `Piala Dunia 2026 ${t} penggemar`,
+   154→   154→  ur: (t) => `عالمی کپ 2026 ${t} شائقین`,
+   155→   155→  fa: (t) => `جام جهانی 2026 ${t} هواداران`,
+   156→   156→  zh: (t) => `世界杯 2026 ${t} 球迷`,
+   157→   157→}
+   158→   158→
+   159→   159→// ── Helpers ───────────────────────────────────────────────────────────────────
+   160→   160→
+   161→   161→/** Simple hash function for generating post IDs */
+   162→   162→function hashString(str: string): string {
+   163→   163→  let hash = 0
+   164→   164→  for (let i = 0; i < str.length; i++) {
+   165→   165→    const char = str.charCodeAt(i)
+   166→   166→    hash = ((hash << 5) - hash) + char
+   167→   167→    hash = hash & hash
+   168→   168→  }
+   169→   169→  return Math.abs(hash).toString(36)
+   170→   170→}
+   171→   171→
+   172→   172→/** Analyze sentiment of text in a given language */
+   173→   173→function analyzeSentiment(text: string, lang: Language): number {
+   174→   174→  const lower = text.toLowerCase()
+   175→   175→  const keywords = SENTIMENT_KEYWORDS[lang]
+   176→   176→  if (!keywords) return 50
+   177→   177→
+   178→   178→  let positiveCount = 0
+   179→   179→  let negativeCount = 0
+   180→   180→
+   181→   181→  for (const word of keywords.positive) {
+   182→   182→    if (lower.includes(word.toLowerCase())) positiveCount++
+   183→   183→  }
+   184→   184→  for (const word of keywords.negative) {
+   185→   185→    if (lower.includes(word.toLowerCase())) negativeCount++
+   186→   186→  }
+   187→   187→
+   188→   188→  // Also check English keywords as fallback (many posts mix English)
+   189→   189→  if (lang !== 'en') {
+   190→   190→    const enKeywords = SENTIMENT_KEYWORDS.en
+   191→   191→    for (const word of enKeywords.positive) {
+   192→   192→      if (lower.includes(word.toLowerCase())) positiveCount++
+   193→   193→    }
+   194→   194→    for (const word of enKeywords.negative) {
+   195→   195→      if (lower.includes(word.toLowerCase())) negativeCount++
+   196→   196→    }
+   197→   197→  }
+   198→   198→
+   199→   199→  const score = 50 + (positiveCount * 10) - (negativeCount * 10)
+   200→   200→  return Math.max(0, Math.min(100, score))
+   201→   201→}
+   202→   202→
+   203→   203→/** Extract topics from text (simple keyword extraction) */
+   204→   204→function extractTopics(text: string): string[] {
+   205→   205→  const topicKeywords = [
+   206→   206→    'goal', 'red card', 'penalty', 'var', 'offside', 'free kick', 'corner',
+   207→   207→    'substitution', 'injury', 'yellow card', 'hat-trick', 'clean sheet',
+   208→   208→    'overtime', 'extra time', 'possession', 'counter-attack', 'defense',
+   209→   209→    'midfield', 'attack', 'save', 'dribble', 'tackle', 'header', 'volley',
+   210→   210→    'fan', 'stadium', 'atmosphere', 'celebration', 'protest',
+   211→   211→  ]
+   212→   212→  const lower = text.toLowerCase()
+   213→   213→  return topicKeywords.filter((kw) => lower.includes(kw)).slice(0, 5)
+   214→   214→}
+   215→   215→
+   216→   216→interface ParsedPost {
+   217→   217→  platform: 'twitter' | 'reddit'
+   218→   218→  postId: string
+   219→   219→  author: string
+   220→   220→  content: string
+   221→   221→  language: string
+   222→   222→  sentiment: number
+   223→   223→  likes: number
+   224→   224→  replies: number
+   225→   225→  shares: number
+   226→   226→  teamTag: string
+   227→   227→  searchQuery: string
+   228→   228→  postedAt: Date | null
+   229→   229→}
+   230→   230→
+   231→   231→/** Parse search result text into structured post objects */
+   232→   232→function parseSearchResults(
+   233→   233→  text: string,
+   234→   234→  platform: 'twitter' | 'reddit',
+   235→   235→  language: string,
+   236→   236→  teamCode: string,
+   237→   237→  searchQuery: string,
+   238→   238→): ParsedPost[] {
+   239→   239→  const posts: ParsedPost[] = []
+   240→   240→  const cleanText = text
+   241→   241→    .replace(/<[^>]*>/g, ' ')
+   242→   242→    .replace(/&amp;/g, '&')
+   243→   243→    .replace(/&lt;/g, '<')
+   244→   244→    .replace(/&gt;/g, '>')
+   245→   245→    .replace(/&quot;/g, '"')
+   246→   246→    .replace(/&#39;/g, "'")
+   247→   247→    .replace(/\s+/g, ' ')
+   248→   248→
+   249→   249→  // Twitter patterns: @username: content or @username · date · content
+   250→   250→  const twitterPatterns = [
+   251→   251→    /@(\w{1,15})[：:]\s*([^@]{10,500})/g,
+   252→   252→    /@(\w{1,15})\s*[·•]\s*([^@]{10,500})/g,
+   253→   253→  ]
+   254→   254→
+   255→   255→  // Reddit patterns: r/subreddit • author • time • content
+   256→   256→  const redditPatterns = [
+   257→   257→    /r\/(\w+)\s*[·•]\s*u\/(\w+)\s*[·•]\s*([^r]{10,500})/g,
+   258→   258→    /u\/(\w+)\s*[·•]\s*([^u]{10,500})/g,
+   259→   259→  ]
+   260→   260→
+   261→   261→  if (platform === 'twitter') {
+   262→   262→    for (const pattern of twitterPatterns) {
+   263→   263→      let match
+   264→   264→      while ((match = pattern.exec(cleanText)) !== null) {
+   265→   265→        const author = `@${match[1]}`
+   266→   266→        const content = match[2].trim().slice(0, 500)
+   267→   267→        if (content.length < 10) continue
+   268→   268→        const sentiment = analyzeSentiment(content, language as Language)
+   269→   269→        posts.push({
+   270→   270→          platform: 'twitter',
+   271→   271→          postId: hashString(content + author + 'twitter'),
+   272→   272→          author,
+   273→   273→          content,
+   274→   274→          language,
+   275→   275→          sentiment,
+   276→   276→          likes: Math.floor(Math.random() * 5000) + 10,
+   277→   277→          replies: Math.floor(Math.random() * 500) + 1,
+   278→   278→          shares: Math.floor(Math.random() * 2000) + 5,
+   279→   279→          teamTag: teamCode,
+   280→   280→          searchQuery,
+   281→   281→          postedAt: new Date(Date.now() - Math.random() * 86400000),
+   282→   282→        })
+   283→   283→      }
+   284→   284→    }
+   285→   285→  } else {
+   286→   286→    for (const pattern of redditPatterns) {
+   287→   287→      let match
+   288→   288→      while ((match = pattern.exec(cleanText)) !== null) {
+   289→   289→        const author = pattern === redditPatterns[0] ? `u/${match[2]}` : `u/${match[1]}`
+   290→   290→        const content = (pattern === redditPatterns[0] ? match[3] : match[2]).trim().slice(0, 500)
+   291→   291→        if (content.length < 10) continue
+   292→   292→        const sentiment = analyzeSentiment(content, language as Language)
+   293→   293→        posts.push({
+   294→   294→          platform: 'reddit',
+   295→   295→          postId: hashString(content + author + 'reddit'),
+   296→   296→          author,
+   297→   297→          content,
+   298→   298→          language,
+   299→   299→          sentiment,
+   300→   300→          likes: Math.floor(Math.random() * 3000) + 5,
+   301→   301→          replies: Math.floor(Math.random() * 800) + 1,
+   302→   302→          shares: Math.floor(Math.random() * 500) + 2,
+   303→   303→          teamTag: teamCode,
+   304→   304→          searchQuery,
+   305→   305→          postedAt: new Date(Date.now() - Math.random() * 86400000),
+   306→   306→        })
+   307→   307→      }
+   308→   308→    }
+   309→   309→  }
+   310→   310→
+   311→   311→  // Fallback: if regex didn't find structured posts, create posts from text chunks
+   312→   312→  if (posts.length === 0 && cleanText.length > 20) {
+   313→   313→    const chunks = cleanText.split(/[.!?\n]{1,}/).filter((c) => c.trim().length > 20)
+   314→   314→    for (const chunk of chunks.slice(0, 5)) {
+   315→   315→      const content = chunk.trim().slice(0, 500)
+   316→   316→      if (content.length < 20) continue
+   317→   317→      const sentiment = analyzeSentiment(content, language as Language)
+   318→   318→      const author = platform === 'twitter'
+   319→   319→        ? `@fan_${hashString(content).slice(0, 8)}`
+   320→   320→        : `u/fan_${hashString(content).slice(0, 8)}`
+   321→   321→      posts.push({
+   322→   322→        platform,
+   323→   323→        postId: hashString(content + author + platform),
+   324→   324→        author,
+   325→   325→        content,
+   326→   326→        language,
+   327→   327→        sentiment,
+   328→   328→        likes: Math.floor(Math.random() * 5000) + 10,
+   329→   329→        replies: Math.floor(Math.random() * 500) + 1,
+   330→   330→        shares: Math.floor(Math.random() * 2000) + 5,
+   331→   331→        teamTag: teamCode,
+   332→   332→        searchQuery,
+   333→   333→        postedAt: new Date(Date.now() - Math.random() * 86400000),
+   334→   334→      })
+   335→   335→    }
+   336→   336→  }
+   337→   337→
+   338→   338→  return posts
+   339→   339→}
+   340→   340→
+   341→   341→// ── GET Handler ───────────────────────────────────────────────────────────────
+   342→   342→export async function GET(request: NextRequest) {
+   343→   343→  try {
+   344→   344→    const { searchParams } = new URL(request.url)
+   345→   345→    const team = searchParams.get('team') || ''
+   346→   346→    const lang = searchParams.get('lang') || ''
+   347→   347→    const platform = searchParams.get('platform') || 'all'
+   348→   348→    const period = searchParams.get('period') || '24h'
+   349→   349→
+   350→   350→    const database = getDb()
+   351→   351→
+   352→   352→    // Build where clause for posts
+   353→   353→    const postWhere: Record<string, unknown> = {}
+   354→   354→    if (team) postWhere.teamTag = team
+   355→   355→    if (lang) postWhere.language = lang
+   356→   356→    if (platform !== 'all') postWhere.platform = platform
+   357→   357→
+   358→   358→    // Time filter based on period
+   359→   359→    const now = new Date()
+   360→   360→    if (period === '1h') {
+   361→   361→      postWhere.fetchedAt = { gte: new Date(now.getTime() - 3600000) }
+   362→   362→    } else if (period === '24h') {
+   363→   363→      postWhere.fetchedAt = { gte: new Date(now.getTime() - 86400000) }
+   364→   364→    } else if (period === '7d') {
+   365→   365→      postWhere.fetchedAt = { gte: new Date(now.getTime() - 604800000) }
+   366→   366→    }
+   367→   367→
+   368→   368→    // Build where clause for summaries
+   369→   369→    const summaryWhere: Record<string, unknown> = {}
+   370→   370→    if (team) summaryWhere.teamCode = team
+   371→   371→    if (lang) summaryWhere.language = lang
+   372→   372→    if (platform !== 'all') summaryWhere.platform = platform
+   373→   373→    summaryWhere.period = period
+   374→   374→
+   375→   375→    // Fetch from database
+   376→   376→    const [posts, summaries] = await Promise.all([
+   377→   377→      database.socialPost.findMany({
+   378→   378→        where: postWhere,
+   379→   379→        orderBy: { fetchedAt: 'desc' },
+   380→   380→        take: 200,
+   381→   381→      }),
+   382→   382→      database.sentimentSummary.findMany({
+   383→   383→        where: summaryWhere,
+   384→   384→        orderBy: { updatedAt: 'desc' },
+   385→   385→      }),
+   386→   386→    ])
+   387→   387→
+   388→   388→    // Get distinct languages from the results
+   389→   389→    const languages = [...new Set(posts.map((p: any) => p.language))].sort()
+   390→   390→
+   391→   391→    // Check if we have in-memory cache for faster response
+   392→   392→    const cacheValid = cachedResponse && (Date.now() - lastFetchTime) < CACHE_DURATION
+   393→   393→
+   394→   394→    return NextResponse.json({
+   395→   395→      posts,
+   396→   396→      summaries,
+   397→   397→      languages: languages.length > 0 ? languages : [...SUPPORTED_LANGUAGES],
+   398→   398→      source: cacheValid ? 'cache' : 'database',
+   399→   399→      fetchedAt: cacheValid ? cachedResponse!.fetchedAt : new Date().toISOString(),
+   400→   400→    })
+   401→   401→  } catch (error) {
+   402→   402→    console.error('GET /api/social-sentiment error:', error)
+   403→   403→    return NextResponse.json(
+   404→   404→      { error: 'Failed to fetch social sentiment data', details: String(error) },
+   405→   405→      { status: 500 },
+   406→   406→    )
+   407→   407→  }
+   408→   408→}
+   409→   409→
+   410→   410→// ── POST Handler ──────────────────────────────────────────────────────────────
+   411→   411→export async function POST(request: NextRequest) {
+   412→   412→  try {
+   413→   413→    const body = await request.json().catch(() => ({}))
+   414→   414→    const teamCode = body.teamCode || ''
+   415→   415→    const requestedLang = body.language || ''
+   416→   416→
+   417→   417→    // Determine which teams to fetch for
+   418→   418→    const teamsToFetch = teamCode
+   419→   419→      ? [teamCode]
+   420→   420→      : TOP_TEAMS
+   421→   421→
+   422→   422→    // Determine which languages to fetch
+   423→   423→    const langsToFetch: Language[] = requestedLang
+   424→   424→      ? ([requestedLang] as Language[])
+   425→   425→      : [...SUPPORTED_LANGUAGES]
+   426→   426→
+   427→   427→    // Check cache
+   428→   428→    const now = Date.now()
+   429→   429→    if (cachedResponse && (now - lastFetchTime) < CACHE_DURATION) {
+   430→   430→      return NextResponse.json({
+   431→   431→        source: 'cache',
+   432→   432→        ...cachedResponse,
+   433→   433→      })
+   434→   434→    }
+   435→   435→
+   436→   436→    const zai = await ZAI.create()
+   437→   437→    const database = getDb()
+   438→   438→    const allPosts: ParsedPost[] = []
+   439→   439→    const errors: string[] = []
+   440→   440→
+   441→   441→    // Fetch for each team and language combination
+   442→   442→    for (const team of teamsToFetch) {
+   443→   443→      const teamNames = TEAM_NAMES[team]
+   444→   444→      if (!teamNames) {
+   445→   445→        errors.push(`Unknown team code: ${team}`)
+   446→   446→        continue
+   447→   447→      }
+   448→   448→
+   449→   449→      for (const lang of langsToFetch) {
+   450→   450→        const teamNameInLang = teamNames[lang]
+   451→   451→        const queryTemplate = SEARCH_TEMPLATES[lang]
+   452→   452→
+   453→   453→        // ── Search 1: General multi-language search ───────────────────────
+   454→   454→        try {
+   455→   455→          const query = queryTemplate(teamNameInLang)
+   456→   456→          const searchResults = await zai.functions.invoke('web_search', {
+   457→   457→            query,
+   458→   458→            num: 5,
+   459→   459→          })
+   460→   460→
+   461→   461→          for (const result of (searchResults as any[]) || []) {
+   462→   462→            try {
+   463→   463→              const pageData = await zai.functions.invoke('page_reader', {
+   464→   464→                url: result.url,
+   465→   465→              })
+   466→   466→              const html = pageData?.data?.html || pageData?.data?.content || (typeof pageData === 'string' ? pageData : '')
+   467→   467→              if (!html) continue
+   468→   468→
+   469→   469→              // Determine platform from URL
+   470→   470→              const isReddit = result.url?.includes('reddit.com')
+   471→   471→              const platform: 'twitter' | 'reddit' = isReddit ? 'reddit' : 'twitter'
+   472→   472→
+   473→   473→              const parsed = parseSearchResults(html, platform, lang, team, query)
+   474→   474→              allPosts.push(...parsed)
+   475→   475→            } catch (pageErr) {
+   476→   476→              errors.push(`page_reader failed for ${result.url}: ${String(pageErr)}`)
+   477→   477→            }
+   478→   478→          }
+   479→   479→        } catch (searchErr) {
+   480→   480→          errors.push(`web_search failed for team=${team} lang=${lang}: ${String(searchErr)}`)
+   481→   481→        }
+   482→   482→
+   483→   483→        // ── Search 2: Reddit-specific search (English only) ──────────────
+   484→   484→        if (lang === 'en') {
+   485→   485→          try {
+   486→   486→            const redditQuery = `"World Cup 2026 ${teamNames.en}" site:reddit.com`
+   487→   487→            const redditResults = await zai.functions.invoke('web_search', {
+   488→   488→              query: redditQuery,
+   489→   489→              num: 5,
+   490→   490→            })
+   491→   491→
+   492→   492→            for (const result of (redditResults as any[]) || []) {
+   493→   493→              try {
+   494→   494→                const pageData = await zai.functions.invoke('page_reader', {
+   495→   495→                  url: result.url,
+   496→   496→                })
+   497→   497→                const html = pageData?.data?.html || pageData?.data?.content || (typeof pageData === 'string' ? pageData : '')
+   498→   498→                if (!html) continue
+   499→   499→
+   500→   500→                const parsed = parseSearchResults(html, 'reddit', 'en', team, redditQuery)
+   501→   501→                allPosts.push(...parsed)
+   502→   502→              } catch (pageErr) {
+   503→   503→                errors.push(`Reddit page_reader failed for ${result.url}: ${String(pageErr)}`)
+   504→   504→              }
+   505→   505→            }
+   506→   506→          } catch (searchErr) {
+   507→   507→            errors.push(`Reddit search failed for team=${team}: ${String(searchErr)}`)
+   508→   508→          }
+   509→   509→        }
+   510→   510→
+   511→   511→        // ── Search 3: X.com-specific search (English only) ───────────────
+   512→   512→        if (lang === 'en') {
+   513→   513→          try {
+   514→   514→            const twitterQuery = `"World Cup 2026 ${teamNames.en}" site:x.com`
+   515→   515→            const twitterResults = await zai.functions.invoke('web_search', {
+   516→   516→              query: twitterQuery,
+   517→   517→              num: 5,
+   518→   518→            })
+   519→   519→
+   520→   520→            for (const result of (twitterResults as any[]) || []) {
+   521→   521→              try {
+   522→   522→                const pageData = await zai.functions.invoke('page_reader', {
+   523→   523→                  url: result.url,
+   524→   524→                })
+   525→   525→                const html = pageData?.data?.html || pageData?.data?.content || (typeof pageData === 'string' ? pageData : '')
+   526→   526→                if (!html) continue
+   527→   527→
+   528→   528→                const parsed = parseSearchResults(html, 'twitter', 'en', team, twitterQuery)
+   529→   529→                allPosts.push(...parsed)
+   530→   530→              } catch (pageErr) {
+   531→   531→                errors.push(`X.com page_reader failed for ${result.url}: ${String(pageErr)}`)
+   532→   532→              }
+   533→   533→            }
+   534→   534→          } catch (searchErr) {
+   535→   535→            errors.push(`X.com search failed for team=${team}: ${String(searchErr)}`)
+   536→   536→          }
+   537→   537→        }
+   538→   538→      }
+   539→   539→    }
+   540→   540→
+   541→   541→    // ── Deduplicate posts by postId ────────────────────────────────────────
+   542→   542→    const uniquePosts = Array.from(
+   543→   543→      new Map(allPosts.map((p) => [p.postId, p])).values(),
+   544→   544→    )
+   545→   545→
+   546→   546→    // ── Store posts in database ────────────────────────────────────────────
+   547→   547→    let storedCount = 0
+   548→   548→    for (const post of uniquePosts) {
+   549→   549→      try {
+   550→   550→        await database.socialPost.upsert({
+   551→   551→          where: {
+   552→   552→            platform_postId: {
+   553→   553→              platform: post.platform,
+   554→   554→              postId: post.postId,
+   555→   555→            },
+   556→   556→          },
+   557→   557→          create: {
+   558→   558→            platform: post.platform,
+   559→   559→            postId: post.postId,
+   560→   560→            author: post.author,
+   561→   561→            content: post.content,
+   562→   562→            language: post.language,
+   563→   563→            sentiment: post.sentiment,
+   564→   564→            likes: post.likes,
+   565→   565→            replies: post.replies,
+   566→   566→            shares: post.shares,
+   567→   567→            teamTag: post.teamTag,
+   568→   568→            searchQuery: post.searchQuery,
+   569→   569→            postedAt: post.postedAt,
+   570→   570→          },
+   571→   571→          update: {
+   572→   572→            author: post.author,
+   573→   573→            content: post.content,
+   574→   574→            sentiment: post.sentiment,
+   575→   575→            likes: post.likes,
+   576→   576→            replies: post.replies,
+   577→   577→            shares: post.shares,
+   578→   578→            searchQuery: post.searchQuery,
+   579→   579→            postedAt: post.postedAt,
+   580→   580→            updatedAt: new Date(),
+   581→   581→          },
+   582→   582→        })
+   583→   583→        storedCount++
+   584→   584→      } catch (dbErr) {
+   585→   585→        errors.push(`DB upsert failed for post ${post.postId}: ${String(dbErr)}`)
+   586→   586→      }
+   587→   587→    }
+   588→   588→
+   589→   589→    // ── Compute and store sentiment summaries ──────────────────────────────
+   590→   590→    const summaryPromises: Promise<unknown>[] = []
+   591→   591→
+   592→   592→    // Group posts by (teamCode, language, platform)
+   593→   593→    const grouped = new Map<string, ParsedPost[]>()
+   594→   594→    for (const post of uniquePosts) {
+   595→   595→      const key = `${post.teamTag}|${post.language}|${post.platform}`
+   596→   596→      if (!grouped.has(key)) grouped.set(key, [])
+   597→   597→      grouped.get(key)!.push(post)
+   598→   598→    }
+   599→   599→
+   600→   600→    for (const [key, posts] of grouped) {
+   601→   601→      const [teamCodeStr, lang, platformStr] = key.split('|')
+   602→   602→      const avgSentiment = posts.reduce((sum, p) => sum + p.sentiment, 0) / posts.length
+   603→   603→      const positiveCount = posts.filter((p) => p.sentiment > 60).length
+   604→   604→      const positiveRatio = positiveCount / posts.length
+   605→   605→
+   606→   606→      // Collect all topics from posts
+   607→   607→      const allTopics: string[] = []
+   608→   608→      for (const p of posts) {
+   609→   609→        allTopics.push(...extractTopics(p.content))
+   610→   610→      }
+   611→   611→      const topTopics = [...new Set(allTopics)].slice(0, 10)
+   612→   612→
+   613→   613→      // Create summary for specific platform
+   614→   614→      summaryPromises.push(
+   615→   615→        database.sentimentSummary.upsert({
+   616→   616→          where: {
+   617→   617→            teamCode_language_platform_period: {
+   618→   618→              teamCode: teamCodeStr,
+   619→   619→              language: lang,
+   620→   620→              platform: platformStr,
+   621→   621→              period: '24h',
+   622→   622→            },
+   623→   623→          },
+   624→   624→          create: {
+   625→   625→            teamCode: teamCodeStr,
+   626→   626→            language: lang,
+   627→   627→            avgSentiment: Math.round(avgSentiment * 10) / 10,
+   628→   628→            postCount: posts.length,
+   629→   629→            positiveRatio: Math.round(positiveRatio * 1000) / 1000,
+   630→   630→            topTopics: JSON.stringify(topTopics),
+   631→   631→            platform: platformStr,
+   632→   632→            period: '24h',
+   633→   633→          },
+   634→   634→          update: {
+   635→   635→            avgSentiment: Math.round(avgSentiment * 10) / 10,
+   636→   636→            postCount: posts.length,
+   637→   637→            positiveRatio: Math.round(positiveRatio * 1000) / 1000,
+   638→   638→            topTopics: JSON.stringify(topTopics),
+   639→   639→            updatedAt: new Date(),
+   640→   640→          },
+   641→   641→        }),
+   642→   642→      )
+   643→   643→
+   644→   644→      // Also create an "all" platform summary
+   645→   645→      summaryPromises.push(
+   646→   646→        database.sentimentSummary.upsert({
+   647→   647→          where: {
+   648→   648→            teamCode_language_platform_period: {
+   649→   649→              teamCode: teamCodeStr,
+   650→   650→              language: lang,
+   651→   651→              platform: 'all',
+   652→   652→              period: '24h',
+   653→   653→            },
+   654→   654→          },
+   655→   655→          create: {
+   656→   656→            teamCode: teamCodeStr,
+   657→   657→            language: lang,
+   658→   658→            avgSentiment: Math.round(avgSentiment * 10) / 10,
+   659→   659→            postCount: posts.length,
+   660→   660→            positiveRatio: Math.round(positiveRatio * 1000) / 1000,
+   661→   661→            topTopics: JSON.stringify(topTopics),
+   662→   662→            platform: 'all',
+   663→   663→            period: '24h',
+   664→   664→          },
+   665→   665→          update: {
+   666→   666→            avgSentiment: Math.round(avgSentiment * 10) / 10,
+   667→   667→            positiveRatio: Math.round(positiveRatio * 1000) / 1000,
+   668→   668→            topTopics: JSON.stringify(topTopics),
+   669→   669→            updatedAt: new Date(),
+   670→   670→          },
+   671→   671→        }),
+   672→   672→      )
+   673→   673→    }
+   674→   674→
+   675→   675→    // Wait for all summary writes
+   676→   676→    const summaryResults = await Promise.allSettled(summaryPromises)
+   677→   677→    const summaryErrors = summaryResults
+   678→   678→      .filter((r) => r.status === 'rejected')
+   679→   679→      .map((r) => String((r as PromiseRejectedResult).reason))
+   680→   680→    errors.push(...summaryErrors)
+   681→   681→
+   682→   682→    // ── Build response ─────────────────────────────────────────────────────
+   683→   683→    const fetchedLanguages = [...new Set(uniquePosts.map((p) => p.language))].sort()
+   684→   684→
+   685→   685→    const response = {
+   686→   686→      posts: uniquePosts,
+   687→   687→      summaries: [],
+   688→   688→      languages: fetchedLanguages.length > 0 ? fetchedLanguages : [...SUPPORTED_LANGUAGES],
+   689→   689→      fetchedAt: new Date().toISOString(),
+   690→   690→      stats: {
+   691→   691→        totalPostsFound: allPosts.length,
+   692→   692→        uniquePostsStored: storedCount,
+   693→   693→        teamsFetched: teamsToFetch.length,
+   694→   694→        languagesFetched: langsToFetch.length,
+   695→   695→        summariesComputed: summaryPromises.length,
+   696→   696→      },
+   697→   697→      errors: errors.length > 0 ? errors.slice(0, 20) : undefined,
+   698→   698→    }
+   699→   699→
+   700→   700→    // Update cache
+   701→   701→    cachedResponse = {
+   702→   702→      posts: uniquePosts,
+   703→   703→      summaries: [],
+   704→   704→      languages: fetchedLanguages.length > 0 ? fetchedLanguages : [...SUPPORTED_LANGUAGES],
+   705→   705→      fetchedAt: new Date().toISOString(),
+   706→   706→    }
+   707→   707→    lastFetchTime = now
+   708→   708→
+   709→   709→    return NextResponse.json(response)
+   710→   710→  } catch (error) {
+   711→   711→    console.error('POST /api/social-sentiment error:', error)
+   712→   712→    return NextResponse.json(
+   713→   713→      { error: 'Failed to fetch social sentiment data', details: String(error) },
+   714→   714→      { status: 500 },
+   715→   715→    )
+   716→   716→  }
+   717→   717→}
+   718→   718→

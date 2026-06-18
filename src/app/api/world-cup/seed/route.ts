@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { db, getDb } from '@/lib/db'
+import { computeAllPulseScores } from '@/lib/pulse-engine'
 
 // ── Team info helper — 48 WC 2026 teams ───────────────────────────────────────
 const TEAM_INFO: Record<string, { name: string; flag: string }> = {
@@ -357,12 +358,24 @@ export async function POST(request: Request) {
       }
     }
 
+    // ── 6. Run the REAL Pulse Score engine ───────────────────────────────────
+    // Computes every player's weighted breakdown (40% match / 25% fan / 20%
+    // narrative / 15% momentum) from seeded match data and persists it.
+    // Fan sentiment falls back to the baseline until /api/social-sentiment runs.
+    let pulseResult: { playersComputed: number; breakdownsWritten: number; errors: string[] } | null = null
+    try {
+      pulseResult = await computeAllPulseScores(getDb())
+    } catch (err) {
+      console.error('Pulse engine failed during seed:', err)
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Database seeded with World Cup 2026 data',
       stages: stages.length,
       nationalTeams: NATIONAL_TEAMS.length,
       matches: MATCHES_DATA.length,
+      pulse: pulseResult,
     })
   } catch (error) {
     console.error('Seed failed:', error)

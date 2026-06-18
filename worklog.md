@@ -129,3 +129,79 @@ Stage Summary:
 - 48 matches (2 matchdays × 12 groups × 2 matches)
 - 7 stages (1 live + 6 upcoming)
 - 11 elite players + 11 crisis players (group-stage only)
+
+---
+Task ID: 7-backend
+Agent: Main Agent
+Task: Fix the "hater review" wounds — make the Pulse Score engine real, add missing Prisma models, wire seed to compute real scores (backend integrity fixes)
+
+Work Log:
+- Read all API routes + schema + types + page.tsx to audit the real state vs. the prior session's claims
+- Found: prior session wrote /api/social-sentiment (930 lines), /api/fan-vote, /api/compute-pulse-scores, /api/pulse-score referencing models (SocialPost, SentimentSummary, FanVote, PulseBreakdown) that did NOT exist in schema.prisma → every route 500s on contact
+- Found: /api/compute-pulse-scores imports `computeAllPulseScores` from `@/lib/pulse-engine` and `getDb` from `@/lib/db` — neither existed → route wouldn't compile
+- Found: /api/pulse-score used `Math.random()` and imported PULSE_WEIGHTS but never applied them (overall = player.pulseScore returned as-is)
+- Added 6 missing Prisma models to schema.prisma: PulseBreakdown (1:1 with WCSelectionPlayer), SocialPost, SentimentSummary, FanVote, FanRating, UserRating — with correct unique constraints matching what the routes expect (platform_postId, teamCode_language_platform_period, teamCode_sessionId)
+- Added `pulseBreakdown PulseBreakdown?` relation to WCSelectionPlayer
+- Ran `bun run db:push` — schema synced, Prisma client regenerated
+- Exported `getDb()` from src/lib/db.ts (detects stale cached client missing new models, creates fresh) + changed log config from `['query']` to `['warn','error']` (was logging every SQL query to stdout)
+- Created src/lib/pulse-engine.ts with REAL weighted engine:
+  * `computeAllPulseScores(db)` — batch: fetches all players + matches + SentimentSummary + FanVote once, computes 4 components per player, applies PULSE_WEIGHTS (40/25/20/15), updates player.pulseScore + upserts PulseBreakdown
+  * `computePlayerPulseScore(db, playerId)` — single-player on-demand compute (used by GET /api/pulse-score)
+  * matchPerformance = winRate×70 + goalDiffBonus×30 (from Match table)
+  * fanSentiment = 70% scraped (SentimentSummary) + 30% fan vote (FanVote), fallback to baseline
+  * aiNarrative = avg(trendScore, fanDirection) — no randomness
+  * momentumTrend = trendBase ± recentGoalDiff×8
+  * overall = Σ(weight × component) — the REAL formula, no Math.random()
+- Rewrote /api/pulse-score/route.ts: reads persisted PulseBreakdown, or computes on-demand via computePlayerPulseScore; returns weights in response for transparency; no Math.random()
+- Wired /api/world-cup/seed/route.ts to call computeAllPulseScores(getDb()) after seeding players
+- Updated /api/social-sentiment/route.ts to import shared getDb from @/lib/db (removed its noisy local copy that logged every query)
+- Restarted dev server (module cache held old PrismaClient; needed fresh import of regenerated client)
+- Re-seeded with ?force=true: pulse engine ran clean — playersComputed: 22, breakdownsWritten: 22, errors: []
+- Verified /api/pulse-score endpoint: Emiliano Martínez (ARG) → overall 90 = 97.5×0.40 + 90×0.25 + 72.5×0.20 + 95×0.15 = 90.25 → 90 ✓ (math confirmed, no randomness)
+- `bun run lint` passes clean (exit 0)
+
+Stage Summary:
+- Pulse Score engine is REAL: weighted formula (40/25/20/15) applied, no Math.random(), breakdowns persisted to DB
+- All 6 missing Prisma models added + synced; routes that referenced them no longer 500
+- /api/pulse-score returns real computed breakdown with transparent weights
+- Seed route now computes real pulse scores from match data on every seed
+- /api/fan-vote, /api/social-sentiment, /api/compute-pulse-scores all functional now
+- Remaining (delegated to UI subagent): un-pause Sentiments tab + wire to /api/sentiments, add FAN MOOD voting section to home + replace "1.2M" lie with real fan-vote count, connect pulse breakdown modal on player click, remove dead MOCK_MATCHES, hide non-working tabs from nav
+
+---
+Task ID: 7-ui
+Agent: full-stack-developer
+Task: UI wiring — make the frontend consume the real backend endpoints (sentiments, fan-vote, pulse-score) instead of fabricated data, hide dead tabs, add Fan Mood voting section + pulse breakdown modal
+
+Work Log:
+- Read worklog.md to ingest prior 7-backend agent's contract notes (sentiments/fan-vote/pulse-score API shapes verified against source routes)
+- Navigation.tsx: removed rate/goals/totw tabs, un-paused sentiments, removed Lock import + all paused/SOON badge logic (sidebar + mobile bar); kept TabId union intact to avoid breaking other references
+- page.tsx: deleted dead MOCK_MATCHES (28 entries, never referenced — HomeTab already used /api/matches) and MOCK_SENTIMENTS (12 fake players)
+- page.tsx SentimentsTab: full rewrite — fetches GET /api/sentiments, replaces dead league filter pills (PL/LaLiga/UCL) with mood filters ALL/ON FIRE/UNDER PRESSURE/CRISIS using the API `label` field, 9-card skeleton loader while pending, friendly AlertTriangle error state with Retry button, empty state for filter with no matches, player cards use FlagImage + getSentimentColor + getSentimentBg + sentiment-bar classes, header shows live "X players" count
+- page.tsx HomeTab: added Fan Mood voting section between Featured Matches and Arena Intelligence — 12 mood chips for top teams (BRA/ARG/FRA/ENG/ESP/GER/MEX/USA/POR/NED/JPN/MAR) using NATIONAL_TEAMS, each chip shows flag emoji + code + crowd score bar + my-vote green ring; clicking opens an AnimatePresence modal with 5 emoji buttons (🤩 95 / 😊 75 / 😐 50 / 😟 25 / 😡 5); POST /api/fan-vote with optimistic update; toast confirmation; SSR-safe sessionId via crypto.randomUUID() persisted to localStorage('fan_session_id'); loading skeleton; responsive grid (2 cols mobile → 4 cols desktop)
+- page.tsx HomeTab Arena Intelligence: replaced hardcoded "1.2M fan votes tallied for World Cup 2026 Group Stage Elite XI" with dynamic `${totalVoteCount.toLocaleString()} fan votes tallied for World Cup 2026 Group Stage`, falls back to "Be the first to vote in the Fan Mood section below" when count is 0
+- page.tsx WorldCupTab stats bar: replaced `'1.2M'` Total Votes value with `totalVotes.toLocaleString()` fetched from /api/fan-vote (sums votes[].count)
+- page.tsx FormationPlayerCard: added optional onPlayerClick callback, made outer motion.div clickable (role=button, tabIndex, Enter/Space keyboard handler, cursor-pointer, hover scale, focus-visible ring) — visual design intact
+- page.tsx WorldCupTab: added selectedPlayerId state + useEffect that fetches GET /api/pulse-score?playerId=<id> on click; modal renders player header (FlagImage + name + position + LIVE badge), big colored Overall score badge using getPulseScoreColor/getPulseScoreColorClass, 4 weighted Progress bars (Match Performance 40% / Fan Sentiment 25% / AI Narrative 20% / Momentum Trend 15%) with note strings under each, weights footnote "Overall = 0.40×Match + 0.25×Fan + 0.20×AI + 0.15×Momentum", X close button + click-outside-to-close backdrop, max-h-[85vh] overflow-y-auto for mobile, loading spinner + skeleton, error state with AlertTriangle
+- page.tsx render switch: changed `{activeTab === 'sentiments' && <PausedTabOverlay .../>}` to `{activeTab === 'sentiments' && <SentimentsTab />}`; left rate/goals/totw lines untouched (unreachable now, harmless)
+- Imports added: NATIONAL_TEAMS from @/lib/national-teams, X icon from lucide-react, getPulseScoreColor + getPulseScoreColorClass from @/types
+- Lint: `bun run lint` exits 0 (clean)
+- Dev log: all API routes return 200 (matches, fan-vote GET/POST, sentiments, world-cup/stages, world-cup/elite-crisis, pulse-score) — no compile errors
+- agent-browser verification (http://localhost:3000/):
+  * Nav shows exactly 3 tabs: HOME, SENTIMENTS, WORLD CUP (NEW badge on World Cup); NO SOON badges anywhere ✓
+  * Home tab: FAN MOOD section with 12 chips, "0 votes cast" initially; clicking BRA chip opens modal; clicking 😊 75 → chip updates to "1 vote mood 😊 75" with green You-voted dot; Arena Intelligence shows "1 fan votes tallied for World Cup 2026 Group Stage" (real count, not 1.2M); before any vote it showed "Be the first to vote in the Fan Mood section below" ✓
+  * Sentiments tab: real player cards rendered (Bellingham ENG 91, Wirtz GER 91, Messi ARG 91, Martínez ARG 90, Yamal ESP 90, Kane ENG 90, ...); Crisis filter narrows to 3 players (Richarlison BRA 41, Cancelo POR 33, Onana CMR 21); header shows live "3 players" count ✓
+  * World Cup tab: clicking Emiliano Martínez opens modal — Overall Pulse Score 90, Match Performance 40% (98, "2 matches · 6 pts · GD +5"), Fan Sentiment 25% (90, "90% baseline — run sentiment refresh for live data"), AI Narrative 20% (73, "Positive trajectory (rising) reinforced by strong fan signal"), Momentum Trend 15% (95, "Upward momentum — avg +2.5 GD over 2 matches"), weights footnote present; stats bar shows "1 Total Votes" (not 1.2M) ✓
+  * Math verified: 98×0.40 + 90×0.25 + 73×0.20 + 95×0.15 = 90.55 ≈ 90 ✓
+- No errors in browser console; no compile errors in dev.log
+
+Stage Summary:
+- Frontend is now fully wired to the real backend — zero fabricated data on the user-visible surface
+- Navigation is clean: 3 working tabs (Home, Sentiments, World Cup), no SOON/lock badges
+- Sentiments tab fetches real players from /api/sentiments with mood-based filtering (ALL/On Fire/Under Pressure/Crisis)
+- Home tab has an interactive Fan Mood voting section that writes real votes to the DB via /api/fan-vote and reflects the count back in Arena Intelligence (replacing the "1.2M" lie)
+- World Cup tab players are clickable — opens a pulse breakdown modal showing the 4 weighted components with their notes, the overall score, and the transparent weights formula
+- World Cup stats bar shows real Total Votes count (toLocaleString formatted)
+- All states handled: loading skeletons, error states with retry, empty states
+- Mobile-responsive grids (2 → 3 → 4 cols), accessible (role=button, tabIndex, keyboard handlers, ARIA labels, sr-only-friendly text)
+- `bun run lint` clean (exit 0); no compile errors in dev.log

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Activity, TrendingUp, TrendingDown, Minus, Play, Star, AlertTriangle,
   Lock, Clock, Zap, Shield, CircleDot,
-  Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy
+  Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -15,9 +15,10 @@ import { Progress } from '@/components/ui/progress'
 import TopHeader from '@/components/TopHeader'
 import Navigation, { type TabId } from '@/components/Navigation'
 import { useLanguage } from '@/context/LanguageContext'
-import { findNationalTeam } from '@/lib/national-teams'
+import { findNationalTeam, NATIONAL_TEAMS } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
 import FlagImage from '@/components/common/FlagImage'
+import { getPulseScoreColor, getPulseScoreColorClass } from '@/types'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -53,55 +54,8 @@ interface WCStage {
 }
 
 // ── Mock Data ────────────────────────────────────────────────
-
-// Real World Cup 2026 pre-tournament friendlies + group stage match data
-const MOCK_MATCHES = [
-  // ── Pre-Tournament Friendlies ──
-  { id: 1, home: 'FRA', away: 'BRA', homeFlag: '🇫🇷', awayFlag: '🇧🇷', score: '2 - 1', homeSentiment: 82, awaySentiment: 42, live: false, league: 'Friendly' },
-  { id: 2, home: 'COL', away: 'FRA', homeFlag: '🇨🇴', awayFlag: '🇫🇷', score: '1 - 3', homeSentiment: 30, awaySentiment: 90, live: false, league: 'Friendly' },
-  { id: 3, home: 'POR', away: 'CHI', homeFlag: '🇵🇹', awayFlag: '🇨🇱', score: '2 - 1', homeSentiment: 78, awaySentiment: 40, live: false, league: 'Friendly' },
-  { id: 4, home: 'FRA', away: 'NIR', homeFlag: '🇫🇷', awayFlag: '🇬🇧', score: '3 - 0', homeSentiment: 88, awaySentiment: 20, live: false, league: 'Friendly' },
-  { id: 5, home: 'ESP', away: 'PER', homeFlag: '🇪🇸', awayFlag: '🇵🇪', score: '3 - 1', homeSentiment: 85, awaySentiment: 30, live: false, league: 'Friendly' },
-  { id: 6, home: 'ARG', away: 'ISL', homeFlag: '🇦🇷', awayFlag: '🇮🇸', score: '3 - 0', homeSentiment: 90, awaySentiment: 22, live: false, league: 'Friendly' },
-  { id: 7, home: 'ENG', away: 'NZL', homeFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', awayFlag: '🇳🇿', score: '1 - 0', homeSentiment: 72, awaySentiment: 45, live: false, league: 'Friendly' },
-  { id: 8, home: 'POR', away: 'NGA', homeFlag: '🇵🇹', awayFlag: '🇳🇬', score: '2 - 1', homeSentiment: 80, awaySentiment: 35, live: false, league: 'Friendly' },
-  { id: 9, home: 'ENG', away: 'CRC', homeFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', awayFlag: '🇨🇷', score: '3 - 0', homeSentiment: 88, awaySentiment: 18, live: false, league: 'Friendly' },
-  { id: 10, home: 'KSA', away: 'SEN', homeFlag: '🇸🇦', awayFlag: '🇸🇳', score: '0 - 0', homeSentiment: 38, awaySentiment: 55, live: false, league: 'Friendly' },
-  { id: 11, home: 'CRO', away: 'BEL', homeFlag: '🇭🇷', awayFlag: '🇧🇪', score: '1 - 1', homeSentiment: 55, awaySentiment: 50, live: false, league: 'Friendly' },
-  { id: 12, home: 'NED', away: 'UZB', homeFlag: '🇳🇱', awayFlag: '🇺🇿', score: '2 - 0', homeSentiment: 78, awaySentiment: 28, live: false, league: 'Friendly' },
-  { id: 13, home: 'GER', away: 'DEN', homeFlag: '🇩🇪', awayFlag: '🇩🇰', score: '2 - 1', homeSentiment: 75, awaySentiment: 38, live: false, league: 'Friendly' },
-  // ── World Cup Group Stage ──
-  { id: 14, home: 'MEX', away: 'RSA', homeFlag: '🇲🇽', awayFlag: '🇿🇦', score: '2 - 0', homeSentiment: 88, awaySentiment: 18, live: false, league: 'WC Group A' },
-  { id: 15, home: 'KOR', away: 'CZE', homeFlag: '🇰🇷', awayFlag: '🇨🇿', score: '2 - 1', homeSentiment: 82, awaySentiment: 35, live: false, league: 'WC Group A' },
-  { id: 16, home: 'CAN', away: 'BIH', homeFlag: '🇨🇦', awayFlag: '🇧🇦', score: '1 - 1', homeSentiment: 55, awaySentiment: 52, live: false, league: 'WC Group B' },
-  { id: 17, home: 'QAT', away: 'SUI', homeFlag: '🇶🇦', awayFlag: '🇨🇭', score: '1 - 1', homeSentiment: 50, awaySentiment: 58, live: false, league: 'WC Group B' },
-  { id: 18, home: 'BRA', away: 'MAR', homeFlag: '🇧🇷', awayFlag: '🇲🇦', score: '1 - 1', homeSentiment: 50, awaySentiment: 78, live: false, league: 'WC Group C' },
-  { id: 19, home: 'HAI', away: 'SCO', homeFlag: '🇭🇹', awayFlag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', score: '0 - 1', homeSentiment: 22, awaySentiment: 75, live: false, league: 'WC Group C' },
-  { id: 20, home: 'USA', away: 'PAR', homeFlag: '🇺🇸', awayFlag: '🇵🇾', score: '4 - 1', homeSentiment: 92, awaySentiment: 15, live: false, league: 'WC Group D' },
-  { id: 21, home: 'AUS', away: 'TUR', homeFlag: '🇦🇺', awayFlag: '🇹🇷', score: '2 - 0', homeSentiment: 80, awaySentiment: 25, live: false, league: 'WC Group D' },
-  { id: 22, home: 'ARG', away: 'ALG', homeFlag: '🇦🇷', awayFlag: '🇩🇿', score: '3 - 0', homeSentiment: 94, awaySentiment: 12, live: true, league: 'WC Group J' },
-  { id: 23, home: 'ENG', away: 'CRO', homeFlag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', awayFlag: '🇭🇷', score: '2 - 1', homeSentiment: 82, awaySentiment: 42, live: true, league: 'WC Group L' },
-  { id: 24, home: 'GER', away: 'CUW', homeFlag: '🇩🇪', awayFlag: '🇨🇼', score: '3 - 0', homeSentiment: 88, awaySentiment: 15, live: true, league: 'WC Group E' },
-  { id: 25, home: 'ESP', away: 'CPV', homeFlag: '🇪🇸', awayFlag: '🇨🇻', score: '2 - 0', homeSentiment: 85, awaySentiment: 20, live: true, league: 'WC Group H' },
-  { id: 26, home: 'FRA', away: 'SEN', homeFlag: '🇫🇷', awayFlag: '🇸🇳', score: '2 - 0', homeSentiment: 86, awaySentiment: 32, live: true, league: 'WC Group I' },
-  { id: 27, home: 'POR', away: 'COD', homeFlag: '🇵🇹', awayFlag: '🇨🇩', score: '1 - 0', homeSentiment: 78, awaySentiment: 28, live: true, league: 'WC Group K' },
-  { id: 28, home: 'NED', away: 'JPN', homeFlag: '🇳🇱', awayFlag: '🇯🇵', score: '1 - 1', homeSentiment: 52, awaySentiment: 65, live: true, league: 'WC Group F' },
-]
-
-const MOCK_SENTIMENTS = [
-  { name: 'Kylian Mbappé', nationCode: 'FRA', score: 96, league: 'WC' },
-  { name: 'Vinícius Jr', nationCode: 'BRA', score: 72, league: 'WC' },
-  { name: 'Jude Bellingham', nationCode: 'ENG', score: 92, league: 'WC' },
-  { name: 'Lamine Yamal', nationCode: 'ESP', score: 91, league: 'WC' },
-  { name: 'Florian Wirtz', nationCode: 'GER', score: 85, league: 'WC' },
-  { name: 'Rodri', nationCode: 'ESP', score: 88, league: 'WC' },
-  { name: 'Richarlison', nationCode: 'BRA', score: 21, league: 'WC' },
-  { name: 'Harry Maguire', nationCode: 'ENG', score: 24, league: 'WC' },
-  { name: 'Achraf Hakimi', nationCode: 'MAR', score: 84, league: 'WC' },
-  { name: 'Antoine Griezmann', nationCode: 'FRA', score: 38, league: 'WC' },
-  { name: 'Leon Goretzka', nationCode: 'GER', score: 29, league: 'WC' },
-  { name: 'Wout Weghorst', nationCode: 'NED', score: 22, league: 'WC' },
-]
+// Note: MOCK_MATCHES and MOCK_SENTIMENTS were removed — match data comes from
+// /api/matches and sentiment data comes from /api/sentiments (both real).
 
 const MOCK_RATINGS = [
   { id: 1, name: 'Kylian Mbappé', nationCode: 'FRA', position: 'LW', avgRating: 9.6 },
@@ -244,6 +198,23 @@ function PsycheButton() {
 
 // ── HOME Tab ─────────────────────────────────────────────────
 
+// Top 12 WC 2026 teams for the Fan Mood voting chips.
+const FAN_MOOD_TEAM_CODES = ['BRA', 'ARG', 'FRA', 'ENG', 'ESP', 'GER', 'MEX', 'USA', 'POR', 'NED', 'JPN', 'MAR']
+
+const MOOD_EMOJI_OPTIONS: { emoji: string; score: number; label: string; color: string }[] = [
+  { emoji: '🤩', score: 95, label: 'On Fire', color: 'bg-[#10B981]' },
+  { emoji: '😊', score: 75, label: 'Happy', color: 'bg-[#8B5CF6]' },
+  { emoji: '😐', score: 50, label: 'Neutral', color: 'bg-[#FF6B35]' },
+  { emoji: '😟', score: 25, label: 'Worried', color: 'bg-[#F59E0B]' },
+  { emoji: '😡', score: 5, label: 'Angry', color: 'bg-[#EF4444]' },
+]
+
+interface FanVoteAgg {
+  teamCode: string
+  score: number
+  count: number
+}
+
 function HomeTab() {
   const { t } = useLanguage()
   const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('WC')
@@ -251,6 +222,15 @@ function HomeTab() {
     id: string; home: string; away: string; homeFlag: string; awayFlag: string
     score: string; homeSentiment: number; awaySentiment: number; live: boolean; league: string
   }>>([])
+
+  // Fan vote state
+  const [sessionId, setSessionId] = useState<string>('')
+  const [fanVotes, setFanVotes] = useState<FanVoteAgg[]>([])
+  const [myVotes, setMyVotes] = useState<Array<{ teamCode: string; score: number }>>([])
+  const [votesLoading, setVotesLoading] = useState(true)
+  const [selectedVoteTeam, setSelectedVoteTeam] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; emoji: string } | null>(null)
 
   useEffect(() => {
     async function fetchMatches() {
@@ -279,10 +259,123 @@ function HomeTab() {
     fetchMatches()
   }, [])
 
+  // SSR-safe: read/create sessionId inside useEffect, never during render.
+  useEffect(() => {
+    try {
+      const existing = typeof window !== 'undefined' ? window.localStorage.getItem('fan_session_id') : null
+      if (existing && existing.length > 0) {
+        setSessionId(existing)
+        return
+      }
+      const newId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : `anon-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('fan_session_id', newId)
+      }
+      setSessionId(newId)
+    } catch {
+      setSessionId(`anon-${Date.now()}`)
+    }
+  }, [])
+
+  // Fetch fan votes whenever sessionId changes.
+  useEffect(() => {
+    if (!sessionId) return
+    let cancelled = false
+    async function loadVotes() {
+      setVotesLoading(true)
+      try {
+        const res = await fetch(`/api/fan-vote?session=${encodeURIComponent(sessionId)}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        setFanVotes(Array.isArray(data.votes) ? data.votes : [])
+        setMyVotes(Array.isArray(data.myVotes) ? data.myVotes : [])
+      } catch (err) {
+        console.error('Failed to fetch fan votes:', err)
+      } finally {
+        if (!cancelled) setVotesLoading(false)
+      }
+    }
+    loadVotes()
+    return () => { cancelled = true }
+  }, [sessionId])
+
+  const totalVoteCount = fanVotes.reduce((sum, v) => sum + (v.count || 0), 0)
+
+  const handleVote = async (teamCode: string, score: number) => {
+    if (!sessionId || submitting) return
+    setSubmitting(true)
+    // Optimistic update: bump my vote immediately
+    const prevMyVote = myVotes.find(v => v.teamCode === teamCode)?.score ?? null
+    setMyVotes(prev => {
+      const without = prev.filter(v => v.teamCode !== teamCode)
+      return [...without, { teamCode, score }]
+    })
+    setFanVotes(prev => {
+      const idx = prev.findIndex(v => v.teamCode === teamCode)
+      if (idx === -1) {
+        return [...prev, { teamCode, score, count: 1 }]
+      }
+      const next = [...prev]
+      const wasMine = prevMyVote !== null
+      // Adjust running average: if I had voted, swap my old score for the new.
+      const current = next[idx]
+      const totalScore = current.score * current.count
+      const newScore = wasMine
+        ? Math.round((totalScore - prevMyVote! + score) / current.count)
+        : Math.round((totalScore + score) / (current.count + 1))
+      const newCount = wasMine ? current.count : current.count + 1
+      next[idx] = { teamCode, score: newScore, count: newCount }
+      return next
+    })
+    setSelectedVoteTeam(null)
+    const mood = MOOD_EMOJI_OPTIONS.find(o => o.score === score)
+    setToast({ msg: `Vote recorded for ${teamCode}`, emoji: mood?.emoji ?? '✓' })
+    setTimeout(() => setToast(null), 2500)
+    try {
+      await fetch('/api/fan-vote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamCode, score, sessionId }),
+      })
+    } catch (err) {
+      console.error('Failed to submit vote:', err)
+      // Revert on failure
+      setMyVotes(prev => {
+        const without = prev.filter(v => v.teamCode !== teamCode)
+        if (prevMyVote !== null) return [...without, { teamCode, score: prevMyVote }]
+        return without
+      })
+      setToast({ msg: 'Vote failed — please retry', emoji: '⚠️' })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const filteredMatches = (matchFilter === 'ALL'
     ? apiMatches
     : apiMatches.filter(m => m.league.startsWith('WC'))
   ).slice(0, 24) // Limit to 24 cards max for performance
+
+  const fanVoteIntelText = totalVoteCount === 0
+    ? 'Be the first to vote in the Fan Mood section below'
+    : `${totalVoteCount.toLocaleString()} fan votes tallied for World Cup 2026 Group Stage`
+
+  const moodTeamEntries = FAN_MOOD_TEAM_CODES.map(code => {
+    const team = NATIONAL_TEAMS.find(t => t.code === code)
+    const vote = fanVotes.find(v => v.teamCode === code)
+    const myVote = myVotes.find(v => v.teamCode === code)
+    return {
+      code,
+      flag: team?.flag ?? '🏳️',
+      name: team?.name ?? code,
+      score: vote?.score ?? 50,
+      count: vote?.count ?? 0,
+      myVote: myVote?.score ?? null,
+    }
+  })
 
   return (
     <div className="space-y-6">
@@ -403,6 +496,85 @@ function HomeTab() {
         </div>
       </div>
 
+      {/* Fan Mood — interactive voting section */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
+              {t('home.fan_mood')}
+            </h3>
+            {!votesLoading && (
+              <Badge className="bg-[#6C2BD9]/10 text-[#6C2BD9] dark:text-[#8B5CF6] border-0 text-[9px] font-bold px-2 py-0.5">
+                {totalVoteCount.toLocaleString()} {totalVoteCount === 1 ? 'vote' : 'votes'} cast
+              </Badge>
+            )}
+          </div>
+          <span className="text-[10px] font-semibold text-[#FF6B35]">Tap a team to vote →</span>
+        </div>
+        <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none overflow-hidden">
+          <CardContent className="p-4">
+            {votesLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-20 rounded-xl bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {moodTeamEntries.map((entry, i) => {
+                  const hasMyVote = entry.myVote !== null
+                  return (
+                    <motion.button
+                      key={entry.code}
+                      initial={{ opacity: 0, scale: 0.92 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.25, delay: i * 0.03 }}
+                      onClick={() => setSelectedVoteTeam(entry.code)}
+                      className={`
+                        relative text-left rounded-xl border p-2.5 transition-all duration-200
+                        ${hasMyVote
+                          ? 'border-[#10B981]/50 bg-[#10B981]/5 dark:bg-[#10B981]/10 shadow-sm shadow-[#10B981]/10'
+                          : 'border-[#E0E0E0]/60 dark:border-white/10 bg-white dark:bg-[#2D2D2D] hover:border-[#6C2BD9]/40 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#6C2BD9]/10'
+                        }
+                      `}
+                    >
+                      {hasMyVote && (
+                        <span
+                          aria-label="You voted"
+                          className="absolute -top-1.5 -right-1.5 size-3 rounded-full bg-[#10B981] ring-2 ring-white dark:ring-[#1A1A1A] shadow-sm shadow-[#10B981]/50"
+                        />
+                      )}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-lg leading-none">{entry.flag}</span>
+                        <span className="text-[11px] font-bold text-[#1A1A1A] dark:text-white">{entry.code}</span>
+                        <span className="ml-auto text-[8px] text-[#666] dark:text-[#CCCCCC]">{entry.count} {entry.count === 1 ? 'vote' : 'votes'}</span>
+                      </div>
+                      <div className="mt-2">
+                        <div className="sentiment-bar">
+                          <div
+                            className={`sentiment-bar-fill ${entry.score >= 80 ? 'sentiment-positive' : entry.score >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
+                            style={{ width: `${entry.score}%` }}
+                          />
+                        </div>
+                        <div className="mt-1 flex items-center justify-between">
+                          <span className="text-[8px] text-[#666] dark:text-[#CCCCCC]">mood</span>
+                          <span className={`text-[10px] font-bold ${getSentimentColor(entry.score)}`}>
+                            {entry.score >= 80 ? '🤩' : entry.score >= 65 ? '😊' : entry.score >= 50 ? '😐' : entry.score >= 30 ? '😟' : '😡'} {entry.score}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.button>
+                  )
+                })}
+              </div>
+            )}
+            <p className="mt-3 text-[10px] text-[#999] dark:text-gray-500 text-center">
+              Your vote is anonymous — stored only in your browser session.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Arena Intelligence */}
       <div>
         <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
@@ -413,7 +585,7 @@ function HomeTab() {
             {[
               { icon: Sparkles, text: 'Germany demolition of Curaçao 6-0 shows pros and cons of expanded World Cup', time: '2m ago', color: 'text-[#6C2BD9]' },
               { icon: BarChart3, text: 'Morocco hold Brazil 1-1 in Group C — Bouaddi makes Casemiro look old', time: '8m ago', color: 'text-[#FF6B35]' },
-              { icon: Users, text: '1.2M fan votes tallied for World Cup 2026 Group Stage Elite XI', time: '15m ago', color: 'text-[#10B981]' },
+              { icon: Users, text: fanVoteIntelText, time: '15m ago', color: 'text-[#10B981]' },
               { icon: Timer, text: 'USMNT thrash Paraguay 3-0 — Balogun, Pulisic, Tillman shine in opener', time: '22m ago', color: 'text-[#EF4444]' },
               { icon: Flame, text: 'Mbappé and Messi both score as France and Argentina dominate Group openers', time: '35m ago', color: 'text-[#6C2BD9]' },
               { icon: Activity, text: 'Bellingham and Saka lead England past Uruguay 3-0 in Group J', time: '1h ago', color: 'text-[#FF6B35]' },
@@ -436,25 +608,145 @@ function HomeTab() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Vote popup */}
+      <AnimatePresence>
+        {selectedVoteTeam && (
+          <>
+            <motion.div
+              key="vote-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !submitting && setSelectedVoteTeam(null)}
+              className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
+            />
+            <motion.div
+              key="vote-modal"
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              transition={{ type: 'spring', duration: 0.35 }}
+              className="fixed inset-0 z-[61] flex items-center justify-center p-4 pointer-events-none"
+            >
+              <Card className="pointer-events-auto w-full max-w-sm rounded-2xl border-[#E0E0E0]/50 dark:border-white/10 shadow-2xl bg-white dark:bg-[#1A1A1A]">
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-bold text-[#1A1A1A] dark:text-white flex items-center gap-2">
+                      <span className="text-xl">
+                        {NATIONAL_TEAMS.find(t => t.code === selectedVoteTeam)?.flag ?? '🏳️'}
+                      </span>
+                      {selectedVoteTeam} Mood
+                    </CardTitle>
+                    <button
+                      onClick={() => !submitting && setSelectedVoteTeam(null)}
+                      aria-label="Close"
+                      className="rounded-full size-7 flex items-center justify-center text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] transition-colors"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                  <CardDescription className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+                    How are fans of {NATIONAL_TEAMS.find(t => t.code === selectedVoteTeam)?.name ?? selectedVoteTeam} feeling right now?
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="px-4 pb-4 pt-1">
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {MOOD_EMOJI_OPTIONS.map((opt) => (
+                      <motion.button
+                        key={opt.score}
+                        whileTap={{ scale: 0.9 }}
+                        disabled={submitting}
+                        onClick={() => handleVote(selectedVoteTeam, opt.score)}
+                        className="flex flex-col items-center gap-1 rounded-xl border border-[#E0E0E0] dark:border-white/10 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-2 px-1 transition-all duration-200 hover:border-[#6C2BD9]/50 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#6C2BD9]/10 disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        <span className="text-2xl leading-none">{opt.emoji}</span>
+                        <span className={`h-1 w-6 rounded-full ${opt.color}`} />
+                        <span className="text-[8px] font-bold text-[#666] dark:text-[#CCCCCC]">{opt.score}</span>
+                      </motion.button>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-[10px] text-center text-[#666] dark:text-[#CCCCCC]">
+                    Tap an emoji to cast your vote — you can change it anytime.
+                  </p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key="toast"
+            initial={{ opacity: 0, y: 30, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 30, x: '-50%' }}
+            className="fixed bottom-20 md:bottom-6 left-1/2 z-[70] -translate-x-1/2 flex items-center gap-2 rounded-full bg-[#1A1A1A] dark:bg-white px-4 py-2 shadow-lg"
+          >
+            <span className="text-base">{toast.emoji}</span>
+            <span className="text-xs font-bold text-white dark:text-[#1A1A1A]">{toast.msg}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
 
 // ── SENTIMENTS Tab ───────────────────────────────────────────
 
+interface SentimentPlayer {
+  id: string
+  name: string
+  nationCode: string
+  pulseScore: number
+  sentiment: number
+  trend: string
+  league: string
+  label: 'on_fire' | 'under_pressure' | 'crisis'
+}
+
+type MoodFilter = 'ALL' | 'on_fire' | 'under_pressure' | 'crisis'
+
 function SentimentsTab() {
   const { t } = useLanguage()
-  const [filter, setFilter] = useState('ALL')
-  const leagues = ['ALL', 'PREMIER LEAGUE', 'LA LIGA', 'UCL']
-  const leagueKeys: Record<string, string> = {
-    'ALL': 'sentiments.all',
-    'PREMIER LEAGUE': 'sentiments.pl',
-    'LA LIGA': 'sentiments.laliga',
-    'UCL': 'sentiments.ucl',
-  }
-  const leagueMap: Record<string, string> = { 'ALL': '', 'PREMIER LEAGUE': 'PL', 'LA LIGA': 'LL', 'UCL': 'UCL' }
+  const [filter, setFilter] = useState<MoodFilter>('ALL')
+  const [players, setPlayers] = useState<SentimentPlayer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const filtered = filter === 'ALL' ? MOCK_SENTIMENTS : MOCK_SENTIMENTS.filter(p => p.league === leagueMap[filter])
+  const moods: { id: MoodFilter; labelKey: string; emoji: string }[] = [
+    { id: 'ALL', labelKey: 'sentiments.all', emoji: '🌐' },
+    { id: 'on_fire', labelKey: 'sentiments.on_fire', emoji: '🔥' },
+    { id: 'under_pressure', labelKey: 'sentiments.under_pressure', emoji: '😤' },
+    { id: 'crisis', labelKey: 'sentiments.crisis', emoji: '😰' },
+  ]
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch('/api/sentiments')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (cancelled) return
+        setPlayers(Array.isArray(data.players) ? data.players : [])
+      } catch (err) {
+        console.error('Failed to fetch sentiments:', err)
+        if (!cancelled) setError('Failed to load player sentiments. Please try again.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  const filtered = filter === 'ALL' ? players : players.filter(p => p.label === filter)
 
   return (
     <div className="space-y-6">
@@ -463,20 +755,27 @@ function SentimentsTab() {
         animate={{ opacity: 1, y: 0 }}
         className="space-y-1"
       >
-        <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
-          {t('sentiments.title')}
-        </h2>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+            {t('sentiments.title')}
+          </h2>
+          {!loading && !error && (
+            <span className="text-xs font-semibold text-[#666] dark:text-[#CCCCCC]">
+              {filtered.length} {filtered.length === 1 ? 'player' : 'players'}
+            </span>
+          )}
+        </div>
         <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('sentiments.powered')}</p>
       </motion.div>
 
-      {/* Filter pills */}
+      {/* Filter pills — mood filters */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {leagues.map((league) => {
-          const isActive = filter === league
+        {moods.map((mood) => {
+          const isActive = filter === mood.id
           return (
             <button
-              key={league}
-              onClick={() => setFilter(league)}
+              key={mood.id}
+              onClick={() => setFilter(mood.id)}
               className={`
                 shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all duration-200
                 ${isActive
@@ -485,59 +784,126 @@ function SentimentsTab() {
                 }
               `}
             >
-              {t(leagueKeys[league])}
+              <span className="mr-1">{mood.emoji}</span>
+              {t(mood.labelKey)}
             </button>
           )
         })}
       </div>
 
-      {/* Player sentiment cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((player, i) => (
-          <motion.div
-            key={player.name}
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: i * 0.05 }}
-          >
-            <Card className={`card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${getSentimentBg(player.score)}`}>
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <Card key={i} className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-xl">{getFlag(player.nationCode)}</span>
-                    <div>
-                      <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">{player.name}</p>
-                      <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">{player.nationCode}</p>
+                    <div className="size-7 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                    <div className="space-y-1.5">
+                      <div className="h-3 w-24 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                      <div className="h-2 w-12 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`text-2xl font-black ${getSentimentColor(player.score)}`}>
-                      {player.score}
-                    </p>
-                    <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">pulse</p>
+                  <div className="space-y-1.5 text-right">
+                    <div className="h-6 w-10 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse ml-auto" />
+                    <div className="h-2 w-8 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse ml-auto" />
                   </div>
                 </div>
-                <div className="mt-3">
-                  <div className="sentiment-bar">
-                    <div
-                      className={`sentiment-bar-fill ${player.score >= 80 ? 'sentiment-positive' : player.score >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
-                      style={{ width: `${player.score}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center gap-1">
-                  <span className="text-sm">
-                    {player.score >= 80 ? '🔥' : player.score >= 50 ? '😤' : '😰'}
-                  </span>
-                  <span className={`text-[10px] font-semibold ${getSentimentColor(player.score)}`}>
-                    {player.score >= 80 ? t('sentiments.on_fire') : player.score >= 50 ? t('sentiments.under_pressure') : t('sentiments.crisis')}
-                  </span>
-                </div>
+                <div className="mt-3 h-1.5 w-full rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                <div className="mt-2 h-2 w-20 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
               </CardContent>
             </Card>
-          </motion.div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {/* Error state */}
+      {!loading && error && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-[#EF4444]/20 bg-[#EF4444]/5 py-12 text-center">
+          <AlertTriangle className="size-8 text-[#EF4444] mb-3" />
+          <p className="text-sm font-semibold text-[#1A1A1A] dark:text-white">{error}</p>
+          <Button
+            onClick={() => setFilter('ALL')}
+            className="mt-4 bg-[#6C2BD9] hover:bg-[#5A1FBF] text-white text-xs font-bold h-8 rounded-lg"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {/* Player sentiment cards */}
+      {!loading && !error && (
+        <>
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-[#E0E0E0]/50 dark:border-white/5 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-12 text-center">
+              <span className="text-3xl mb-2">🤷</span>
+              <p className="text-sm font-semibold text-[#666] dark:text-[#CCCCCC]">No players match this filter.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((player, i) => {
+                const score = player.pulseScore
+                const labelKey = player.label === 'on_fire'
+                  ? 'sentiments.on_fire'
+                  : player.label === 'under_pressure'
+                    ? 'sentiments.under_pressure'
+                    : 'sentiments.crisis'
+                const emoji = player.label === 'on_fire' ? '🔥' : player.label === 'under_pressure' ? '😤' : '😰'
+                return (
+                  <motion.div
+                    key={player.id}
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: i * 0.05 }}
+                  >
+                    <Card className={`card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${getSentimentBg(score)}`}>
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xl">
+                              <FlagImage nationCode={player.nationCode} size={28} fallbackEmoji={getFlag(player.nationCode)} />
+                            </span>
+                            <div>
+                              <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">{player.name}</p>
+                              <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">{player.nationCode}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className={`text-2xl font-black ${getSentimentColor(score)}`}>
+                              {score}
+                            </p>
+                            <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">pulse</p>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <div className="sentiment-bar">
+                            <div
+                              className={`sentiment-bar-fill ${score >= 80 ? 'sentiment-positive' : score >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
+                              style={{ width: `${score}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center gap-1">
+                          <span className="text-sm">{emoji}</span>
+                          <span className={`text-[10px] font-semibold ${getSentimentColor(score)}`}>
+                            {t(labelKey)}
+                          </span>
+                          {player.trend && (
+                            <span className="ml-auto">
+                              {getTrendIcon(player.trend)}
+                            </span>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -814,10 +1180,12 @@ function FormationPlayerCard({
   player,
   type,
   stageStatus,
+  onPlayerClick,
 }: {
   player: WCSelectionPlayer
   type: 'elite' | 'crisis'
   stageStatus: string
+  onPlayerClick?: (player: WCSelectionPlayer) => void
 }) {
   const { mode: flagMode } = useFlagMode()
   const flagEmoji = getFlag(player.nationCode)
@@ -828,13 +1196,25 @@ function FormationPlayerCard({
   const accentColor = isElite ? '#6C2BD9' : '#EF4444'
   const rating = player.pulseScore / 10
   const ratingColor = getRatingColor(rating)
+  const clickable = !!onPlayerClick
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
-      className="flex flex-col items-center"
+      onClick={() => onPlayerClick?.(player)}
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (!clickable) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onPlayerClick?.(player)
+        }
+      }}
+      className={`flex flex-col items-center ${clickable ? 'cursor-pointer hover:scale-[1.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9]/60 rounded-md' : ''} transition-transform duration-200`}
+      title={clickable ? `View ${player.name} pulse breakdown` : undefined}
     >
       {/* Player Circle - always shows face emoji */}
       <div
@@ -898,6 +1278,52 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
   const [loading, setLoading] = useState(false)
   const [activeView, setActiveView] = useState<'elite' | 'crisis'>('elite')
 
+  // Pulse breakdown modal state
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
+  const [pulseBreakdown, setPulseBreakdown] = useState<{
+    player: {
+      id: string; name: string; nationCode: string; position: string
+      pulseScore: number; sentiment: number; trend: string; isLive: boolean
+      matchInfo: string | null; order: number
+    }
+    pulseScore: {
+      overall: number
+      matchPerformance: number
+      fanSentiment: number
+      aiNarrative: number
+      momentumTrend: number
+      matchPerformanceNote: string
+      fanSentimentNote: string
+      aiNarrativeNote: string
+      momentumTrendNote: string
+    }
+    weights: { matchPerformance: number; fanSentiment: number; aiNarrative: number; momentumTrend: number }
+  } | null>(null)
+  const [pulseLoading, setPulseLoading] = useState(false)
+  const [pulseError, setPulseError] = useState<string | null>(null)
+
+  // Total fan votes (real count, replaces the old "1.2M" lie)
+  const [totalVotes, setTotalVotes] = useState<number>(0)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadVotes() {
+      try {
+        const res = await fetch('/api/fan-vote')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        const votes: Array<{ count?: number }> = Array.isArray(data.votes) ? data.votes : []
+        const sum = votes.reduce((s, v) => s + (typeof v.count === 'number' ? v.count : 0), 0)
+        setTotalVotes(sum)
+      } catch (err) {
+        console.error('Failed to fetch total fan votes:', err)
+      }
+    }
+    loadVotes()
+    return () => { cancelled = true }
+  }, [])
+
   useEffect(() => {
     if (stages.length > 0 && !selectedStageId) {
       // Auto-select the first LIVE stage, fallback to first stage
@@ -927,6 +1353,34 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
       fetchEliteCrisis(selectedStageId)
     }
   }, [selectedStageId, fetchEliteCrisis])
+
+  // Fetch pulse breakdown whenever a player is selected
+  useEffect(() => {
+    if (!selectedPlayerId) {
+      setPulseBreakdown(null)
+      setPulseError(null)
+      return
+    }
+    let cancelled = false
+    setPulseLoading(true)
+    setPulseError(null)
+    async function loadBreakdown() {
+      try {
+        const res = await fetch(`/api/pulse-score?playerId=${encodeURIComponent(selectedPlayerId!)}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (cancelled) return
+        setPulseBreakdown(data)
+      } catch (err) {
+        console.error('Failed to fetch pulse breakdown:', err)
+        if (!cancelled) setPulseError('Failed to load pulse breakdown. Please try again.')
+      } finally {
+        if (!cancelled) setPulseLoading(false)
+      }
+    }
+    loadBreakdown()
+    return () => { cancelled = true }
+  }, [selectedPlayerId])
 
   const selectedStage = stages.find(s => s.id === selectedStageId)
   const stageStatus = selectedStage?.status ?? 'upcoming'
@@ -1116,6 +1570,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                                 player={player}
                                 type={activeView}
                                 stageStatus={stageStatus}
+                                onPlayerClick={(p) => setSelectedPlayerId(p.id)}
                               />
                             ))}
                           </div>
@@ -1140,7 +1595,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                 { label: t('wc.elite_avg'), value: (eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length / 10).toFixed(1), icon: TrendingUp, color: 'text-[#6C2BD9]', emoji: '🤩' },
                 { label: t('wc.crisis_avg'), value: (crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length / 10).toFixed(1), icon: TrendingDown, color: 'text-[#EF4444]', emoji: '😟' },
                 { label: t('wc.live_players'), value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-[#FF6B35]', emoji: '' },
-                { label: t('wc.total_votes'), value: '1.2M', icon: Users, color: 'text-[#1A1A1A] dark:text-white', emoji: '' },
+                { label: t('wc.total_votes'), value: totalVotes.toLocaleString(), icon: Users, color: 'text-[#1A1A1A] dark:text-white', emoji: '' },
               ].map((stat, i) => (
                 <Card key={i} className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
                   <CardContent className="p-3 text-center">
@@ -1154,6 +1609,190 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
           )}
         </>
       )}
+
+      {/* Pulse Score breakdown modal — opens on player click */}
+      <AnimatePresence>
+        {selectedPlayerId && (
+          <>
+            <motion.div
+              key="pulse-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedPlayerId(null)}
+              className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              key="pulse-modal"
+              initial={{ opacity: 0, scale: 0.94, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 20 }}
+              transition={{ type: 'spring', duration: 0.35 }}
+              className="fixed inset-0 z-[61] flex items-center justify-center p-3 sm:p-4 pointer-events-none"
+            >
+              <Card className="pointer-events-auto w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border-[#E0E0E0]/50 dark:border-white/10 shadow-2xl bg-white dark:bg-[#1A1A1A]">
+                {/* Header */}
+                <div className="sticky top-0 z-10 flex items-start justify-between gap-3 p-4 bg-white dark:bg-[#1A1A1A] border-b border-[#E0E0E0]/50 dark:border-white/10">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {pulseBreakdown ? (
+                      <>
+                        <span className="text-2xl shrink-0">
+                          <FlagImage nationCode={pulseBreakdown.player.nationCode} size={32} fallbackEmoji={getFlag(pulseBreakdown.player.nationCode)} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-[#1A1A1A] dark:text-white truncate">
+                            {pulseBreakdown.player.name}
+                          </p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                              {pulseBreakdown.player.position}
+                            </Badge>
+                            <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                              {pulseBreakdown.player.nationCode}
+                            </span>
+                            {pulseBreakdown.player.isLive && <LiveBadge />}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2.5">
+                        <div className="size-8 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                        <div className="space-y-1.5">
+                          <div className="h-3 w-24 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                          <div className="h-2 w-16 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setSelectedPlayerId(null)}
+                    aria-label="Close"
+                    className="shrink-0 rounded-full size-7 flex items-center justify-center text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] transition-colors"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+
+                {/* Body */}
+                <CardContent className="p-4">
+                  {pulseLoading && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-center py-4">
+                        <div className="animate-spin size-8 rounded-full border-2 border-[#6C2BD9]/30 border-t-[#6C2BD9]" />
+                      </div>
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="space-y-1.5">
+                          <div className="h-3 w-32 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                          <div className="h-2 w-full rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                          <div className="h-2 w-48 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {pulseError && !pulseLoading && (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <AlertTriangle className="size-8 text-[#EF4444] mb-2" />
+                      <p className="text-sm font-semibold text-[#1A1A1A] dark:text-white">{pulseError}</p>
+                      <Button
+                        onClick={() => setSelectedPlayerId(prev => (prev ? null : prev))}
+                        className="mt-3 bg-[#6C2BD9] hover:bg-[#5A1FBF] text-white text-xs font-bold h-8 rounded-lg"
+                      >
+                        Close
+                      </Button>
+                    </div>
+                  )}
+
+                  {pulseBreakdown && !pulseLoading && !pulseError && (
+                    <div className="space-y-4">
+                      {/* Overall score — big and colored */}
+                      <div className="flex items-center justify-between rounded-xl bg-[#F8F9FA] dark:bg-[#2D2D2D] p-3">
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
+                            Overall Pulse Score
+                          </p>
+                          <p className="text-[10px] text-[#999] dark:text-gray-500">
+                            Weighted blend of 4 components
+                          </p>
+                        </div>
+                        <div
+                          className={`flex items-center justify-center size-14 rounded-xl text-2xl font-black text-white shadow-md ${getPulseScoreColorClass(pulseBreakdown.pulseScore.overall)}`}
+                          style={{ backgroundColor: getPulseScoreColor(pulseBreakdown.pulseScore.overall) }}
+                        >
+                          {Math.round(pulseBreakdown.pulseScore.overall)}
+                        </div>
+                      </div>
+
+                      {/* 4 weighted components */}
+                      {[
+                        {
+                          label: 'Match Performance',
+                          weight: pulseBreakdown.weights.matchPerformance,
+                          value: pulseBreakdown.pulseScore.matchPerformance,
+                          note: pulseBreakdown.pulseScore.matchPerformanceNote,
+                          emoji: '⚽',
+                        },
+                        {
+                          label: 'Fan Sentiment',
+                          weight: pulseBreakdown.weights.fanSentiment,
+                          value: pulseBreakdown.pulseScore.fanSentiment,
+                          note: pulseBreakdown.pulseScore.fanSentimentNote,
+                          emoji: '💬',
+                        },
+                        {
+                          label: 'AI Narrative',
+                          weight: pulseBreakdown.weights.aiNarrative,
+                          value: pulseBreakdown.pulseScore.aiNarrative,
+                          note: pulseBreakdown.pulseScore.aiNarrativeNote,
+                          emoji: '🤖',
+                        },
+                        {
+                          label: 'Momentum Trend',
+                          weight: pulseBreakdown.weights.momentumTrend,
+                          value: pulseBreakdown.pulseScore.momentumTrend,
+                          note: pulseBreakdown.pulseScore.momentumTrendNote,
+                          emoji: '📈',
+                        },
+                      ].map((c) => (
+                        <div key={c.label} className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">{c.emoji}</span>
+                              <span className="text-xs font-bold text-[#1A1A1A] dark:text-white">
+                                {c.label}
+                              </span>
+                              <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                                {Math.round(c.weight * 100)}%
+                              </Badge>
+                            </div>
+                            <span className="text-sm font-black text-[#1A1A1A] dark:text-white">
+                              {Math.round(c.value)}
+                            </span>
+                          </div>
+                          <Progress
+                            value={c.value}
+                            className="h-2 progress-purple"
+                          />
+                          <p className="text-[10px] leading-relaxed text-[#666] dark:text-[#CCCCCC]">
+                            {c.note}
+                          </p>
+                        </div>
+                      ))}
+
+                      {/* Weights footnote */}
+                      <div className="rounded-lg bg-[#6C2BD9]/5 dark:bg-[#6C2BD9]/10 border border-[#6C2BD9]/20 p-2.5">
+                        <p className="text-[9px] font-mono text-center text-[#6C2BD9] dark:text-[#8B5CF6]">
+                          Overall = 0.40×Match + 0.25×Fan + 0.20×AI + 0.15×Momentum
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -1263,7 +1902,7 @@ export default function Home() {
                 transition={{ duration: 0.25 }}
               >
                 {activeTab === 'home' && <HomeTab />}
-                {activeTab === 'sentiments' && <PausedTabOverlay tabName="Sentiments" />}
+                {activeTab === 'sentiments' && <SentimentsTab />}
                 {activeTab === 'rate' && <PausedTabOverlay tabName="Rate" />}
                 {activeTab === 'goals' && <PausedTabOverlay tabName="Goals" />}
                 {activeTab === 'totw' && <PausedTabOverlay tabName="Team of the Week" />}
