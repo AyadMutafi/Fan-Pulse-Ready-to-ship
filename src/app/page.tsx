@@ -144,6 +144,22 @@ function getPulseFaceEmoji(pulseScore: number): string {
   return '😵'
 }
 
+// 5-level fan mood emoji for match cards (emojis only, no text/percentages)
+function getFanMoodEmoji(score: number): string {
+  if (score >= 80) return '🤩'
+  if (score >= 65) return '😊'
+  if (score >= 45) return '😐'
+  if (score >= 25) return '😟'
+  return '😡'
+}
+
+function getFanMoodEmojiSize(score: number): string {
+  // Bigger emoji for more extreme sentiments
+  if (score >= 80 || score < 25) return 'text-3xl'
+  if (score >= 65 || score < 45) return 'text-2xl'
+  return 'text-xl'
+}
+
 function getRatingColor(rating: number): string {
   if (rating >= 9) return '#10B981'
   if (rating >= 7) return '#6C2BD9'
@@ -180,18 +196,6 @@ function SharePulseButton({ className = '' }: { className?: string }) {
     >
       <Share2 className="size-3" />
       Share Pulse
-    </Button>
-  )
-}
-
-function PsycheButton() {
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      className="border-[#E0E0E0] dark:border-white/10 text-[#666] dark:text-gray-400 gap-1.5 text-[11px] font-bold h-8 rounded-lg hover:text-[#1A1A1A] dark:hover:text-white"
-    >
-      🧠 PSYCHE
     </Button>
   )
 }
@@ -464,30 +468,26 @@ function HomeTab() {
                       {match.league}
                     </Badge>
                   </div>
-                  {/* Sentiment bars */}
-                  <div className="mt-2 space-y-1.5">
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] mb-1">
-                        <span className="text-[#666] dark:text-[#CCCCCC]">{match.home} {t('home.fan_mood')}</span>
-                        <span className={getSentimentColor(match.homeSentiment)}>{match.homeSentiment}% {match.homeSentiment >= 80 ? '😊' : match.homeSentiment >= 50 ? '😐' : '😰'}</span>
-                      </div>
-                      <div className="sentiment-bar">
-                        <div className={`sentiment-bar-fill ${match.homeSentiment >= 80 ? 'sentiment-positive' : match.homeSentiment >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`} style={{ width: `${match.homeSentiment}%` }} />
-                      </div>
+                  {/* Fan Mood — Emoji Only with team flags */}
+                  <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2.5">
+                    <div className="flex items-center gap-1.5" title={`${match.home} fan mood`}>
+                      <span className="text-lg leading-none">{match.homeFlag}</span>
+                      <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.homeSentiment)}`}>
+                        {getFanMoodEmoji(match.homeSentiment)}
+                      </span>
                     </div>
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] mb-1">
-                        <span className="text-[#666] dark:text-[#CCCCCC]">{match.away} {t('home.fan_mood')}</span>
-                        <span className={getSentimentColor(match.awaySentiment)}>{match.awaySentiment}% {match.awaySentiment >= 80 ? '😊' : match.awaySentiment >= 50 ? '😐' : '😰'}</span>
-                      </div>
-                      <div className="sentiment-bar">
-                        <div className={`sentiment-bar-fill ${match.awaySentiment >= 80 ? 'sentiment-positive' : match.awaySentiment >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`} style={{ width: `${match.awaySentiment}%` }} />
-                      </div>
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-[#999] dark:text-gray-500">
+                      {t('home.fan_mood')}
+                    </span>
+                    <div className="flex items-center gap-1.5" title={`${match.away} fan mood`}>
+                      <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.awaySentiment)}`}>
+                        {getFanMoodEmoji(match.awaySentiment)}
+                      </span>
+                      <span className="text-lg leading-none">{match.awayFlag}</span>
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-3 flex items-center">
                     <SharePulseButton className="flex-1" />
-                    <PsycheButton />
                   </div>
                 </CardContent>
               </Card>

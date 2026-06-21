@@ -263,3 +263,28 @@ Stage Summary:
 - FlagImage FIFA→ISO mapping updated for 12 new team codes
 - Pulse engine math verified end-to-end: heavy wins (GER 7-1, SWE 5-1, USA 4-1) produce elite scores; heavy losses (CUW 1-7, TUN 1-5, PAR 1-4) produce crisis scores
 - VLM + agent-browser confirm visual rendering is clean — 4-3-3 pitch layout, flag images, face emojis, player names/ratings all displaying correctly
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Redesign "Fan Mood" in matched results (Featured Matches) to use emojis only + team flags; remove Psyche button
+
+Work Log:
+- Analyzed user-uploaded screenshot (pasted_image_1782060446902.png) via VLM — confirmed it shows the Featured Matches card with score "2 - 2" (IRN vs NZL) and Fan Mood rendered as orange progress bars + percentages + small emojis
+- Located the targeted code in src/app/page.tsx (Featured Matches section, lines ~467-491)
+- Added two helper functions: getFanMoodEmoji(score) with 5-level emoji scale (🤩/😊/😐/😟/😡) and getFanMoodEmojiSize(score) for dynamic emoji sizing based on sentiment extremity
+- Removed the PsycheButton function definition entirely (previously requested fix #1)
+- Replaced the old Fan Mood block (sentiment bars + percentages + "{team} Fan Mood" text labels) with a clean emoji-only design:
+    [home flag emoji] [home sentiment emoji]  ·  FAN MOOD  ·  [away sentiment emoji] [away flag emoji]
+- Removed the PsycheButton usage from the card footer, leaving only SharePulseButton (full width)
+- Verified dev server compiled cleanly (✓ Compiled in 255ms, no errors)
+- Browser-verified on desktop (1280px): confirmed via innerText that first card renders "🇮🇷 😐 FAN MOOD 😊 🇳🇿 Share Pulse" — emojis only, flags included, no Psyche
+- Browser-verified on mobile (375px): VLM confirmed FAN MOOD shows emojis + team flag emojis (🇮🇷, 🇳🇿, 🇨🇮, 🇪🇨), layout clean, no Psyche buttons, Share Pulse present
+- Ran ESLint: clean (no errors/warnings)
+
+Stage Summary:
+- Featured Matches cards now display Fan Mood using ONLY emojis (no progress bars, no percentages, no text team labels) with each team's flag emoji included on its respective side
+- "Psyche" button fully removed from the UI and its component definition deleted; only "Share Pulse" remains on each match card
+- 5-level emoji scale (🤩/😊/😐/😟/😡) gives more expressive sentiment gradation than the previous 3-level (😊/😐/😰)
+- Emoji size scales with sentiment extremity (extreme sentiments get bigger emojis) for visual emphasis
+- Works responsively on both desktop and mobile viewports
