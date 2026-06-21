@@ -288,3 +288,40 @@ Stage Summary:
 - 5-level emoji scale (🤩/😊/😐/😟/😡) gives more expressive sentiment gradation than the previous 3-level (😊/😐/😰)
 - Emoji size scales with sentiment extremity (extreme sentiments get bigger emojis) for visual emphasis
 - Works responsively on both desktop and mobile viewports
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Redesign Fan Mood voting section — replace 3-column grid with a creative side-scrolling carousel showing team flag + emoji together
+
+Work Log:
+- Analyzed user-uploaded screenshot (pasted_image_1782061243926.png) via VLM — confirmed it shows the interactive Fan Mood voting section with 12 teams in a 3-column grid (2/3/4 responsive), each chip showing flag+code+votes+progress bar+mood score
+- Reviewed the existing voting flow: clicking a team chip sets selectedVoteTeam → opens a modal with 5 emoji mood options (🤩95/😊75/😐50/😟25/😡5) → handleVote POSTs to /api/fan-vote
+- Added ChevronRight + Check icons to lucide-react imports
+- Replaced the responsive grid (`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4`) with a horizontal side-scrolling carousel (`flex gap-2.5 overflow-x-auto scrollbar-none snap-x snap-mandatory`)
+- Redesigned each team "card" as a vertical poster-style layout:
+    • BIG team flag emoji (text-4xl sm:text-5xl) at top
+    • BIG mood emoji (text-3xl sm:text-4xl) directly below — flag + emoji together as the hero visual
+    • Team code (BRA, ARG, etc.) in bold tracking-wider
+    • Vote count in small muted text
+    • Thin 3px colored mood indicator bar at the bottom (gradient fill by sentiment tier)
+- Added a right-edge fade gradient with an animated pulsing ChevronRight scroll hint (motion x:[0,4,0] loop) so users discover the horizontal scroll
+- Replaced the old "voted" tiny dot with a larger green check badge (size-5) using the Check icon with strokeWidth=4 for clear voted state
+- Voted cards get a green ring + shadow glow; unvoted cards get a purple hover lift (hover:-translate-y-0.5)
+- Cards use snap-start so they scroll into place cleanly one-by-one
+- Loading skeleton updated to match (6 horizontal pill placeholders instead of grid)
+- Updated header hint text from "Tap a team to vote →" to "Swipe teams to vote →"
+- Verified dev server compiled cleanly (✓ Compiled in 273ms)
+- Ran ESLint: clean (no errors/warnings)
+- Browser-verified on desktop (1280px): VLM confirmed horizontal carousel (not grid), big flag + big mood emoji together on each card, team codes + vote counts visible, scroll hint arrow on right edge, 6-7 cards visible at once, layout clean
+- Browser-verified on mobile (375px): VLM confirmed 3 cards visible, horizontal carousel, big flag + emoji together, clean non-overlapping layout
+- Verified voting interaction preserved: clicked first card → modal opened showing "🇧🇷 BRA Mood — How are fans of Brazil feeling right now?" with 5 emoji options
+- Verified horizontal scroll works programmatically: scrollLeft went 4 → 370 after scrollBy(350), scrollWidth (1462) > clientWidth (966) confirms overflow/scrol456lable
+
+Stage Summary:
+- Fan Mood voting section transformed from a static 3-column grid into an attractive horizontal side-scrolling carousel of poster-style team cards
+- Each card leads with the team flag + mood emoji as a bold visual pair (the user's core request), with team code, vote count, and a thin sentiment bar as supporting info
+- Scroll-snap + hidden scrollbar + animated right-edge chevron hint make the side-scrolling discoverable and smooth
+- Voted state is now more prominent (green check badge + glow ring) instead of a tiny dot
+- Fully responsive: shows ~3 cards on mobile, ~6-7 on desktop; horizontal scroll reveals the rest
+- Voting flow fully preserved — tap any card → mood picker modal → cast vote → optimistic update

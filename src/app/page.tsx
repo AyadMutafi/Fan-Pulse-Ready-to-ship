@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Activity, TrendingUp, TrendingDown, Minus, Play, Star, AlertTriangle,
   Lock, Clock, Zap, Shield, CircleDot,
-  Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X
+  Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X, ChevronRight, Check
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -496,7 +496,7 @@ function HomeTab() {
         </div>
       </div>
 
-      {/* Fan Mood — interactive voting section */}
+      {/* Fan Mood — interactive voting section (horizontal side-scrolling carousel) */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -509,63 +509,93 @@ function HomeTab() {
               </Badge>
             )}
           </div>
-          <span className="text-[10px] font-semibold text-[#FF6B35]">Tap a team to vote →</span>
+          <span className="text-[10px] font-semibold text-[#FF6B35]">Swipe teams to vote →</span>
         </div>
         <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none overflow-hidden">
           <CardContent className="p-4">
             {votesLoading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="h-20 rounded-xl bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+              <div className="flex gap-2.5 overflow-hidden">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="shrink-0 w-28 h-36 rounded-2xl bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                {moodTeamEntries.map((entry, i) => {
-                  const hasMyVote = entry.myVote !== null
-                  return (
-                    <motion.button
-                      key={entry.code}
-                      initial={{ opacity: 0, scale: 0.92 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.25, delay: i * 0.03 }}
-                      onClick={() => setSelectedVoteTeam(entry.code)}
-                      className={`
-                        relative text-left rounded-xl border p-2.5 transition-all duration-200
-                        ${hasMyVote
-                          ? 'border-[#10B981]/50 bg-[#10B981]/5 dark:bg-[#10B981]/10 shadow-sm shadow-[#10B981]/10'
-                          : 'border-[#E0E0E0]/60 dark:border-white/10 bg-white dark:bg-[#2D2D2D] hover:border-[#6C2BD9]/40 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#6C2BD9]/10'
-                        }
-                      `}
-                    >
-                      {hasMyVote && (
-                        <span
-                          aria-label="You voted"
-                          className="absolute -top-1.5 -right-1.5 size-3 rounded-full bg-[#10B981] ring-2 ring-white dark:ring-[#1A1A1A] shadow-sm shadow-[#10B981]/50"
-                        />
-                      )}
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-lg leading-none">{entry.flag}</span>
-                        <span className="text-[11px] font-bold text-[#1A1A1A] dark:text-white">{entry.code}</span>
-                        <span className="ml-auto text-[8px] text-[#666] dark:text-[#CCCCCC]">{entry.count} {entry.count === 1 ? 'vote' : 'votes'}</span>
-                      </div>
-                      <div className="mt-2">
-                        <div className="sentiment-bar">
+              <div className="relative">
+                {/* Right-edge fade + animated scroll hint */}
+                <div className="pointer-events-none absolute right-0 top-0 bottom-3 z-10 w-10 bg-gradient-to-l from-white dark:from-[#1A1A1A] via-white/70 dark:via-[#1A1A1A]/70 to-transparent flex items-center justify-end pr-1.5">
+                  <motion.span
+                    animate={{ x: [0, 4, 0] }}
+                    transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+                    className="flex items-center justify-center size-5 rounded-full bg-[#6C2BD9]/10"
+                  >
+                    <ChevronRight className="size-3.5 text-[#6C2BD9]" />
+                  </motion.span>
+                </div>
+
+                {/* Horizontal scroll carousel */}
+                <div className="flex gap-2.5 overflow-x-auto scrollbar-none snap-x snap-mandatory pb-2 -mx-1 px-1">
+                  {moodTeamEntries.map((entry, i) => {
+                    const hasMyVote = entry.myVote !== null
+                    return (
+                      <motion.button
+                        key={entry.code}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: i * 0.04 }}
+                        onClick={() => setSelectedVoteTeam(entry.code)}
+                        className={`
+                          relative shrink-0 snap-start w-28 sm:w-32 rounded-2xl border p-3 flex flex-col items-center
+                          transition-all duration-200
+                          ${hasMyVote
+                            ? 'border-[#10B981]/60 bg-[#10B981]/5 dark:bg-[#10B981]/10 shadow-md shadow-[#10B981]/15'
+                            : 'border-[#E0E0E0]/60 dark:border-white/10 bg-white dark:bg-[#2D2D2D] hover:border-[#6C2BD9]/50 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#6C2BD9]/10 hover:-translate-y-0.5'
+                          }
+                        `}
+                      >
+                        {/* Voted check badge */}
+                        {hasMyVote && (
+                          <span
+                            aria-label="You voted"
+                            className="absolute -top-1.5 -right-1.5 z-10 size-5 rounded-full bg-[#10B981] ring-2 ring-white dark:ring-[#1A1A1A] shadow-sm shadow-[#10B981]/50 flex items-center justify-center"
+                          >
+                            <Check className="size-3 text-white" strokeWidth={4} />
+                          </span>
+                        )}
+
+                        {/* Big team flag */}
+                        <span className="text-4xl sm:text-5xl leading-none drop-shadow-sm">
+                          {entry.flag}
+                        </span>
+
+                        {/* Big mood emoji */}
+                        <span className="mt-1.5 text-3xl sm:text-4xl leading-none">
+                          {getFanMoodEmoji(entry.score)}
+                        </span>
+
+                        {/* Team code */}
+                        <span className="mt-2 text-[11px] font-black tracking-wider text-[#1A1A1A] dark:text-white">
+                          {entry.code}
+                        </span>
+
+                        {/* Vote count */}
+                        <span className="text-[8px] text-[#666] dark:text-[#CCCCCC]">
+                          {entry.count} {entry.count === 1 ? 'vote' : 'votes'}
+                        </span>
+
+                        {/* Thin mood indicator bar */}
+                        <div
+                          className="mt-2 w-full rounded-full overflow-hidden"
+                          style={{ height: 3, background: 'rgba(0,0,0,0.06)' }}
+                        >
                           <div
-                            className={`sentiment-bar-fill ${entry.score >= 80 ? 'sentiment-positive' : entry.score >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
-                            style={{ width: `${entry.score}%` }}
+                            className={`h-full rounded-full ${entry.score >= 80 ? 'sentiment-positive' : entry.score >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
+                            style={{ width: `${entry.score}%`, transition: 'width 0.6s ease' }}
                           />
                         </div>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-[8px] text-[#666] dark:text-[#CCCCCC]">mood</span>
-                          <span className={`text-[10px] font-bold ${getSentimentColor(entry.score)}`}>
-                            {entry.score >= 80 ? '🤩' : entry.score >= 65 ? '😊' : entry.score >= 50 ? '😐' : entry.score >= 30 ? '😟' : '😡'} {entry.score}
-                          </span>
-                        </div>
-                      </div>
-                    </motion.button>
-                  )
-                })}
+                      </motion.button>
+                    )
+                  })}
+                </div>
               </div>
             )}
             <p className="mt-3 text-[10px] text-[#999] dark:text-gray-500 text-center">
