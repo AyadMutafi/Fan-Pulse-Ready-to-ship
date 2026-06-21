@@ -325,3 +325,35 @@ Stage Summary:
 - Voted state is now more prominent (green check badge + glow ring) instead of a tiny dot
 - Fully responsive: shows ~3 cards on mobile, ~6-7 on desktop; horizontal scroll reveals the rest
 - Voting flow fully preserved — tap any card → mood picker modal → cast vote → optimistic update
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Add real team flags/logos — emoji flags were rendering as plain text codes (BR, AR, FR) on Windows/Linux
+
+Work Log:
+- Analyzed user-uploaded screenshot (pasted_image_1782063156110.png) via VLM — confirmed team "flags" were rendering as two-letter text codes (BR, AR, FR) with NO actual flag imagery visible
+- Diagnosed root cause: regional indicator flag emojis (🇧🇷 = "BR" + regional indicators) only render as actual flag glyphs on macOS/iOS/Android. On Windows and most Linux/headless browsers, they render as the bare two-letter country code — this is a known OS-level limitation, not a code bug
+- Solution: replace emoji flags with the existing FlagImage component (src/components/common/FlagImage.tsx) which renders real PNG flag images from flagcdn.com CDN. The component was already imported in page.tsx but only used in WorldCupTab — not in the Home tab
+- FlagImage maps FIFA 3-letter codes (BRA, ARG, FRA) → ISO alpha-2 codes (br, ar, fr) → flagcdn.com/w80/{iso}.png URLs, with graceful emoji fallback for unknown codes
+- Replaced emoji flags in 4 locations within src/app/page.tsx:
+    1. Featured Matches card header — homeFlag/awayFlag emojis → FlagImage size=26 (26x17px) next to team code
+    2. Featured Matches Fan Mood row — homeFlag/awayFlag emojis → FlagImage size=20 (20x13px) alongside mood emoji
+    3. Fan Mood voting carousel — entry.flag emoji (was text-5xl) → FlagImage size=48 (48x32px) as the hero flag in a centered flex container with minHeight 32px and shadow-sm
+    4. Voting modal title — emoji flag → FlagImage size=24 (24x16px) next to "{CODE} Mood" title
+- All FlagImage usages pass fallbackEmoji={original emoji} so unknown codes still show something
+- Verified dev server compiled cleanly (✓ Compiled in 170ms)
+- Ran ESLint: clean (no errors/warnings)
+- Browser-verified flag images load via DOM inspection: carousel img src=flagcdn.com/w80/br.png (48x32, naturalWidth=80=loaded); match card imgs ir.png + nz.png both loaded:true
+- VLM-verified carousel (desktop): confirmed real rectangular flag images — Brazil (green/yellow diamond), Argentina (light blue/white), France (blue/white/red vertical), England (red cross on white), Spain (red/yellow), Germany (black/red/gold), Mexico (green/white/red)
+- VLM-verified Featured Matches (desktop): confirmed real flags in both the match header (Iran green/white/red, New Zealand blue/Union Jack/stars, Côte d'Ivoire orange/white/green, Ecuador yellow/blue/coat of arms) AND the Fan Mood row inside each card
+- VLM-verified voting modal: confirmed real Brazil flag image (br.png loaded:true) in the "BRA Mood" modal title
+- VLM-verified mobile (375px): confirmed real flag images render at top of each team card, layout clean, hierarchy flag → emoji → code → votes intact
+
+Stage Summary:
+- All team flags across the Home tab now render as REAL PNG flag images (from flagcdn.com) instead of emoji flags that were showing as plain text codes on Windows/Linux
+- 4 locations updated: Featured Matches card headers, Featured Matches Fan Mood rows, Fan Mood voting carousel cards, and the voting mood-picker modal
+- Flags load reliably on ALL platforms (Windows, Linux, macOS, iOS, Android) since they're standard PNG images, not emoji
+- FlagImage component gracefully falls back to emoji for any team code not in the FIFA→ISO mapping
+- Fully responsive: flags sized appropriately per context (48px hero in carousel, 26px in match headers, 20px in Fan Mood rows, 24px in modal)
+- Voting flow fully preserved with real flag in modal title

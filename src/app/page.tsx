@@ -446,7 +446,7 @@ function HomeTab() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-xl">{match.homeFlag}</span>
+                      <FlagImage nationCode={match.home} size={26} fallbackEmoji={match.homeFlag} />
                       <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.home}</span>
                     </div>
                     <div className="flex flex-col items-center">
@@ -455,7 +455,7 @@ function HomeTab() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.away}</span>
-                      <span className="text-xl">{match.awayFlag}</span>
+                      <FlagImage nationCode={match.away} size={26} fallbackEmoji={match.awayFlag} />
                     </div>
                   </div>
                   {/* League badge */}
@@ -471,7 +471,7 @@ function HomeTab() {
                   {/* Fan Mood — Emoji Only with team flags */}
                   <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2.5">
                     <div className="flex items-center gap-1.5" title={`${match.home} fan mood`}>
-                      <span className="text-lg leading-none">{match.homeFlag}</span>
+                      <FlagImage nationCode={match.home} size={20} fallbackEmoji={match.homeFlag} />
                       <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.homeSentiment)}`}>
                         {getFanMoodEmoji(match.homeSentiment)}
                       </span>
@@ -483,7 +483,7 @@ function HomeTab() {
                       <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.awaySentiment)}`}>
                         {getFanMoodEmoji(match.awaySentiment)}
                       </span>
-                      <span className="text-lg leading-none">{match.awayFlag}</span>
+                      <FlagImage nationCode={match.away} size={20} fallbackEmoji={match.awayFlag} />
                     </div>
                   </div>
                   <div className="mt-3 flex items-center">
@@ -562,10 +562,10 @@ function HomeTab() {
                           </span>
                         )}
 
-                        {/* Big team flag */}
-                        <span className="text-4xl sm:text-5xl leading-none drop-shadow-sm">
-                          {entry.flag}
-                        </span>
+                        {/* Big team flag (real PNG image — renders on all platforms) */}
+                        <div className="flex items-center justify-center" style={{ minHeight: 32 }}>
+                          <FlagImage nationCode={entry.code} size={48} fallbackEmoji={entry.flag} className="shadow-sm" />
+                        </div>
 
                         {/* Big mood emoji */}
                         <span className="mt-1.5 text-3xl sm:text-4xl leading-none">
@@ -663,9 +663,11 @@ function HomeTab() {
                 <CardHeader className="pb-2 pt-4 px-4">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-bold text-[#1A1A1A] dark:text-white flex items-center gap-2">
-                      <span className="text-xl">
-                        {NATIONAL_TEAMS.find(t => t.code === selectedVoteTeam)?.flag ?? '🏳️'}
-                      </span>
+                      <FlagImage
+                        nationCode={selectedVoteTeam}
+                        size={24}
+                        fallbackEmoji={NATIONAL_TEAMS.find(t => t.code === selectedVoteTeam)?.flag ?? '🏳️'}
+                      />
                       {selectedVoteTeam} Mood
                     </CardTitle>
                     <button
