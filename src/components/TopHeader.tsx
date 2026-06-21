@@ -1,8 +1,7 @@
 'use client'
 
-import { useLanguage } from '@/context/LanguageContext'
 import { useTheme } from 'next-themes'
-import { Sun, Moon, Globe } from 'lucide-react'
+import { Sun, Moon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { TabId } from '@/components/Navigation'
 
@@ -20,7 +19,6 @@ const tabTitles: Record<TabId, string> = {
 }
 
 export default function TopHeader({ activeTab }: TopHeaderProps) {
-  const { lang, setLang } = useLanguage()
   const { theme, setTheme } = useTheme()
 
   return (
@@ -33,17 +31,6 @@ export default function TopHeader({ activeTab }: TopHeaderProps) {
 
         {/* Right actions */}
         <div className="flex items-center gap-1">
-          {/* Language Toggle */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setLang(lang === 'EN' ? 'AR' : 'EN')}
-            className="gap-1 text-xs font-medium text-[#666] dark:text-gray-400 hover:text-[#1A1A1A] dark:hover:text-white h-8"
-          >
-            <Globe className="size-3.5" />
-            <span>{lang}</span>
-          </Button>
-
           {/* Theme Toggle */}
           <Button
             variant="ghost"

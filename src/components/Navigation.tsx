@@ -1,7 +1,7 @@
 'use client'
 
 import { useLanguage } from '@/context/LanguageContext'
-import { Home, Activity, Globe, Zap, Crown, Radio } from 'lucide-react'
+import { Home, Activity, Globe, Zap, Radio } from 'lucide-react'
 
 export type TabId = 'home' | 'sentiments' | 'rate' | 'goals' | 'totw' | 'worldcup'
 
@@ -89,19 +89,6 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                   <p className="text-[10px] text-[#10B981] font-medium">AI sync active</p>
                 </div>
               </div>
-            </div>
-
-            {/* Arena Pro CTA */}
-            <div className="rounded-xl bg-gradient-to-br from-[#6C2BD9] to-[#8B5CF6] p-3.5 text-white shadow-lg shadow-[#6C2BD9]/20">
-              <div className="flex items-center gap-2 mb-1.5">
-                <Crown className="size-4" />
-                <p className="text-xs font-bold">Arena Pro</p>
-                <span className="ml-auto rounded bg-[#FF6B35] px-1.5 py-0.5 text-[8px] font-black uppercase">PRO</span>
-              </div>
-              <p className="text-[10px] text-white/70 mb-2.5">Unlock advanced analytics & insights</p>
-              <button className="w-full rounded-lg bg-white/20 hover:bg-white/30 transition-colors py-1.5 text-[10px] font-bold">
-                Upgrade Now
-              </button>
             </div>
           </div>
         </div>

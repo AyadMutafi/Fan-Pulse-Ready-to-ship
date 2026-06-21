@@ -357,3 +357,34 @@ Stage Summary:
 - FlagImage component gracefully falls back to emoji for any team code not in the FIFA→ISO mapping
 - Fully responsive: flags sized appropriately per context (48px hero in carousel, 26px in match headers, 20px in Fan Mood rows, 24px in modal)
 - Voting flow fully preserved with real flag in modal title
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Remove "Arena Pro" plan card and make the app English-only (delete Arabic language support)
+
+Work Log:
+- Analyzed user-uploaded screenshot (pasted_image_1782063915735.png) via VLM — confirmed two things to remove: (1) the purple "Arena Pro" CTA card with crown icon + "Upgrade Now" button in the desktop sidebar, (2) the "EN" language toggle in the top header
+- Audited all usages of useLanguage / lang / setLang across the codebase (11 files) to choose a low-risk refactor strategy: keep the LanguageContext API surface intact (so the many `t('...')` call sites and `lang === 'AR'` comparisons keep compiling) but lock it to English at runtime
+- Navigation.tsx: removed the entire "Arena Pro CTA" block (gradient purple card with Crown icon, "Arena Pro" title, "Unlock advanced analytics & insights" tagline, orange PRO badge, and "Upgrade Now" button); removed now-unused Crown import from lucide-react. Kept the "Arena Live" card above it intact.
+- TopHeader.tsx: removed the language toggle Button (Globe icon + "EN" label + setLang toggle); removed the useLanguage import and the `const { lang, setLang } = useLanguage()` destructure; removed the Globe import from lucide-react. Kept only the theme (sun/moon) toggle. Rewrote the file cleanly.
+- LanguageContext.tsx: rewrote to English-only:
+    • Deleted the entire AR translation block (~80 Arabic keys) and the 'header.pro'/'header.upgrade' keys (no longer used)
+    • Changed translations from `Record<Language, Record<string,string>>` to a flat `Record<string,string>` (EN only)
+    • `lang` is now a constant 'EN' (no useState); `setLang` is a no-op `(_lang: Language) => {}`
+    • Removed the useEffect that set document.dir (RTL) and document.lang based on language — no longer needed, app is always LTR English
+    • `t()` now reads directly from the flat EN translations map
+    • Kept the `Language = 'EN' | 'AR'` type union purely for type-compat with existing consumer files that still reference `lang === 'AR'` (page.tsx, WorldCupTab.tsx, FanPulseTab.tsx) — those comparisons now always evaluate to false, so stages show English names, post-language names show English, etc.
+- Verified ESLint passes clean (no errors/warnings)
+- Verified dev server compiles cleanly (✓ Compiled in 163ms / 176ms); the only log note was an expected Fast Refresh full-reload because LanguageContext.tsx changed (context modules always force full reload)
+- Browser-verified via DOM inspection: proCtaPresent=false (no "Arena Pro" in sidebar), header has only 1 button (icon-only theme toggle, no language toggle), headerText is just "Home" (no "EN")
+- VLM-verified screenshot: confirmed only "Arena Live" card in sidebar (no Arena Pro/Upgrade Now), only theme toggle in header (no EN/globe), all visible text English (no Arabic characters)
+- Browser-verified World Cup tab: navigated to it, confirmed stage labels render in English ("Group Stage", "Round of 32", "Quarter Finals", "Semi Finals") and hasArabic=false across the entire page body
+- Checked dev log: all routes returning 200, no runtime errors during the visit
+
+Stage Summary:
+- "Arena Pro" premium/subscription card fully removed from the desktop sidebar (crown icon, PRO badge, "Upgrade Now" button all gone); the "Arena Live" status card above it is retained
+- Language toggle (EN/AR globe button) removed from the top header; only the dark/light theme toggle remains
+- App is now English-only: all ~80 Arabic translation keys deleted, RTL document-direction switching removed, lang is hardcoded to 'EN', setLang is a no-op
+- Zero breaking changes to consumer files — every existing `t('key')` call still resolves (to English), every `lang === 'AR'` comparison safely evaluates to false (English content shown)
+- Layout is always LTR; no possibility of accidental RTL/Arabic rendering
