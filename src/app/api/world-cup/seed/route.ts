@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db, getDb } from '@/lib/db'
 import { computeAllPulseScores } from '@/lib/pulse-engine'
+import { isAdminAuthorized, unauthorizedResponse } from '@/lib/admin-auth'
 
 // ── Team info helper — 48 WC 2026 teams (official groups) ─────────────────────
 const TEAM_INFO: Record<string, { name: string; flag: string }> = {
@@ -152,7 +153,16 @@ const CRISIS_PLAYERS: Record<string, PlayerData[]> = {
 }
 
 // ── Seed handler ─────────────────────────────────────────────────────────────
+// AUTH REQUIRED: this route wipes and re-creates most tables. Only the admin
+// may call it. (The early-return "already seeded" path is safe, but we still
+// gate it behind auth to avoid the per-page-load DB count() query on every
+// visitor — the frontend no longer calls this route; it runs once at deploy.)
 export async function POST(request: Request) {
+  // ── Auth gate ──
+  if (!isAdminAuthorized(request)) {
+    return unauthorizedResponse()
+  }
+
   try {
     // ── Check if already seeded (skip if ?force=true) ──
     const { searchParams } = new URL(request.url)
@@ -165,15 +175,21 @@ export async function POST(request: Request) {
     }
 
     // ── 1. Clean up existing data ──
+    // NOTE: fanVote is intentionally NOT wiped — user votes are the product and
+    // must survive re-seeds. pulseBreakdown + sentimentSummary are safe to wipe
+    // because they are fully recomputed by the pulse engine below.
     await db.wCSelectionPlayer.deleteMany()
     await db.wCSelection.deleteMany()
     await db.wCStage.deleteMany()
     await db.match.deleteMany()
     await db.nationalTeam.deleteMany()
-    // Also wipe pulse breakdown + sentiment summaries so recomputation is clean
-    await db.pulseBreakdown.deleteMany().catch(() => {})
-    await db.sentimentSummary.deleteMany().catch(() => {})
-    await db.fanVote.deleteMany().catch(() => {})
+    await db.pulseBreakdown.deleteMany().catch((e) => {
+      console.warn('pulseBreakdown deleteMany failed (continuing):', e)
+    })
+    await db.sentimentSummary.deleteMany().catch((e) => {
+      console.warn('sentimentSummary deleteMany failed (continuing):', e)
+    })
+    // Intentionally NOT deleting fanVote — user votes are preserved.
 
     // ── 2. Create 7 stages — Group Stage is live, rest are upcoming ──
     const stagesData = [

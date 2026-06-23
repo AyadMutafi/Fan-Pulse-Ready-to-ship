@@ -43,22 +43,26 @@ export async function POST(request: Request) {
       },
     })
 
-    const existingRating = await db.fanRating.findFirst({
-      where: { id: playerId },
-    })
+    // ── Atomic read-modify-write via $transaction ──
+    // Previously: findFirst → compute → update with no lock. Two concurrent
+    // POSTs both read totalRatings=N, both write N+1, and the average drifts
+    // permanently. The transaction serializes the read + write so concurrent
+    // submissions are counted correctly.
+    await db.$transaction(async (tx) => {
+      const existing = await tx.fanRating.findFirst({ where: { id: playerId } })
+      if (!existing) return
 
-    if (existingRating) {
-      const newTotal = existingRating.totalRatings + 1
-      const newAvg = ((existingRating.avgRating * existingRating.totalRatings) + rating) / newTotal
+      const newTotal = existing.totalRatings + 1
+      const newAvg = ((existing.avgRating * existing.totalRatings) + rating) / newTotal
 
-      await db.fanRating.update({
+      await tx.fanRating.update({
         where: { id: playerId },
         data: {
           avgRating: Math.round(newAvg * 10) / 10,
           totalRatings: newTotal,
         },
       })
-    }
+    })
 
     return NextResponse.json({ success: true, rating: userRating })
   } catch (error) {

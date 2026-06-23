@@ -61,9 +61,10 @@ RUN mkdir -p /app/db && chown nextjs:nodejs /app/db
 USER nextjs
 EXPOSE 3000
 
-# Health check — hits the Next.js server every 30s
+# Health check — uses bun (already in the image) instead of curl (not installed
+# on oven/bun:1.1-debian). The health endpoint now also verifies DB reachability.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+  CMD bun -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["bun", "server.js"]

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
 // GET /api/fan-vote?session=<sessionId>
 // Returns aggregated fan votes for ALL teams, plus this session's own votes.
@@ -48,8 +49,23 @@ export async function GET(request: NextRequest) {
 
 // POST /api/fan-vote
 // Body: { teamCode: string, score: number, sessionId: string }
+//
+// Rate limited: 10 votes / minute / IP (in-memory, single-instance).
+// This protects the Fan Mood metric from ballot-stuffing — the #1 user-facing
+// number and the entire "social proof" marketing loop. Without it, a 5-line
+// bash loop can flood every team's mood with 95s.
 export async function POST(request: NextRequest) {
   try {
+    // ── Rate limit (10 votes/min/IP) ──
+    const ip = getClientIp(request)
+    const rl = rateLimit(`fan-vote:${ip}`, 10, 60_000)
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Too many votes — please slow down', retryAfter: Math.ceil((rl.resetAt - Date.now()) / 1000) },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+      )
+    }
+
     const body = await request.json().catch(() => null)
     if (!body || typeof body !== 'object') {
       return NextResponse.json(

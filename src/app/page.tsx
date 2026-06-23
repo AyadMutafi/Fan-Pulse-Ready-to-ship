@@ -306,6 +306,17 @@ function HomeTab() {
     return () => { cancelled = true }
   }, [sessionId])
 
+  // Close voting modal on Escape key (accessibility — modal was only closable
+  // via the explicit Close button or selecting a mood)
+  useEffect(() => {
+    if (!selectedVoteTeam) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) setSelectedVoteTeam(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedVoteTeam, submitting])
+
   const totalVoteCount = fanVotes.reduce((sum, v) => sum + (v.count || 0), 0)
 
   const handleVote = async (teamCode: string, score: number) => {
@@ -1898,20 +1909,24 @@ export default function Home() {
   const [stages, setStages] = useState<WCStage[]>([])
 
   useEffect(() => {
-    async function init() {
+    let cancelled = false
+    async function loadStages() {
       try {
-        await fetch('/api/world-cup/seed', { method: 'POST' })
-
+        // NOTE: the seed endpoint is no longer called on every page load.
+        // It was causing a DB count() query per visitor and is also an
+        // admin-gated destructive route now. Seeding happens once at deploy
+        // time (see docker-entrypoint.sh + DEPLOY.md).
         const res = await fetch('/api/world-cup/stages')
-        if (res.ok) {
+        if (res.ok && !cancelled) {
           const data = await res.json()
           setStages(data.stages || [])
         }
       } catch (err) {
-        console.error('Init failed:', err)
+        console.error('Failed to load stages:', err)
       }
     }
-    init()
+    loadStages()
+    return () => { cancelled = true }
   }, [])
 
   return (
@@ -1921,10 +1936,10 @@ export default function Home() {
         <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* Main content area */}
-        <div className="flex-1 md:ml-60">
+        <div className="flex-1 md:ml-60 min-w-0 min-h-screen flex flex-col">
           <TopHeader activeTab={activeTab} />
 
-          <main className="mx-auto max-w-5xl px-4 py-6 pb-24 md:pb-6">
+          <main className="mx-auto w-full max-w-5xl px-4 py-6 pb-24 md:pb-6">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
@@ -1942,6 +1957,12 @@ export default function Home() {
               </motion.div>
             </AnimatePresence>
           </main>
+
+          {/* Desktop footer — sticky to bottom via mt-auto in the flex-col.
+              Hidden on mobile where the fixed bottom nav serves as the footer. */}
+          <footer className="hidden md:block mt-auto border-t border-[#E0E0E0] dark:border-white/10 px-4 py-3 text-center text-[11px] text-[#666] dark:text-[#999]">
+            Fan Pulse © 2026 · World Cup 2026 Real-Time Fan Sentiment Dashboard
+          </footer>
         </div>
       </div>
     </div>

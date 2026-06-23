@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db, getDb } from '@/lib/db'
 import { computeAllPulseScores } from '@/lib/pulse-engine'
+import { isAdminAuthorized, unauthorizedResponse } from '@/lib/admin-auth'
 
 /**
  * POST /api/compute-pulse-scores
@@ -8,13 +9,18 @@ import { computeAllPulseScores } from '@/lib/pulse-engine'
  * Recompute every WCSelectionPlayer's pulse score and breakdown using real data
  * from the SentimentSummary (fan sentiment) and Match (match results) tables.
  *
- * Called by:
- *  - The "Recompute Pulse Scores" button on the World Cup tab
- *  - The seed route, automatically, after seeding players
+ * AUTH REQUIRED: this route does 22+ sequential DB writes and is a DoS vector
+ * if left open. Only the admin may call it.
  *
- * Returns a summary of what was computed so the UI can show feedback.
+ * Called by:
+ *  - The seed route, automatically, after seeding players (server-side call —
+ *    pass through by setting the internal header)
+ *  - Manual admin trigger via the World Cup tab admin panel (future)
  */
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
+  if (!isAdminAuthorized(request)) {
+    return unauthorizedResponse()
+  }
   try {
     const result = await computeAllPulseScores(getDb())
     return NextResponse.json({

@@ -443,3 +443,42 @@ Stage Summary:
 - Product-marketing alignment: identified 6 product features to ship before Jun 28 that directly enable the marketing tactics (og:image, share-image export, email capture, UTM tracking, vote social-proof seeding, loading performance)
 - Budget: $2K-$5K with $0 bootstrap fallback; primary spend on creator partnerships + boosting best-performing organic content
 - North Star: 100K unique visitors + 15K WAU by the Jul 19 Final
+
+---
+Task ID: 8
+Agent: Main Agent (GLM-5.2)
+Task: Fix all P0/P1 audit issues found in the codebase + browser QA audit
+
+Work Log:
+- Ran two parallel audits: (1) codebase review by Explore agent, (2) live browser QA by general-purpose agent
+- Audit found 7 P0 launch blockers, 14 P1 issues, 13 P2 polish items
+- Created `/src/lib/admin-auth.ts` — admin password verification via header or query param (env-configurable, dev fallback to Ayad1241987)
+- Created `/src/lib/rate-limit.ts` — in-memory sliding-window rate limiter + client IP extraction (Fly-Client-IP / X-Forwarded-For)
+- Added admin auth gate to `POST /api/world-cup/seed` — returns 401 without password (was: open DB-wipe endpoint)
+- Added admin auth gate to `POST /api/compute-pulse-scores` — returns 401 without password (was: DoS vector)
+- Modified seed route to NOT delete `fanVote` table on re-seed — user votes now survive re-seeds
+- Removed per-page-load `POST /api/world-cup/seed` call from page.tsx Home component (was: DB count() query on every visitor)
+- Added rate limiting to `POST /api/fan-vote`: 10 votes/min/IP, returns 429 with Retry-After header when exceeded
+- Fixed race condition in `POST /api/ratings`: wrapped read-modify-write in `db.$transaction()` for atomic increment
+- Upgraded health endpoint to actually check DB: runs `db.wCStage.count()`, returns 503 if DB unreachable, includes `dbLatencyMs`
+- Fixed `docker-entrypoint.sh`: `--accept-data-loss` now only runs when DB file is missing (first boot), NOT on every container boot — prevents silent data loss on schema drift
+- Fixed `Dockerfile` HEALTHCHECK: uses `bun -e "fetch(...)"` instead of `curl` (not installed on oven/bun:1.1-debian)
+- Implemented `SharePulseButton`: navigator.share() + clipboard.writeText() fallback + execCommand last-resort, with toast confirmation
+- Rewrote `layout.tsx` metadata: added metadataBase, openGraph (title/description/url/siteName/images), twitter card, robots, viewport export with themeColor
+- Mounted Sonner `<Toaster />` in layout.tsx (replaced unused shadcn Toaster that nothing called)
+- Generated `public/og-image.png` (1344×768, 137KB) via z-ai image CLI — branded social share card
+- Fixed mobile horizontal overflow: added `min-w-0` to main content wrapper (was: 1024px scrollWidth on 375px viewport)
+- Added Escape key handler to voting modal (was: only closable via Close button or mood selection)
+- Added desktop `<footer>` with `mt-auto` sticky-to-bottom behavior (hidden on mobile where bottom nav serves as footer)
+- Deleted ~3,150 lines of dead code: src/components/tabs/* (7 files), src/components/pitch/* (2 files), src/hooks/queries/* (7 files), src/providers/QueryProvider.tsx, src/components/common/{ComingSoon,TeamLogo,TrendIcon}.tsx, src/components/pulse/PulseScoreRing.tsx, src/hooks/use-toast.ts, src/components/ui/toaster.tsx
+- Ran `bun run lint` — passed clean, zero errors
+- Browser-verified all fixes: homepage 200, OG meta tags present in DOM, og-image.png serves 200 (136KB), health endpoint returns dbLatencyMs, seed POST returns 401, fan-vote rate limiting returns 429 after 10 rapid requests, mobile scrollWidth=375 (was 1024), footer exists on desktop, Escape closes modal
+
+Stage Summary:
+- All 7 P0 launch blockers fixed and verified
+- All critical P1 issues fixed (rate limiting, race condition, SharePulseButton, OG metadata, mobile overflow, health check, docker entrypoint)
+- ~3,150 lines of dead code removed (codebase shrunk ~30%)
+- Lint passes clean
+- Dev server running without errors
+- Remaining P1/P2 items NOT fixed in this pass (documented for future): social-sentiment route fabricates engagement metrics (Math.random for likes/replies/shares), hardcoded "Arena Intelligence" feed strings with fake timestamps, no analytics tracking (Plausible/Umami), no CSRF/CSP security headers, in-memory caches break under multi-machine scaling, schema still has dead nameAr columns + Arabic translations in social-sentiment route, ~11 `any` types in API code
+- Deployment readiness: app is now safe to deploy to Fly.io. Admin password must be set via `fly secrets set ADMIN_PASSWORD=...`. Site URL can be set via `NEXT_PUBLIC_SITE_URL=...` for correct OG metadata.
