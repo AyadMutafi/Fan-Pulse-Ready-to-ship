@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Activity, TrendingUp, TrendingDown, Minus, Play, Star, AlertTriangle,
@@ -378,6 +378,107 @@ function HomeTab() {
     ? 'Be the first to vote in the Fan Mood section below'
     : `${totalVoteCount.toLocaleString()} fan votes tallied for World Cup 2026 Group Stage`
 
+  // ── Arena Intelligence: derived from REAL match data, not hardcoded strings ──
+  // Previously this was 7 hardcoded strings with fake "2m ago" / "8m ago"
+  // timestamps that never changed. Now we compute insights from apiMatches:
+  // biggest win, shock result, clean sheets, highest-scoring draw, etc.
+  // All timestamps are labeled "Matchday 1" (the real matchday) instead of fake
+  // relative times.
+  const arenaIntel = useMemo(() => {
+    const items: Array<{ icon: typeof Sparkles; text: string; color: string }> = []
+
+    if (apiMatches.length === 0) {
+      return [
+        { icon: Activity, text: 'Loading live match data…', color: 'text-[#6C2BD9]' },
+      ]
+    }
+
+    // Parse scores (format: "2-0" or "1-1") from the score string
+    const parsed = apiMatches.map(m => {
+      const [h, a] = (m.score || '0-0').split('-').map(s => parseInt(s.trim(), 10) || 0)
+      return { ...m, homeScore: h, awayScore: a, goalDiff: Math.abs(h - a), totalGoals: h + a }
+    })
+
+    // 1. Biggest win (largest goal difference)
+    const biggestWin = [...parsed].sort((a, b) => b.goalDiff - a.goalDiff)[0]
+    if (biggestWin && biggestWin.goalDiff >= 3) {
+      items.push({
+        icon: Flame,
+        text: `${biggestWin.home} ${biggestWin.score} ${biggestWin.away} — ${biggestWin.goalDiff}-goal margin sets the tone for Matchday 1`,
+        color: 'text-[#FF6B35]',
+      })
+    }
+
+    // 2. Shock result (lower sentiment team won or drew against higher)
+    const shock = parsed.find(m =>
+      m.homeScore <= m.awayScore && m.homeSentiment > m.awaySentiment + 20
+    ) || parsed.find(m =>
+      m.goalDiff === 0 && Math.abs(m.homeSentiment - m.awaySentiment) > 25
+    )
+    if (shock) {
+      items.push({
+        icon: BarChart3,
+        text: `Shock in Group ${shock.league?.includes('WC') ? 'Stage' : ''}: ${shock.home} ${shock.score} ${shock.away} — sentiment predicted a different outcome`,
+        color: 'text-[#EF4444]',
+      })
+    }
+
+    // 3. Fan vote count (dynamic — already computed above)
+    items.push({
+      icon: Users,
+      text: fanVoteIntelText,
+      color: 'text-[#10B981]',
+    })
+
+    // 4. Highest-scoring draw
+    const draw = parsed.filter(m => m.homeScore === m.awayScore && m.totalGoals >= 3)
+      .sort((a, b) => b.totalGoals - a.totalGoals)[0]
+    if (draw) {
+      items.push({
+        icon: Activity,
+        text: `${draw.home} ${draw.score} ${draw.away} — highest-scoring draw of Matchday 1 with ${draw.totalGoals} goals`,
+        color: 'text-[#6C2BD9]',
+      })
+    }
+
+    // 5. Clean sheet dominance
+    const cleanSheet = parsed.filter(m => m.awayScore === 0 && m.homeScore >= 2)
+      .sort((a, b) => b.homeScore - a.homeScore)[0]
+    if (cleanSheet) {
+      items.push({
+        icon: Shield,
+        text: `${cleanSheet.home} keep a clean sheet in ${cleanSheet.score} win — defensive statement to open the tournament`,
+        color: 'text-[#10B981]',
+      })
+    }
+
+    // 6. Highest fan sentiment winner
+    const topSentiment = [...parsed].sort((a, b) =>
+      Math.max(b.homeSentiment, b.awaySentiment) - Math.max(a.homeSentiment, a.awaySentiment)
+    )[0]
+    if (topSentiment) {
+      const dominant = topSentiment.homeSentiment > topSentiment.awaySentiment
+        ? topSentiment.home : topSentiment.away
+      items.push({
+        icon: Sparkles,
+        text: `${dominant} riding highest fan mood (${Math.max(topSentiment.homeSentiment, topSentiment.awaySentiment)}/100) after Matchday 1`,
+        color: 'text-[#6C2BD9]',
+      })
+    }
+
+    // 7. Tournament opener
+    const opener = parsed[0]
+    if (opener) {
+      items.push({
+        icon: Trophy,
+        text: `World Cup 2026 kicked off with ${opener.home} ${opener.score} ${opener.away} in the opener`,
+        color: 'text-[#FF6B35]',
+      })
+    }
+
+    return items.slice(0, 7)
+  }, [apiMatches, fanVoteIntelText])
+
   const moodTeamEntries = FAN_MOOD_TEAM_CODES.map(code => {
     const team = NATIONAL_TEAMS.find(t => t.code === code)
     const vote = fanVotes.find(v => v.teamCode === code)
@@ -623,15 +724,7 @@ function HomeTab() {
         </h3>
         <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
           <CardContent className="p-4 space-y-3">
-            {[
-              { icon: Sparkles, text: 'Germany demolition of Curaçao 6-0 shows pros and cons of expanded World Cup', time: '2m ago', color: 'text-[#6C2BD9]' },
-              { icon: BarChart3, text: 'Morocco hold Brazil 1-1 in Group C — Bouaddi makes Casemiro look old', time: '8m ago', color: 'text-[#FF6B35]' },
-              { icon: Users, text: fanVoteIntelText, time: '15m ago', color: 'text-[#10B981]' },
-              { icon: Timer, text: 'USMNT thrash Paraguay 3-0 — Balogun, Pulisic, Tillman shine in opener', time: '22m ago', color: 'text-[#EF4444]' },
-              { icon: Flame, text: 'Mbappé and Messi both score as France and Argentina dominate Group openers', time: '35m ago', color: 'text-[#6C2BD9]' },
-              { icon: Activity, text: 'Bellingham and Saka lead England past Uruguay 3-0 in Group J', time: '1h ago', color: 'text-[#FF6B35]' },
-              { icon: Trophy, text: 'Mexico kick off World Cup 2026 with 2-0 win over South Africa', time: '3h ago', color: 'text-[#10B981]' },
-            ].map((item, i) => (
+            {arenaIntel.map((item, i) => (
               <motion.div
                 key={i}
                 initial={{ opacity: 0, x: -10 }}
@@ -642,7 +735,7 @@ function HomeTab() {
                 <item.icon className={`mt-0.5 size-4 shrink-0 ${item.color}`} />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs leading-relaxed text-[#1A1A1A]/80 dark:text-white/80">{item.text}</p>
-                  <p className="mt-0.5 text-[10px] text-[#666] dark:text-[#CCCCCC]">{item.time}</p>
+                  <p className="mt-0.5 text-[10px] text-[#666] dark:text-[#CCCCCC]">Matchday 1</p>
                 </div>
               </motion.div>
             ))}

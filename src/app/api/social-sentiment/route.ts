@@ -316,12 +316,17 @@ function parseSearchResults(
           content,
           language,
           sentiment,
-          likes: Math.floor(Math.random() * 5000) + 10,
-          replies: Math.floor(Math.random() * 500) + 1,
-          shares: Math.floor(Math.random() * 2000) + 5,
+          // Engagement metrics are NOT available from web_search scraping.
+          // Previously these were Math.random() — fabricated numbers in a
+          // "real" data pipeline. Set to 0 until we wire a real platform API.
+          likes: 0,
+          replies: 0,
+          shares: 0,
           teamTag: teamCode,
           searchQuery,
-          postedAt: new Date(Date.now() - Math.random() * 86400000),
+          // postedAt is unknown from search snippets; leave null rather than
+          // fabricate a random timestamp within the last 24h.
+          postedAt: null,
         })
       }
     }
@@ -340,12 +345,12 @@ function parseSearchResults(
           content,
           language,
           sentiment,
-          likes: Math.floor(Math.random() * 3000) + 5,
-          replies: Math.floor(Math.random() * 800) + 1,
-          shares: Math.floor(Math.random() * 500) + 2,
+          likes: 0,
+          replies: 0,
+          shares: 0,
           teamTag: teamCode,
           searchQuery,
-          postedAt: new Date(Date.now() - Math.random() * 86400000),
+          postedAt: null,
         })
       }
     }
@@ -368,12 +373,12 @@ function parseSearchResults(
         content,
         language,
         sentiment,
-        likes: Math.floor(Math.random() * 5000) + 10,
-        replies: Math.floor(Math.random() * 500) + 1,
-        shares: Math.floor(Math.random() * 2000) + 5,
+        likes: 0,
+        replies: 0,
+        shares: 0,
         teamTag: teamCode,
         searchQuery,
-        postedAt: new Date(Date.now() - Math.random() * 86400000),
+        postedAt: null,
       })
     }
   }
