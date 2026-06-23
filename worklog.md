@@ -416,3 +416,30 @@ Stage Summary:
 - App is now deploy-ready: fly launch → fly volumes create → fly secrets set → fly deploy → live
 - DEPLOY.md includes ongoing operations (backup, scale-up for hard launch, rollback) and troubleshooting
 - Soft launch cost estimate: ~$3-5/mo (shared-cpu-1x, 512MB, 1GB volume, always-on)
+
+---
+Task ID: 7
+Agent: Main Agent (CTPO)
+Task: Create hard launch marketing plan for Fan Pulse (Jun 28 knockout round → Jul 19 Final)
+
+Work Log:
+- Adopted expanded role (CTO + Head of Marketing & Sales) and approached marketing from a product-aware perspective — leveraging Fan Pulse's unique features (real-time fan sentiment, AI player ratings, Fan Mood voting) as the core marketing hooks rather than generic tactics
+- Defined positioning: "Feel the Game." — owning the "fan emotion" white space between score apps (FotMob, ESPN) and stats apps (SofaScore); positioned Fan Pulse as the "second-screen companion" app, not a competitor to score apps
+- Identified 4 target audience tiers: Tier 1 = emotionally invested WC fans 18-34 on X/Twitter (~50M globally); Tier 2 = football content creators 10K-100K followers (~10K accounts); Tier 3 = casual knockout-round fans; Tier 4 = niche (betters, journalists — defer)
+- Structured a 3-phase plan: Pre-launch (Jun 23-27 soft launch as content engine) → Hard launch week (Jun 28, riding the R16 match conversation) → Sustain phase (Jun 29-Jul 19 daily content rhythm)
+- Designed 4 organic growth loops built into the product: Share Pulse button (already built), screenshot-worthy data, "your team needs you" vote recruitment, daily streak badges
+- Created a concrete content calendar: real-time Fan Pulse tweets at kickoff/halftime/fulltime, post-match recap carousels within 1 hour, Daily Pulse newsletter (Substack/Beehiiv free tier), 3x/week TikTok videos (Fan Mood Shift / AI rates / Did fans agree?), X reply strategy to big football accounts
+- Outlined partnership strategy: 20 mid-size creators (10K-100K) via free-access value exchange, 10 football podcasts/newsletters as "data sponsor", country-specific Discord/Facebook fan communities; explicitly advised against mega-influencers and paid ads at this stage
+- Aligned tech roadmap with marketing needs (CTPO view): prioritized og:image generation, "share insight" image export, email capture, UTM tracking, social-proof vote seeding as pre-launch product features
+- Defined KPIs: North Star = 100K unique visitors during knockout phase + 15K WAU by Final; weekly tracking table with targets; daily health checks (uptime, load time, vote success rate, AI endpoint latency)
+- Budgeted $2K-$5K total (creator partnerships $500-$1K, X/TikTok ads $800-$1.5K, tools $50-$65, contingency $500) with a bootstrap-mode ($0) fallback that relies purely on organic World Cup interest
+- Included risk mitigation (traffic crashes, empty product, creator dropout, algorithm indifference, criticism) and post-WC retention plan (league-season pivot Aug-May, Fan Pulse Awards recap, newsletter continuation, Phase 2 monetization exploration)
+- Wrote complete plan to MARKETING_PLAN.md (12 sections, ~2500 words)
+
+Stage Summary:
+- Complete hard-launch marketing plan delivered and saved to MARKETING_PLAN.md
+- Core strategy: own the "fan emotion" white space; position as the second-screen companion app (not a score-app competitor); tagline "Feel the Game."
+- 3-phase execution: soft launch warmup (Jun 23-27) → hard launch into the match conversation (Jun 28) → sustain with daily content rhythm (Jun 29-Jul 19)
+- Product-marketing alignment: identified 6 product features to ship before Jun 28 that directly enable the marketing tactics (og:image, share-image export, email capture, UTM tracking, vote social-proof seeding, loading performance)
+- Budget: $2K-$5K with $0 bootstrap fallback; primary spend on creator partnerships + boosting best-performing organic content
+- North Star: 100K unique visitors + 15K WAU by the Jul 19 Final
