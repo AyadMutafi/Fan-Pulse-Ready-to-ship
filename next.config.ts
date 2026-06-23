@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   images: {
+    // Avoid sharp native-module issues on deployment platforms; flag images
+    // from flagcdn.com are already marked `unoptimized` per-image.
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',

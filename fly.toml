@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────
+# Fan Pulse — Fly.io app config
+# ─────────────────────────────────────────────────────────────
+
+app = "fan-pulse"  # ← change this to your unique app name (fly launch will offer one)
+primary_region = "iad"  # ← change to your nearest region (see Step 4)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  HOSTNAME = "0.0.0.0"
+  DATABASE_URL = "file:/app/db/custom.db"
+
+# Persistent volume for the SQLite DB — survives redeploys & restarts
+# Created in Step 5 with: fly volumes create fan_pulse_db
+[[mounts]]
+  source = "fan_pulse_db"
+  destination = "/app/db"
+  initial_size = "1GB"
+
+# HTTP service
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false   # keep always-on so no cold starts during launch
+  auto_start_machines = true
+  min_machines_running = 1     # always keep 1 instance alive
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+# VM size — start small for soft launch, bump up before hard launch
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

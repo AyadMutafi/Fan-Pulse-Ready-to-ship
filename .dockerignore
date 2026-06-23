@@ -1,0 +1,44 @@
+# Version control
+.git
+.gitignore
+
+# Dependencies
+node_modules
+
+# Build output (rebuilt in Docker)
+.next
+out
+dist
+
+# Database (kept on a Fly volume, never bake into image)
+db/*.db
+db/*.db-journal
+db/*.db-wal
+db/*.db-shm
+
+# Logs
+*.log
+dev.log
+server.log
+
+# Env files (secrets set via `fly secrets set`)
+.env
+.env.local
+.env.*.local
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
+fly.toml
+docker-entrypoint.sh
+
+# Docs / screenshots
+*.md
+upload/
+verify-*.png
