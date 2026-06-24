@@ -8,6 +8,7 @@ import {
   Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X, ChevronRight, Check
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { FanCardButton } from '@/components/common/FanCardButton'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
@@ -235,6 +236,7 @@ function HomeTab() {
   const [selectedVoteTeam, setSelectedVoteTeam] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ msg: string; emoji: string } | null>(null)
+  const [fanCardOffer, setFanCardOffer] = useState<{ teamCode: string; score: number } | null>(null)
 
   useEffect(() => {
     async function fetchMatches() {
@@ -349,6 +351,9 @@ function HomeTab() {
     const mood = MOOD_EMOJI_OPTIONS.find(o => o.score === score)
     setToast({ msg: `Vote recorded for ${teamCode}`, emoji: mood?.emoji ?? '✓' })
     setTimeout(() => setToast(null), 2500)
+    // Show the Fan Card offer for 8 seconds — long enough to click "Get Fan Card"
+    setFanCardOffer({ teamCode, score })
+    const offerTimer = setTimeout(() => setFanCardOffer(null), 8000)
     try {
       await fetch('/api/fan-vote', {
         method: 'POST',
@@ -364,6 +369,8 @@ function HomeTab() {
         return without
       })
       setToast({ msg: 'Vote failed — please retry', emoji: '⚠️' })
+      setFanCardOffer(null)
+      clearTimeout(offerTimer)
     } finally {
       setSubmitting(false)
     }
@@ -824,6 +831,41 @@ function HomeTab() {
           >
             <span className="text-base">{toast.emoji}</span>
             <span className="text-xs font-bold text-white dark:text-[#1A1A1A]">{toast.msg}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fan Card offer — appears after a successful vote */}
+      <AnimatePresence>
+        {fanCardOffer && (
+          <motion.div
+            key="fan-card-offer"
+            initial={{ opacity: 0, y: 40, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 40, x: '-50%' }}
+            transition={{ type: 'spring', duration: 0.4 }}
+            className="fixed bottom-20 md:bottom-6 left-1/2 z-[71] -translate-x-1/2 flex items-center gap-3 rounded-2xl bg-[#1A1A1A] dark:bg-white px-4 py-2.5 shadow-2xl border border-white/10 dark:border-[#1A1A1A]/10"
+          >
+            <span className="text-xl">{MOOD_EMOJI_OPTIONS.find(o => o.score === fanCardOffer.score)?.emoji ?? '✓'}</span>
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-white dark:text-[#1A1A1A]">
+                Voted for {fanCardOffer.teamCode}!
+              </span>
+              <span className="text-[10px] text-white/60 dark:text-[#666]">
+                Share your fan mood
+              </span>
+            </div>
+            <FanCardButton
+              teamCode={fanCardOffer.teamCode}
+              score={fanCardOffer.score}
+            />
+            <button
+              onClick={() => setFanCardOffer(null)}
+              aria-label="Dismiss"
+              className="ml-1 rounded-full size-6 flex items-center justify-center text-white/40 dark:text-[#1A1A1A]/40 hover:text-white/70 dark:hover:text-[#1A1A1A]/70 transition-colors"
+            >
+              <X className="size-3.5" />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

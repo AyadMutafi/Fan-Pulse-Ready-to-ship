@@ -514,3 +514,43 @@ Stage Summary:
 - Lint passes clean
 - Dev server running without errors
 - App is now launch-ready for soft launch. Remaining items are P2 polish (dead nameAr columns, ~11 `any` types, in-memory cache → Redis for multi-region, CSRF tokens for POST routes).
+
+---
+Task ID: 10
+Agent: Main Agent (GLM-5.2)
+Task: Build the Fan Card generator — #1 marketing-loop feature
+
+Work Log:
+- Created `/api/fan-card/route.tsx` — server-side PNG generator using Next.js `ImageResponse` (next/og)
+  - GET endpoint: `?team=BRA&score=95` → returns 1200×630 PNG
+  - Fetches team flag from flagcdn.com server-side, converts to base64 data URI for Satori rendering
+  - 5 mood configs (ON FIRE / HAPPY / NEUTRAL / WORRIED / FURIOUS) with distinct gradient backgrounds + accent colors
+  - Card design: Fan Pulse branding (top), flag image + team name + mood badge (center), score + site URL (bottom)
+  - Edge runtime for fast image generation
+  - 404 for unknown team codes
+- Created `/src/components/common/FanCardButton.tsx` — client-side download/share component
+  - Fetches PNG from `/api/fan-card` as blob
+  - Tries Web Share API with files first (mobile native share sheet with image attachment)
+  - Falls back to programmatic `<a download>.click()` (desktop file download)
+  - Loading state with spinner ("Generating...")
+  - Sonner toast confirmation: "Fan Card downloaded! Share fan-pulse-{team}-{score}.png to your stories or feed."
+- Integrated into post-vote flow in `page.tsx`:
+  - Added `fanCardOffer` state: `{ teamCode, score } | null`
+  - After successful vote, shows a spring-animated notification at bottom of screen for 8 seconds
+  - Notification contains: mood emoji + "Voted for [TEAM]!" + "Share your fan mood" subtitle + "Get Fan Card" button + dismiss (X) button
+  - Auto-dismisses after 8s, or on dismiss click, or on vote failure
+  - z-index layering: notification z-[71] sits above toast z-[70], both above content
+- Fixed JSX parsing error: renamed `route.ts` → `route.tsx` (ImageResponse uses JSX)
+- Browser-verified full flow:
+  - API: 4 mood variants tested (BRA 95, ARG 75, ESP 50, GER 20) — all return valid 1200×630 PNGs with correct IHDR dimensions
+  - Invalid team → 404 with "Team not found"
+  - Voting flow: click team → modal opens → click mood → modal closes → fan card notification appears with all 5 elements → click "Get Fan Card" → loading spinner → PNG fetched (596ms) → success toast "Fan Card downloaded! Share fan-pulse-esp-75.png to your stories or feed."
+  - No console errors
+
+Stage Summary:
+- Fan Card generator is fully functional and browser-verified
+- The #1 organic growth loop from the $200 marketing plan is now built: every fan who votes gets a branded, shareable PNG with their team's flag + mood + score + Fan Pulse URL
+- File naming convention: `fan-pulse-{team-lowercase}-{score}.png` (e.g., `fan-pulse-esp-75.png`)
+- Web Share API support means mobile users can share directly to their stories/feeds without leaving the app
+- Desktop users get a clean file download with a toast telling them where to share it
+- This is the single highest-ROI feature for the marketing launch — it turns every voter into a distributor
