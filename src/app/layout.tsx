@@ -52,21 +52,16 @@ export const metadata: Metadata = {
     description:
       "Track real-time fan mood, AI-powered player ratings, and live World Cup 2026 sentiment. Vote on your team's pulse and see what fans worldwide are feeling.",
     siteName: "Fan Pulse",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1200,
-        height: 630,
-        alt: "Fan Pulse — World Cup 2026 Real-Time Fan Sentiment",
-      },
-    ],
+    // OG image is generated dynamically by src/app/opengraph-image.tsx
+    // (Next.js file convention — automatically injected as og:image).
+    // The dynamic version bakes the site URL into the image for SEO/brand recall.
   },
   twitter: {
     card: "summary_large_image",
     title: "Fan Pulse — Real-Time Fan Sentiment for World Cup 2026",
     description:
       "Track real-time fan mood, AI-powered player ratings, and live World Cup 2026 sentiment.",
-    images: ["/og-image.png"],
+    // Twitter image is generated dynamically by src/app/twitter-image.tsx
   },
   robots: {
     index: true,
@@ -88,8 +83,53 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // JSON-LD structured data — helps Google/Bing understand this is a web app,
+  // improves rich-result eligibility, and bakes the URL into the page's
+  // semantic markup (separate from <meta> tags). This is the #1 on-page SEO
+  // signal after <title>.
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Fan Pulse",
+    url: siteUrl,
+    description:
+      "Real-time fan sentiment, AI-powered player ratings, and live World Cup 2026 mood tracking. Vote on your team's pulse and share fan cards.",
+    applicationCategory: "SportsApplication",
+    operatingSystem: "Web",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Fan Pulse",
+      url: siteUrl,
+    },
+    about: {
+      "@type": "SportsEvent",
+      name: "FIFA World Cup 2026",
+    },
+    keywords: [
+      "Fan Pulse",
+      "World Cup 2026",
+      "FIFA World Cup",
+      "fan sentiment",
+      "football",
+      "soccer",
+      "player ratings",
+      "fan mood",
+    ].join(", "),
+  };
+
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >

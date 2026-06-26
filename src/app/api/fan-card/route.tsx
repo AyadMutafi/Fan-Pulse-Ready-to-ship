@@ -213,25 +213,68 @@ export async function GET(request: NextRequest) {
           </div>
         </div>
 
-        {/* ── Bottom bar: score + CTA ── */}
+        {/* ── Bottom bar: score + prominent URL CTA ── */}
+        {/* The URL is the SEO-critical element here — it's what gets OCR'd by
+            search engines and read by humans when the card is shared as a
+            thumbnail on Twitter/X, WhatsApp forwards, and IG stories. So we
+            make it BIG, high-contrast, and centered as a clear CTA badge. */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          padding: '40px 60px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          padding: '32px 60px 40px',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
+          gap: '32px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '18px', fontWeight: 600 }}>FAN MOOD SCORE</span>
-            <span style={{ color: 'white', fontSize: '48px', fontWeight: 900 }}>{score}</span>
-            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '24px', fontWeight: 700 }}>/100</span>
+          {/* Score (compact, left) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px', fontWeight: 700, letterSpacing: '1.5px' }}>FAN MOOD SCORE</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+              <span style={{ color: 'white', fontSize: '52px', fontWeight: 900, lineHeight: 1 }}>{score}</span>
+              <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '22px', fontWeight: 700 }}>/100</span>
+            </div>
           </div>
+
+          {/* URL CTA pill (prominent, right) — high contrast for SEO + clicks */}
           <div style={{
             marginLeft: 'auto',
-            color: 'rgba(255,255,255,0.5)',
-            fontSize: '20px',
-            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px',
+            background: 'rgba(255,255,255,0.95)',
+            padding: '14px 28px',
+            borderRadius: '16px',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
+            border: `2px solid ${mood.accentColor}`,
           }}>
-            {siteUrl.replace(/^https?:\/\//, '')}
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              background: mood.accentColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '20px',
+              fontWeight: 900,
+              color: 'white',
+              flexShrink: 0,
+            }}>F</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{
+                color: '#1A1A1A',
+                fontSize: '13px',
+                fontWeight: 800,
+                letterSpacing: '2px',
+                lineHeight: 1,
+              }}>VOTE NOW →</span>
+              <span style={{
+                color: '#1A1A1A',
+                fontSize: '28px',
+                fontWeight: 900,
+                letterSpacing: '-0.5px',
+                lineHeight: 1,
+              }}>{siteUrl.replace(/^https?:\/\//, '')}</span>
+            </div>
           </div>
         </div>
       </div>

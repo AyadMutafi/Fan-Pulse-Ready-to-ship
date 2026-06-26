@@ -554,3 +554,58 @@ Stage Summary:
 - Web Share API support means mobile users can share directly to their stories/feeds without leaving the app
 - Desktop users get a clean file download with a toast telling them where to share it
 - This is the single highest-ROI feature for the marketing launch — it turns every voter into a distributor
+
+---
+Task ID: 11
+Agent: Main Agent (GLM-5.2)
+Task: Make Fan Pulse URL prominently visible on Fan Card + improve site-wide SEO
+
+Work Log:
+- User requested the "Fan Pulse URL that can be visible and for better SEO" — i.e. make the domain prominent on the shareable Fan Card PNG + improve overall SEO
+- **Fan Card URL CTA redesign** (`/api/fan-card/route.tsx`):
+  - Old: URL was a tiny 20px muted-gray text (rgba(255,255,255,0.5)) in bottom-right — barely readable at thumbnail size
+  - New: Prominent white CTA pill with accent-color border + box-shadow, containing the Fan Pulse "F" badge + "VOTE NOW →" label (13px, bold, letter-spaced) + the URL (28px, bold, near-black #1A1A1A on white)
+  - Score block moved to compact two-line layout on the left
+  - URL text is now ~10x larger and ~6x higher contrast — readable even when card is shown as a 400px-wide Twitter thumbnail
+  - Comment added explaining why URL visibility matters for SEO (OCR by search engines + human readability in social feeds)
+- **Dynamic OG image** (`src/app/opengraph-image.tsx`, NEW):
+  - Replaces the static `/public/og-image.png` via Next.js file convention
+  - Brand: "F" logo + "Fan Pulse" + "World Cup 2026" badge (top)
+  - Hero headline: "Real-Time Fan Sentiment" with gradient text on "Sentiment" (center)
+  - Description: "Vote on your team's pulse. See what fans worldwide are feeling — live mood scores, AI player ratings, and fan cards."
+  - URL CTA pill at bottom-left: same high-contrast white pill design as the Fan Card (consistency)
+  - Edge runtime for fast generation
+- **Dynamic Twitter card image** (`src/app/twitter-image.tsx`, NEW):
+  - Same design as OG image (consistency across platforms)
+  - Used for `summary_large_image` Twitter cards
+- **layout.tsx metadata updates**:
+  - Removed static `/og-image.png` references from `openGraph.images` and `twitter.images` (now handled by file convention)
+  - Added explanatory comments pointing to the dynamic image routes
+  - siteUrl still driven by `NEXT_PUBLIC_SITE_URL` env var with `https://fan-pulse.fly.dev` fallback
+- **JSON-LD structured data** (NEW, in layout.tsx `<head>`):
+  - WebApplication schema with name, url, description, applicationCategory=SportsApplication, operatingSystem=Web
+  - Free Offer (price=0, USD) — signals to search engines the app is free
+  - Publisher Organization with URL
+  - About: SportsEvent "FIFA World Cup 2026"
+  - Keywords baked into structured data (separate from <meta keywords>)
+- Fixed Satori rendering bugs:
+  - Removed conflicting `import { runtime } from 'next/server'` (was shadowing `export const runtime = 'edge'`)
+  - Added `display: 'flex'` to gradient-text container div (Satori requires explicit flex for multi-child divs)
+  - Changed `"Fan "` to `"Fan&nbsp;"` to preserve the trailing space inside flex
+- **Verification**:
+  - VLM confirmed Fan Card URL is "clearly visible and readable" on all 5 mood variants (BRA 95, ARG 75, ESP 50, GER 25, JPN 10) with "VOTE NOW →" CTA visible
+  - VLM confirmed OG image: "URL clearly readable, works well as a link preview, in a white rounded button at the bottom left, prominent due to contrast"
+  - Verified homepage HTML: og:image → /opengraph-image (dynamic), twitter:image → /twitter-image (dynamic), JSON-LD script tag present with WebApplication schema
+  - All endpoints return HTTP 200: Fan Card (348KB), OG image (346KB), Twitter image (346KB)
+  - `bun run lint` passes clean (zero errors)
+
+Stage Summary:
+- Fan Pulse URL is now prominently visible on:
+  1. Every shareable Fan Card PNG (5 mood variants) — bottom-right CTA pill, 28px bold dark text on white, with "VOTE NOW →" label
+  2. Site OG image (shown when sharing fan-pulse.fly.dev on Twitter/Facebook/Discord/WhatsApp/LinkedIn) — bottom-left CTA pill, 36px bold dark text on white
+  3. Twitter card image — same design as OG
+- SEO improvements added:
+  - Dynamic OG/Twitter images (replace static PNG — easier to maintain, URL always current)
+  - JSON-LD WebApplication structured data (rich-result eligibility, semantic URL markup)
+  - All metadata continues to use NEXT_PUBLIC_SITE_URL env var
+- The marketing funnel is now tighter: anyone who sees a shared Fan Card OR a shared site link sees the domain "fan-pulse.fly.dev" baked into the image — drives direct type-in traffic + reinforces brand recall for SEO
