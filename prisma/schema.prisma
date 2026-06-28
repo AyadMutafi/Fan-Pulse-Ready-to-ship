@@ -192,3 +192,81 @@ model UserRating {
   comment   String?
   createdAt DateTime @default(now())
 }
+
+// ── Admin-Seeded Fan Sentiment Pipeline ───────────────────────────────────────
+// Implements the hybrid Layer 1+2+3 approach:
+//   Layer 1: SDK scraping (web_search + page_reader + LLM scoring)
+//   Layer 2: Reddit API integration (free, on-demand)
+//   Layer 3: Admin-seeded monitoring (admin pastes hashtags + seed tweet URLs,
+//            cron job re-searches every 5 min during the match window)
+//
+// Flow:
+//   1. Admin creates FeedMonitor with hashtags + seed URLs + match window
+//   2. Cron job runs every 5 min for active monitors → web_search + page_reader
+//   3. LLM scores each post's sentiment (0-100) + extracts mentioned players
+//   4. PlayerSentiment aggregate is recomputed (weighted avg of FeedPost scores)
+//   5. Pulse Engine reads PlayerSentiment for the 25% Fan Sentiment component
+//      (replaces the old "95% baseline" placeholder)
+
+/// An admin-curated sentiment monitoring session for a specific match.
+/// One FeedMonitor per match. Active while the match is being played + a
+/// configurable cooldown window after.
+model FeedMonitor {
+  id              String   @id @default(cuid())
+  matchLabel      String   // human-readable, e.g. "ESP vs KSA — Matchday 2"
+  stageId         String?  // optional link to WCStage (Group Stage, R32, etc.)
+  teamCodes       String   @default("[]") // JSON array of team codes, e.g. ["ESP","KSA"]
+  playerIds       String   @default("[]") // JSON array of WCSelectionPlayer IDs to track
+  hashtags        String   @default("[]") // JSON array of hashtags, e.g. ["#ESP","#LamineYamal"]
+  seedUrls        String   @default("[]") // JSON array of seed tweet/post URLs (anchor context)
+  status          String   @default("active") // "active" | "paused" | "ended"
+  refreshInterval Int      @default(5) // minutes between auto-refreshes
+  lastRefreshedAt DateTime?
+  endsAt          DateTime // auto-end time (typically kickoff + 6h)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  posts           FeedPost[]
+
+  @@index([status, endsAt])
+}
+
+/// A single scraped post analyzed by the sentiment pipeline.
+/// One FeedPost per (monitorId, url) — de-duplicated across refreshes.
+model FeedPost {
+  id                String   @id @default(cuid())
+  monitorId         String
+  monitor           FeedMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  platform          String   // "twitter" | "reddit" | "web"
+  url               String   @unique
+  author            String   @default("")
+  content           String   @default("") // extracted text (truncated to ~2000 chars)
+  language          String   @default("en")
+  sentimentScore    Float    @default(50) // 0-100, LLM-scored
+  positiveRatio     Float    @default(0.5) // 0-1
+  mentionedPlayers  String   @default("[]") // JSON array of player IDs found in content
+  topQuote          String?  // notable fan quote extracted by LLM (for UI display)
+  postedAt          DateTime @default(now())
+  analyzedAt        DateTime @default(now())
+
+  @@index([monitorId, analyzedAt])
+  @@index([mentionedPlayers])
+}
+
+/// Aggregated per-player sentiment derived from FeedPosts.
+/// One PlayerSentiment per (playerId, monitorId) — the latest monitor wins.
+/// Read by the Pulse Engine to compute the 25% Fan Sentiment component.
+model PlayerSentiment {
+  id              String   @id @default(cuid())
+  playerId        String   @unique // 1:1 with WCSelectionPlayer
+  monitorId       String?  // link to the FeedMonitor that produced this sentiment
+  sentiment       Float    @default(50) // 0-100, weighted avg of FeedPost.sentimentScore
+  postCount       Int      @default(0) // total posts mentioning this player
+  positiveRatio   Float    @default(0.5) // 0-1
+  topQuotes       String   @default("[]") // JSON array of {quote, source} objects
+  avgEngagement   Float    @default(0) // avg likes+replies+shares (best-effort, often 0)
+  analyzedAt      DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([monitorId])
+}

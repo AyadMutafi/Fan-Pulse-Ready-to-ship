@@ -86,6 +86,11 @@ function aggregateTeamMatches(
 /**
  * Pure computation of the 4 Pulse components from aggregated source data.
  * Shared by both the batch and single-player paths. No side effects, no randomness.
+ *
+ * Now also accepts an optional `playerSentiment` arg — when the admin-seeded
+ * FeedMonitor pipeline has produced per-player sentiment data (PlayerSentiment
+ * table), it takes precedence over the team-level SentimentSummary. This is
+ * what replaces the old "95% baseline" placeholder with real fan data.
  */
 function computeComponents(args: {
   trend: string
@@ -93,8 +98,13 @@ function computeComponents(args: {
   slice: TeamMatchSlice
   sent: SentimentAgg | undefined
   votes: VoteAgg | undefined
+  playerSentiment?: {
+    sentiment: number
+    postCount: number
+    monitorId: string | null
+  } | null
 }): PulseComponents {
-  const { trend, baselineSentiment, slice, sent, votes } = args
+  const { trend, baselineSentiment, slice, sent, votes, playerSentiment } = args
 
   // ── matchPerformance (40%) ──
   const winRate = slice.played > 0 ? slice.points / (slice.played * 3) : 0.5
@@ -103,12 +113,28 @@ function computeComponents(args: {
   const matchPerformance = clamp(winRate * 70 + gdBonus)
 
   // ── fanSentiment (25%) ──
+  // Priority (highest wins):
+  //   1. Per-player sentiment from FeedMonitor pipeline (admin-seeded, real fan posts)
+  //   2. Team-level scraped sentiment (SentimentSummary)
+  //   3. Fan vote crowd average (FanVote)
+  //   4. Baseline fallback (player.sentiment column)
   const scrapedScore = sent && sent.weight > 0 ? sent.score / sent.weight : null
   const voteScore = votes && votes.count > 0 ? votes.total / votes.count : null
+  const playerScore =
+    playerSentiment && playerSentiment.postCount > 0
+      ? playerSentiment.sentiment
+      : null
 
   let fanSentiment: number
   let fanSentimentNote: string
-  if (scrapedScore !== null && voteScore !== null) {
+  if (playerScore !== null && voteScore !== null) {
+    // Per-player sentiment from real fan posts, blended with crowd votes
+    fanSentiment = playerScore * 0.75 + voteScore * 0.25
+    fanSentimentNote = `${Math.round(playerScore)}% from ${playerSentiment!.postCount} real fan posts × 0.75 + ${Math.round(voteScore)}% fan vote × 0.25`
+  } else if (playerScore !== null) {
+    fanSentiment = playerScore
+    fanSentimentNote = `${Math.round(playerScore)}% from ${playerSentiment!.postCount} real fan posts (FeedMonitor pipeline)`
+  } else if (scrapedScore !== null && voteScore !== null) {
     fanSentiment = scrapedScore * 0.7 + voteScore * 0.3
     fanSentimentNote = `${Math.round(scrapedScore)}% scraped × 0.7 + ${Math.round(voteScore)}% fan vote × 0.3 (${sent!.weight} posts, ${votes!.count} votes)`
   } else if (scrapedScore !== null) {
@@ -228,7 +254,7 @@ export async function computeAllPulseScores(
 
   const teamCodes = [...new Set(players.map((p) => p.nationCode))]
 
-  const [allMatches, sentimentSummaries, fanVotes] = await Promise.all([
+  const [allMatches, sentimentSummaries, fanVotes, playerSentimentRows] = await Promise.all([
     database.match.findMany({
       where: { status: 'completed', league: 'WC' },
       select: { homeTeamCode: true, awayTeamCode: true, homeScore: true, awayScore: true },
@@ -241,11 +267,23 @@ export async function computeAllPulseScores(
       where: { teamCode: { in: teamCodes } },
       select: { teamCode: true, score: true },
     }),
+    database.playerSentiment.findMany({
+      select: {
+        playerId: true,
+        sentiment: true,
+        postCount: true,
+        monitorId: true,
+      },
+    }),
   ])
 
   const matchByTeam = new Map<string, TeamMatchSlice>()
   const sentimentByTeam = new Map<string, SentimentAgg>()
   const voteByTeam = new Map<string, VoteAgg>()
+  const playerSentimentByPlayer = new Map<
+    string,
+    { sentiment: number; postCount: number; monitorId: string | null }
+  >()
 
   for (const code of teamCodes) matchByTeam.set(code, aggregateTeamMatches(allMatches, code))
 
@@ -269,6 +307,14 @@ export async function computeAllPulseScores(
     }
   }
 
+  for (const ps of playerSentimentRows) {
+    playerSentimentByPlayer.set(ps.playerId, {
+      sentiment: ps.sentiment,
+      postCount: ps.postCount,
+      monitorId: ps.monitorId,
+    })
+  }
+
   for (const player of players) {
     try {
       const c = computeComponents({
@@ -277,6 +323,7 @@ export async function computeAllPulseScores(
         slice: matchByTeam.get(player.nationCode) ?? { points: 0, goalDiff: 0, played: 0 },
         sent: sentimentByTeam.get(player.nationCode),
         votes: voteByTeam.get(player.nationCode),
+        playerSentiment: playerSentimentByPlayer.get(player.id) ?? null,
       })
       await persistComponents(database, player.id, c)
       playersComputed += 1
@@ -304,7 +351,7 @@ export async function computePlayerPulseScore(
   })
   if (!player) return null
 
-  const [matches, sentRows, voteRows] = await Promise.all([
+  const [matches, sentRows, voteRows, playerSentRow] = await Promise.all([
     database.match.findMany({
       where: { status: 'completed', league: 'WC' },
       select: { homeTeamCode: true, awayTeamCode: true, homeScore: true, awayScore: true },
@@ -316,6 +363,10 @@ export async function computePlayerPulseScore(
     database.fanVote.findMany({
       where: { teamCode: player.nationCode },
       select: { score: true },
+    }),
+    database.playerSentiment.findUnique({
+      where: { playerId },
+      select: { sentiment: true, postCount: true, monitorId: true },
     }),
   ])
 
@@ -336,6 +387,13 @@ export async function computePlayerPulseScore(
     slice: aggregateTeamMatches(matches, player.nationCode),
     sent: sent.weight > 0 ? sent : undefined,
     votes: votes.count > 0 ? votes : undefined,
+    playerSentiment: playerSentRow
+      ? {
+          sentiment: playerSentRow.sentiment,
+          postCount: playerSentRow.postCount,
+          monitorId: playerSentRow.monitorId,
+        }
+      : null,
   })
 
   await persistComponents(database, player.id, c)

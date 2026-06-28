@@ -9,6 +9,10 @@ import { computePlayerPulseScore } from '@/lib/pulse-engine'
  * human-readable notes). Uses the persisted PulseBreakdown if available;
  * otherwise computes it on demand via the real weighted engine
  * (40% match / 25% fan / 20% narrative / 15% momentum). No Math.random().
+ *
+ * Also returns fan sentiment metadata (post count + top quotes + freshness)
+ * from the PlayerSentiment table when available — this is what powers the
+ * "Based on N real fan posts" UI in the pulse breakdown modal.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -54,6 +58,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Fetch per-player fan sentiment metadata (post count + top quotes + freshness)
+    // This is what powers the "Based on N real fan posts" UI in the breakdown modal.
+    const playerSentiment = await database.playerSentiment.findUnique({
+      where: { playerId },
+      select: {
+        sentiment: true,
+        postCount: true,
+        positiveRatio: true,
+        topQuotes: true,
+        analyzedAt: true,
+        monitorId: true,
+      },
+    })
+
     const pulseScore = {
       overall,
       matchPerformance: breakdown?.matchPerformance ?? 50,
@@ -85,9 +103,39 @@ export async function GET(request: NextRequest) {
       },
       pulseScore,
       weights: { matchPerformance: 0.4, fanSentiment: 0.25, aiNarrative: 0.2, momentumTrend: 0.15 },
+      // Real fan sentiment metadata (null when no FeedMonitor data exists yet)
+      fanSentimentMeta: playerSentiment
+        ? {
+            postCount: playerSentiment.postCount,
+            positiveRatio: playerSentiment.positiveRatio,
+            topQuotes: safeJsonParse(playerSentiment.topQuotes, []),
+            analyzedAt: playerSentiment.analyzedAt.toISOString(),
+            monitorId: playerSentiment.monitorId,
+            freshnessLabel: getFreshnessLabel(playerSentiment.analyzedAt),
+          }
+        : null,
     })
   } catch (error) {
     console.error('Failed to fetch pulse score:', error)
     return NextResponse.json({ error: 'Failed to fetch pulse score' }, { status: 500 })
   }
+}
+
+function safeJsonParse<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}
+
+function getFreshnessLabel(date: Date): string {
+  const diffMs = Date.now() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffHours = Math.floor(diffMin / 60)
+  if (diffHours < 24) return `${diffHours}h ago`
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays}d ago`
 }

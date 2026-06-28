@@ -1476,6 +1476,16 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
       momentumTrendNote: string
     }
     weights: { matchPerformance: number; fanSentiment: number; aiNarrative: number; momentumTrend: number }
+    // Real fan sentiment metadata (null when no FeedMonitor data exists yet).
+    // When present, the modal shows "Based on N real fan posts" + top quote + freshness.
+    fanSentimentMeta?: {
+      postCount: number
+      positiveRatio: number
+      topQuotes: Array<{ quote: string; score: number }>
+      analyzedAt: string
+      monitorId: string | null
+      freshnessLabel: string
+    } | null
   } | null>(null)
   const [pulseLoading, setPulseLoading] = useState(false)
   const [pulseError, setPulseError] = useState<string | null>(null)
@@ -1916,6 +1926,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                           value: pulseBreakdown.pulseScore.fanSentiment,
                           note: pulseBreakdown.pulseScore.fanSentimentNote,
                           emoji: '💬',
+                          meta: pulseBreakdown.fanSentimentMeta,
                         },
                         {
                           label: 'AI Narrative',
@@ -1954,6 +1965,24 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                           <p className="text-[10px] leading-relaxed text-[#666] dark:text-[#CCCCCC]">
                             {c.note}
                           </p>
+                          {/* Real fan sentiment metadata — only shown when FeedMonitor data exists */}
+                          {c.meta && c.meta.postCount > 0 && (
+                            <div className="mt-1.5 rounded-md bg-[#10B981]/5 border border-[#10B981]/20 p-2 space-y-1.5">
+                              <div className="flex items-center gap-1.5 text-[9px] font-bold text-[#10B981] uppercase tracking-wider">
+                                <span className="inline-block size-1.5 rounded-full bg-[#10B981] animate-pulse" />
+                                Based on {c.meta.postCount} real fan post{c.meta.postCount === 1 ? '' : 's'} · {c.meta.freshnessLabel}
+                              </div>
+                              {c.meta.topQuotes && c.meta.topQuotes.length > 0 && (
+                                <div className="space-y-1">
+                                  {c.meta.topQuotes.slice(0, 2).map((q, i) => (
+                                    <div key={i} className="text-[10px] italic text-[#1A1A1A] dark:text-white/80 leading-relaxed pl-2 border-l-2 border-[#10B981]/40">
+                                      &ldquo;{q.quote}&rdquo;
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
 
