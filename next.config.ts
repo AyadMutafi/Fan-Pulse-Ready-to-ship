@@ -5,10 +5,14 @@ import type { NextConfig } from "next";
 // z-cdn.chatglm.cn (logo icon), inline styles + scripts (Next.js runtime
 // requires these for hydration), data: URIs (for unoptimized images).
 //
+// IMPORTANT — frame-ancestors: MUST allow the Z.ai preview panel origins,
+// otherwise the preview iframe shows a blank/sad-face icon. Allowed:
+//   - 'self'                → same-origin embedding
+//   - https://*.space-z.ai  → Z.ai preview/chat panels (preview-chat-*.space-z.ai)
+//
 // Note: 'unsafe-inline' for scripts is a pragmatic trade-off — Next.js App
 // Router injects inline scripts for hydration. Removing it would break the
-// app. A stricter CSP with nonces is possible but requires a custom server
-// middleware; deferred to Phase 2.
+// app.
 const cspHeader = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is",
@@ -16,7 +20,7 @@ const cspHeader = [
   "img-src 'self' https://flagcdn.com https://z-cdn.chatglm.cn data:",
   "font-src 'self' data:",
   "connect-src 'self' https://cloud.umami.is",
-  "frame-ancestors 'none'",
+  "frame-ancestors 'self' https://*.space-z.ai https://space-z.ai",
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
@@ -30,7 +34,10 @@ const securityHeaders = [
   },
   {
     key: 'X-Frame-Options',
-    value: 'DENY', // Prevents clickjacking — site cannot be framed
+    // MUST be SAMEORIGIN (not DENY) so the Z.ai preview panel iframe can
+    // embed the app. CSP frame-ancestors above is the authoritative control
+    // for modern browsers; this is the legacy fallback.
+    value: 'SAMEORIGIN',
   },
   {
     key: 'X-Content-Type-Options',
@@ -56,6 +63,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Allow the Z.ai preview panel (preview-chat-*.space-z.ai etc.) to load
+  // /_next/* assets cross-origin during dev. Without this, Next.js 16 logs a
+  // warning and (in future versions) will refuse the request entirely.
+  allowedDevOrigins: ["*.space-z.ai", "space-z.ai"],
   typescript: {
     ignoreBuildErrors: true,
   },
