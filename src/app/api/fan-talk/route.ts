@@ -85,10 +85,38 @@ export async function GET(request: NextRequest) {
     const monitorIds = matchingMonitors.map((m) => m.id)
 
     // Fetch posts from matching monitors
-    const allPosts = await database.feedPost.findMany({
+    let allPosts = await database.feedPost.findMany({
       where: { monitorId: { in: monitorIds } },
       orderBy: tab === 'latest' ? [{ postedAt: 'desc' }] : undefined,
       take: MAX_POSTS * 3, // over-fetch for popularity sort + sentiment stats
+    })
+
+    // ── Safety net: filter out any posts with anti-bot block messages ──────
+    // The scraper now rejects block messages before saving, but this catches
+    // any legacy seeded data that slipped through. Posts with content like
+    // "Log into Instagram" or "blocked by network security" add zero value
+    // to the panel and get filtered here.
+    const BLOCK_PATTERNS = [
+      'blocked by network security',
+      'log into instagram',
+      'please enable javascript',
+      'access denied',
+      'attention required',
+      'enable javascript and cookies',
+      'are you a robot',
+      'unusual traffic',
+      'sorry, you have been blocked',
+      'checking your browser',
+      'cloudflare',
+      'please verify you are a human',
+      'request blocked',
+      'see everyday moments from your close friends',
+    ]
+    allPosts = allPosts.filter((p) => {
+      const lower = (p.content || '').toLowerCase()
+      // Also filter very-short content (likely block pages or empty snippets)
+      if ((p.content || '').length < 40) return false
+      return !BLOCK_PATTERNS.some((pat) => lower.includes(pat))
     })
 
     if (allPosts.length === 0) {
@@ -121,17 +149,23 @@ export async function GET(request: NextRequest) {
     // Sort posts
     let sortedPosts = allPosts
     if (tab === 'popular') {
-      // "Popular" = highest sentiment conviction (distance from 50) + recency bonus.
-      // We don't have reliable engagement metrics from scrapers, so we use
-      // sentiment extremity as a proxy for "notable" — posts that strongly
-      // praise or criticize get surfaced first.
+      // "Popular" sort: posts with a real LLM-extracted quote rank highest
+      // (they have the most "punchy" fan reaction), then by sentiment
+      // conviction (distance from 50), then by recency. This surfaces the
+      // most quotable, opinionated fan reactions first — exactly what a
+      // "What Fans Are Saying" panel should show.
       sortedPosts = [...allPosts].sort((a, b) => {
+        // Tier 1: posts with a quote always beat posts without
+        const aHasQuote = a.topQuote ? 1 : 0
+        const bHasQuote = b.topQuote ? 1 : 0
+        if (aHasQuote !== bHasQuote) return bHasQuote - aHasQuote
+        // Tier 2: higher sentiment conviction (extreme praise/criticism)
         const aConviction = Math.abs(a.sentimentScore - 50)
         const bConviction = Math.abs(b.sentimentScore - 50)
         if (Math.abs(aConviction - bConviction) > 5) {
           return bConviction - aConviction
         }
-        // Tie-break by recency
+        // Tier 3: most recent first
         return b.postedAt.getTime() - a.postedAt.getTime()
       })
     }

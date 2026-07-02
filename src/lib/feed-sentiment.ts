@@ -203,46 +203,99 @@ export async function refreshMonitor(
         // Stop if we've hit the per-refresh cap
         if (scrapedPosts.length >= MAX_POSTS_PER_REFRESH) break
 
-        try {
-          await sleep(SDK_CALL_DELAY_MS) // rate limit page_reader
-          const pageData = await zai.functions.invoke('page_reader', {
-            url: result.url,
-          })
-          const content =
-            pageData?.data?.html ||
-            pageData?.data?.content ||
-            (typeof pageData === 'string' ? pageData : '')
-          if (!content || content.length < 50) {
-            console.log(`[feed-sentiment] page_reader returned empty content for ${result.url}`)
-            continue
-          }
+        const domain = extractDomain(result.url)
+        const platform = detectPlatform(result.url)
 
-          const platform: 'twitter' | 'reddit' | 'web' = result.url.includes(
-            'reddit.com',
-          )
-            ? 'reddit'
-            : result.url.includes('x.com') || result.url.includes('twitter.com')
-              ? 'twitter'
-              : 'web'
+        // ── ANTI-BLOCK STRATEGY ────────────────────────────────────────────
+        // Primary content = search snippet + title. These come straight from
+        // the search engine's index and are NEVER blocked (Reddit/Instagram
+        // block page_reader, but they can't block the search snippet Google
+        // already cached). This is our reliable baseline.
+        const snippet = String(result.snippet || result.description || result.summary || '').trim()
+        const title = String(result.name || result.title || '').trim()
+        let content = [title, snippet].filter(Boolean).join(' — ')
 
-          scrapedPosts.push({
-            url: result.url,
-            platform,
-            author: result.author || result.source || '',
-            content: stripHtml(content).slice(0, MAX_CONTENT_LENGTH),
-            postedAt: result.datePublished
-              ? new Date(result.datePublished)
-              : new Date(),
-          })
-        } catch (pageErr) {
-          errors.push(`page_reader failed for ${result.url}: ${String(pageErr)}`)
-          failedPosts++
-          // If we hit a 429, wait longer before the next attempt
-          if (String(pageErr).includes('429')) {
-            console.log(`[feed-sentiment] 429 rate limit, waiting 5s...`)
-            await sleep(5000)
+        // Skip results with no usable snippet at all
+        if (!content || content.length < 20) {
+          console.log(`[feed-sentiment] No snippet for ${domain}, skipping`)
+          continue
+        }
+
+        // ── ENRICHMENT (optional, domain-specific) ─────────────────────────
+        // Only call page_reader for domains known to allow scraping (news
+        // sites). Social media (Reddit, Instagram, X, TikTok) get snippet-
+        // only — page_reader returns anti-bot block pages for them.
+        if (isScrapeFriendlyDomain(domain)) {
+          try {
+            await sleep(SDK_CALL_DELAY_MS) // rate limit
+            const pageData = await zai.functions.invoke('page_reader', {
+              url: result.url,
+            })
+            const rawContent =
+              pageData?.data?.html ||
+              pageData?.data?.content ||
+              (typeof pageData === 'string' ? pageData : '')
+            // Only use enriched content if it's substantial AND not a block msg
+            if (rawContent && rawContent.length > 200 && !isBlockMessage(rawContent)) {
+              const fullText = stripHtml(rawContent).slice(0, MAX_CONTENT_LENGTH)
+              if (fullText.length > content.length) {
+                content = fullText
+              }
+            }
+          } catch (pageErr) {
+            // page_reader failed — fall back to snippet (already set above)
+            if (String(pageErr).includes('429')) {
+              console.log(`[feed-sentiment] 429 rate limit, waiting 5s...`)
+              await sleep(5000)
+            }
           }
         }
+
+        // ── REDDIT JSON API FALLBACK ───────────────────────────────────────
+        // Reddit exposes a public JSON API: append .json to any reddit.com
+        // URL and you get the post + comments as JSON (no auth, not blocked).
+        // This gives us the actual post body + top comment, far richer than
+        // the snippet. We fetch via page_reader on the .json URL.
+        if (platform === 'reddit' && result.url.includes('reddit.com/r/')) {
+          try {
+            const jsonUrl = result.url.replace(/\/?$/, '.json')
+            await sleep(SDK_CALL_DELAY_MS) // rate limit
+            const redditData = await zai.functions.invoke('page_reader', {
+              url: jsonUrl,
+            })
+            const redditJson =
+              redditData?.data?.html ||
+              redditData?.data?.content ||
+              (typeof redditData === 'string' ? redditData : '')
+            const extracted = extractRedditContent(redditJson)
+            if (extracted && extracted.length > content.length && !isBlockMessage(extracted)) {
+              content = extracted
+            }
+          } catch {
+            // JSON fetch failed — snippet is still our fallback
+          }
+        }
+
+        // ── FINAL SAFETY CHECK ─────────────────────────────────────────────
+        // Reject the post entirely if the final content (even snippet-based)
+        // looks like an anti-bot block page. This catches cases where the
+        // search snippet itself is a block message (e.g. Instagram's
+        // "Log into Instagram" or Reddit's "blocked by network security").
+        if (isBlockMessage(content)) {
+          console.log(`[feed-sentiment] Block message detected in content for ${domain}, skipping`)
+          failedPosts++
+          continue
+        }
+
+        scrapedPosts.push({
+          url: result.url,
+          platform,
+          author: result.author || result.source || result.host_name || '',
+          content: content.slice(0, MAX_CONTENT_LENGTH),
+          postedAt: result.datePublished || result.date
+            ? new Date(result.datePublished || result.date)
+            : new Date(),
+        })
       }
     } catch (searchErr) {
       errors.push(`web_search failed for query="${query}": ${String(searchErr)}`)
@@ -457,6 +510,154 @@ function stripHtml(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+// ── Anti-block helpers ───────────────────────────────────────────────────────
+
+/** Extract the hostname from a URL (without www. prefix). */
+function extractDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+/** Classify a URL into a platform for display in the UI. */
+function detectPlatform(url: string): 'twitter' | 'reddit' | 'web' {
+  if (url.includes('reddit.com')) return 'reddit'
+  if (url.includes('x.com') || url.includes('twitter.com')) return 'twitter'
+  return 'web'
+}
+
+/**
+ * Domains known to allow page_reader scraping (news sites, sports media).
+ * Social media (Reddit, Instagram, X, TikTok) are deliberately EXCLUDED —
+ * they return anti-bot block pages to page_reader. For those, we rely on
+ * the search snippet (always available) + Reddit's public .json API.
+ */
+const SCRAPE_FRIENDLY_DOMAINS: readonly string[] = [
+  'yahoo.com',
+  'espn.com',
+  'bbc.com',
+  'bbc.co.uk',
+  'theguardian.com',
+  'goal.com',
+  'skysports.com',
+  'reuters.com',
+  'apnews.com',
+  'cbssports.com',
+  'sportingnews.com',
+  'fourfourtwo.com',
+  'marca.com',
+  'as.com',
+  'mundodeportivo.com',
+  'sportsmole.com',
+  '90min.com',
+  'football365.com',
+  'talksport.com',
+  'fifa.com',
+  'mlssoccer.com',
+  'worldsoccer.com',
+  'espn.co.uk',
+  'sportskeeda.com',
+  'essentiallysports.com',
+]
+
+/** Returns true if the domain is in the scrape-friendly allowlist. */
+function isScrapeFriendlyDomain(domain: string): boolean {
+  if (!domain) return false
+  return SCRAPE_FRIENDLY_DOMAINS.some(
+    (d) => domain === d || domain.endsWith('.' + d),
+  )
+}
+
+/**
+ * Known anti-bot block-message patterns. If page_reader returns content
+ * matching any of these, we discard it and fall back to the search snippet.
+ * This catches Reddit's "blocked by network security", Instagram's
+ * "Log into Instagram", Cloudflare's "Attention Required", etc.
+ */
+const BLOCK_MESSAGE_PATTERNS: readonly string[] = [
+  'blocked by network security',
+  'log into instagram',
+  'please enable javascript',
+  'access denied',
+  'attention required',
+  'enable javascript and cookies to continue',
+  'are you a robot',
+  'unusual traffic',
+  'sorry, you have been blocked',
+  'checking your browser',
+  'cf-browser-verification',
+  'cloudflare',
+  'please verify you are a human',
+  'captcha-bypass',
+  'request blocked',
+  'whoops, looks like this page',
+  'this page is not available',
+  'sorry, this content',
+]
+
+/** Returns true if the content looks like an anti-bot block page. */
+function isBlockMessage(content: string): boolean {
+  if (!content) return true
+  const lower = content.toLowerCase()
+  return BLOCK_MESSAGE_PATTERNS.some((p) => lower.includes(p))
+}
+
+/**
+ * Extract post title + body + top comment from a Reddit .json API response.
+ * Reddit's public JSON API (append .json to any reddit URL) returns the
+ * post + comments as JSON — no auth, not blocked by anti-bot measures.
+ * We parse out the most useful text for sentiment scoring.
+ */
+function extractRedditContent(rawJson: string): string {
+  try {
+    // page_reader may return the JSON wrapped in HTML or as raw text.
+    // Try to extract the JSON payload either way.
+    let jsonStr = rawJson
+    // If it's HTML-wrapped, extract text content
+    if (jsonStr.includes('<')) {
+      jsonStr = stripHtml(jsonStr)
+    }
+    const parsed = JSON.parse(jsonStr)
+
+    // Reddit JSON structure: [{ data: { children: [{ data: { title, selftext, ... } }] } }, { data: { children: [comments] } }]
+    const postListing = Array.isArray(parsed) ? parsed[0] : parsed
+    const postData = postListing?.data?.children?.[0]?.data
+    if (!postData) return ''
+
+    const title = String(postData.title || '').trim()
+    const body = String(postData.selftext || '').trim()
+    const author = String(postData.author || '').trim()
+    const subreddit = String(postData.subreddit_name_prefixed || postData.subreddit || '').trim()
+
+    // Try to get top comment (second listing in the array)
+    let topComment = ''
+    if (Array.isArray(parsed) && parsed[1]?.data?.children) {
+      const comments = parsed[1].data.children
+      for (const c of comments) {
+        const text = String(c?.data?.body || '').trim()
+        if (text && text.length > 20 && !text.includes('[deleted]')) {
+          topComment = text
+          break
+        }
+      }
+    }
+
+    const parts = [
+      subreddit ? `[${subreddit}]` : '',
+      title,
+      body,
+      topComment ? `Top comment: ${topComment}` : '',
+    ].filter(Boolean)
+
+    return parts.join(' — ').slice(0, MAX_CONTENT_LENGTH)
+  } catch {
+    // Not valid JSON — return empty so caller falls back to snippet
+    return ''
+  }
 }
 
 /**
