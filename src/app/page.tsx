@@ -19,6 +19,7 @@ import { useLanguage } from '@/context/LanguageContext'
 import { findNationalTeam, NATIONAL_TEAMS } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
 import FlagImage from '@/components/common/FlagImage'
+import { FanTalkPanel } from '@/components/FanTalkPanel'
 import { getPulseScoreColor, getPulseScoreColorClass } from '@/types'
 
 // ── Types ────────────────────────────────────────────────────
@@ -605,6 +606,11 @@ function HomeTab() {
                       <FlagImage nationCode={match.away} size={20} fallbackEmoji={match.awayFlag} />
                     </div>
                   </div>
+                  {/* What Fans Are Saying — collapsible real-time fan posts panel */}
+                  <FanTalkPanel
+                    teamCodes={[match.home, match.away]}
+                    matchLabel={`${match.home} vs ${match.away}`}
+                  />
                   <div className="mt-3 flex items-center">
                     <SharePulseButton className="flex-1" />
                   </div>
