@@ -932,3 +932,40 @@ Stage Summary:
 - 11 R32 matches seeded including two shock results (SUI 1-0 ESP, RSA 1-0 NED) that feed the Crisis narratives
 - Pulse engine recomputed 44 player breakdowns from match data — Elite scores 75-88, Crisis scores 8-65
 - Auto-stage-select logic picks R32 as the first `status === 'live'` stage on page load
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Fix Group Stage and Round of 32 Elite/Crisis teams being identical (user reported duplication)
+
+Work Log:
+- User correctly identified that R32 teams were duplicates of Group Stage teams
+- Verified via API comparison:
+  - Elite: 9 of 11 players identical (only GK Ochoa→Pickford and ST Isak→Kane changed)
+  - Crisis: 11 of 11 players 100% identical between GS and R32 (lazy copy)
+- Root cause: when adding R32 data in Task 4, I reused the same star players instead of creating fresh R32-specific rosters based on the actual knockout results
+- Rewrote R32 Elite XI in /home/z/my-project/src/app/api/world-cup/seed/route.ts:
+  - 8 NEW faces: Pickford (ENG), Akanji (SUI), Xhaka (SUI), Bellingham (ENG), Saka (ENG), Vinícius Júnior (BRA), Rodrygo (BRA), Kane (ENG)
+  - 3 returning R32 MOTMs who deserved to keep their spot: Hakimi (MAR), Souttar (AUS), Robertson (SCO)
+  - Dropped from GS Elite: Ochoa, Montes, Musiala, Kimmich, Wirtz, Pulisic, Lozano, Isak
+- Rewrote R32 Crisis XI — completely fresh, featuring the shock-exit villains:
+  - 11 NEW faces, 0 overlap with GS Crisis
+  - Spain shock-exit (lost 0-1 to SUI): Unai Simón, Dani Carvajal, Aymeric Laporte, Pedri, Alvaro Morata
+  - Netherlands shock-exit (lost 0-1 to RSA): Virgil van Dijk, Nathan Aké, Frenkie de Jong, Memphis Depay
+  - Plus: Mohamed Kudus (GHA, lost 0-2 to ENG), Takefusa Kubo (JPN, lost 1-2 to MAR)
+  - Dropped from GS Crisis: Room, Bacuna, Meriah, Gómez, Alonso, Mejbri, Endo, Almirón, Richarlison, Yamal, Weghorst
+- Ran `bun run lint` — passed with 0 errors
+- Re-seeded DB: POST /api/world-cup/seed?force=true → success (27 matches, 44 pulse breakdowns)
+- Verified roster distinctness via API:
+  - Elite overlap: 3/11 (only Hakimi, Souttar, Robertson — justified R32 MOTMs)
+  - Crisis overlap: 0/11 (completely fresh)
+- Verified in Agent Browser:
+  - R32 PULSE ELITE: confirmed Pickford, Hakimi, Souttar, Akanji, Robertson, Xhaka, Bellingham, Saka, Vinícius, Rodrygo, Kane all visible
+  - R32 CRISIS RADAR: confirmed Unai Simón, Carvajal, Van Dijk, Laporte, Aké, Pedri, De Jong, Kudus, Depay, Kubo, Morata all visible
+
+Stage Summary:
+- Group Stage and Round of 32 now have genuinely distinct Elite/Crisis teams
+- R32 Elite reflects actual knockout heroes: ENG (Kane brace, Pickford pen save), SUI (Akanji+Xhaka shock Spain), BRA (Vinícius+Rodrygo 5-0 rout)
+- R32 Crisis reflects the two giant-killings: Switzerland eliminating Spain (5 ESP players), South Africa eliminating Netherlands (4 NED players), plus Ghana and Japan eliminated
+- The 3 retained Elite players (Hakimi, Souttar, Robertson) all had standout R32 performances and deserved their spot — they're not lazy copies
+- Pulse engine recomputed 44 breakdowns from the updated match data — 0 errors

@@ -143,22 +143,24 @@ const ELITE_PLAYERS: Record<string, PlayerData[]> = {
     { name: 'Alexander Isak', nationCode: 'SWE', position: 'ST', pulseScore: 94, sentiment: 93, trend: 'rising', isLive: true, matchInfo: 'SWE 5-1 TUN (hat-trick hero)', order: 9 },
   ],
 
-  // ── Round of 32 Elite XI — top knockout-round performers (Jun 28 – Jul 2 2026) ──
+  // ── Round of 32 Elite XI — fresh knockout-round heroes (Jun 28 – Jul 2 2026) ──
+  // 8 NEW faces (ENG, SUI, BRA stars) + 3 returning R32 MOTMs (Hakimi, Souttar, Robertson)
+  // Distinct from Group Stage Elite — reflects actual R32 match winners
   'round-of-32': [
     // ── GK (1) ──
     { name: 'Jordan Pickford', nationCode: 'ENG', position: 'GK', pulseScore: 91, sentiment: 89, trend: 'rising', isLive: true, matchInfo: 'ENG 2-0 GHA (clean sheet, penalty save)', order: 0 },
     // ── DEF (4) ──
     { name: 'Achraf Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 92, sentiment: 90, trend: 'rising', isLive: true, matchInfo: 'MAR 2-1 JPN (goal + assist, MOTM)', order: 2 },
     { name: 'Harry Souttar', nationCode: 'AUS', position: 'CB', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'AUS 1-0 ECU (defensive wall, 12 clearances)', order: 3 },
-    { name: 'César Montes', nationCode: 'MEX', position: 'CB', pulseScore: 87, sentiment: 85, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 PAR (clean sheet, captain)', order: 4 },
+    { name: 'Manuel Akanji', nationCode: 'SUI', position: 'CB', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'SUI 1-0 ESP (shackled Spain attack, shock win)', order: 4 },
     { name: 'Andrew Robertson', nationCode: 'SCO', position: 'LB', pulseScore: 86, sentiment: 84, trend: 'rising', isLive: true, matchInfo: 'SCO 2-1 HAI (captain, assist for winner)', order: 1 },
     // ── MID (3) ──
-    { name: 'Jamal Musiala', nationCode: 'GER', position: 'CM', pulseScore: 95, sentiment: 94, trend: 'rising', isLive: true, matchInfo: 'GER 4-0 QAT (2 goals, MOTM, dribbling masterclass)', order: 5 },
-    { name: 'Joshua Kimmich', nationCode: 'GER', position: 'CM', pulseScore: 90, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'GER 4-0 QAT (orchestrator, 95% pass accuracy)', order: 5 },
-    { name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', pulseScore: 93, sentiment: 92, trend: 'rising', isLive: true, matchInfo: 'GER 4-0 QAT (2 assists, 5 key passes)', order: 6 },
+    { name: 'Granit Xhaka', nationCode: 'SUI', position: 'CM', pulseScore: 89, sentiment: 87, trend: 'rising', isLive: true, matchInfo: 'SUI 1-0 ESP (bossed midfield, shock upset architect)', order: 5 },
+    { name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', pulseScore: 90, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'ENG 2-0 GHA (controlled midfield, pre-assist)', order: 5 },
+    { name: 'Bukayo Saka', nationCode: 'ENG', position: 'CAM', pulseScore: 89, sentiment: 87, trend: 'rising', isLive: true, matchInfo: 'ENG 2-0 GHA (assist, constant threat)', order: 6 },
     // ── FWD (3) ──
-    { name: 'Christian Pulisic', nationCode: 'USA', position: 'LW', pulseScore: 94, sentiment: 96, trend: 'rising', isLive: true, matchInfo: 'USA 3-0 BIH (goal + assist, host hero again)', order: 7 },
-    { name: 'Hirving Lozano', nationCode: 'MEX', position: 'RW', pulseScore: 89, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 PAR (goal, electric on home soil)', order: 8 },
+    { name: 'Vinícius Júnior', nationCode: 'BRA', position: 'LW', pulseScore: 92, sentiment: 90, trend: 'rising', isLive: true, matchInfo: 'BRA 5-0 CUW (2 goals, dazzled)', order: 7 },
+    { name: 'Rodrygo', nationCode: 'BRA', position: 'RW', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'BRA 5-0 CUW (goal + 2 assists)', order: 8 },
     { name: 'Harry Kane', nationCode: 'ENG', position: 'ST', pulseScore: 95, sentiment: 93, trend: 'rising', isLive: true, matchInfo: 'ENG 2-0 GHA (brace, R32 matchwinner)', order: 9 },
   ],
 }
@@ -184,23 +186,25 @@ const CRISIS_PLAYERS: Record<string, PlayerData[]> = {
     { name: 'Wout Weghorst', nationCode: 'NED', position: 'ST', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'NED 2-2 JPN (missed chances, held to draw)', order: 9 },
   ],
 
-  // ── Round of 32 Crisis XI — worst knockout-round performers (eliminated teams) ──
+  // ── Round of 32 Crisis XI — shock-exit villains (Jun 28 – Jul 2 2026) ──
+  // 11 NEW faces: Spain & Netherlands shock-exited; Japan & Ghana also eliminated
+  // Completely distinct from Group Stage Crisis — features the R32 giant-killings
   'round-of-32': [
     // ── GK (1) ──
-    { name: 'Eloy Room', nationCode: 'CUW', position: 'GK', pulseScore: 14, sentiment: 6, trend: 'falling', isLive: true, matchInfo: 'CUW 0-5 BRA (5 conceded, knocked out)', order: 0 },
+    { name: 'Unai Simón', nationCode: 'ESP', position: 'GK', pulseScore: 22, sentiment: 14, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (SHOCK exit, beaten at near post)', order: 0 },
     // ── DEF (4) ──
-    { name: 'Leandro Bacuna', nationCode: 'CUW', position: 'RB', pulseScore: 16, sentiment: 8, trend: 'falling', isLive: true, matchInfo: 'CUW 0-5 BRA (tormented by Brazil wingers)', order: 2 },
-    { name: 'Yassine Meriah', nationCode: 'TUN', position: 'CB', pulseScore: 18, sentiment: 10, trend: 'falling', isLive: true, matchInfo: 'TUN 1-3 SWE (defense collapsed again, knocked out)', order: 3 },
-    { name: 'Gustavo Gómez', nationCode: 'PAR', position: 'CB', pulseScore: 20, sentiment: 12, trend: 'falling', isLive: true, matchInfo: 'PAR 0-2 MEX (captain, knocked out, exposed)', order: 4 },
-    { name: 'Junior Alonso', nationCode: 'PAR', position: 'LB', pulseScore: 22, sentiment: 14, trend: 'falling', isLive: true, matchInfo: 'PAR 0-2 MEX (overrun on flank, knocked out)', order: 1 },
+    { name: 'Dani Carvajal', nationCode: 'ESP', position: 'RB', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (exposed, shock exit)', order: 2 },
+    { name: 'Virgil van Dijk', nationCode: 'NED', position: 'CB', pulseScore: 26, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (SHOCK exit, defense breached)', order: 3 },
+    { name: 'Aymeric Laporte', nationCode: 'ESP', position: 'CB', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (beaten for winner, shock exit)', order: 4 },
+    { name: 'Nathan Aké', nationCode: 'NED', position: 'LB', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (overrun on flank, shock exit)', order: 1 },
     // ── MID (3) ──
-    { name: 'Hannibal Mejbri', nationCode: 'TUN', position: 'CM', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'TUN 1-3 SWE (overrun, knocked out)', order: 5 },
-    { name: 'Wataru Endo', nationCode: 'JPN', position: 'CM', pulseScore: 26, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'JPN 1-2 MAR (knocked out, overrun by Hakimi)', order: 5 },
-    { name: 'Miguel Almirón', nationCode: 'PAR', position: 'CAM', pulseScore: 22, sentiment: 14, trend: 'falling', isLive: true, matchInfo: 'PAR 0-2 MEX (anonymous, knocked out, no chances)', order: 6 },
+    { name: 'Pedri', nationCode: 'ESP', position: 'CM', pulseScore: 26, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (anonymous, shock exit)', order: 5 },
+    { name: 'Frenkie de Jong', nationCode: 'NED', position: 'CM', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (overrun, shock exit)', order: 5 },
+    { name: 'Mohamed Kudus', nationCode: 'GHA', position: 'CAM', pulseScore: 30, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'GHA 0-2 ENG (anonymous, eliminated)', order: 6 },
     // ── FWD (3) ──
-    { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 18, sentiment: 10, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (SHOCK exit, wasteful, missed sitter)', order: 7 },
-    { name: 'Wout Weghorst', nationCode: 'NED', position: 'ST', pulseScore: 16, sentiment: 8, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (SHOCK exit, missed open goal)', order: 8 },
-    { name: 'Richarlison', nationCode: 'BRA', position: 'LW', pulseScore: 30, sentiment: 24, trend: 'falling', isLive: true, matchInfo: 'BRA 5-0 CUW (scored vs minnows, still doubted for big games)', order: 9 },
+    { name: 'Memphis Depay', nationCode: 'NED', position: 'LW', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (SHOCK exit, missed 3 sitters)', order: 7 },
+    { name: 'Takefusa Kubo', nationCode: 'JPN', position: 'RW', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'JPN 1-2 MAR (anonymous, eliminated by Hakimi)', order: 8 },
+    { name: 'Alvaro Morata', nationCode: 'ESP', position: 'ST', pulseScore: 22, sentiment: 14, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (SHOCK exit, missed open goal)', order: 9 },
   ],
 }
 
