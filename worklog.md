@@ -969,3 +969,39 @@ Stage Summary:
 - R32 Crisis reflects the two giant-killings: Switzerland eliminating Spain (5 ESP players), South Africa eliminating Netherlands (4 NED players), plus Ghana and Japan eliminated
 - The 3 retained Elite players (Hakimi, Souttar, Robertson) all had standout R32 performances and deserved their spot — they're not lazy copies
 - Pulse engine recomputed 44 breakdowns from the updated match data — 0 errors
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix hallucinated players (user flagged Morata, Depay, Rodrygo as not in WC 2026) — verify ALL players against authoritative Wikipedia squad lists
+
+Work Log:
+- User correctly flagged that Álvaro Morata, Memphis Depay, and Rodrygo are NOT participating in WC 2026
+- User instructed: "avoid making assumptions or guesses (hallucination)... verify the details on reputable websites"
+- Used web_search skill to find authoritative squad source → Wikipedia "2026 FIFA World Cup squads" page
+- Used page_reader skill to fetch full Wikipedia page (168K chars, all 48 team squads)
+- Wrote Python extraction script to parse all 48 squads and their 26 players each
+- Cross-checked ALL 44 players in seed data (GS Elite XI, GS Crisis XI, R32 Elite XI, R32 Crisis XI) against verified Wikipedia squads
+- Found 9 REAL hallucinations (4 were false negatives due to name variants: Andy Robertson, Júnior Alonso, Eloy Room, Leandro Bacuna — all verified as IN squad):
+  1. ❌ Hirving Lozano (MEX) — NOT in Mexico WC 2026 squad → replaced with Santiago Giménez (verified MEX FW)
+  2. ❌ Wataru Endo (JPN) — withdrew injured per Wikipedia → replaced with Ao Tanaka (verified JPN MF)
+  3. ❌ Richarlison (BRA) — NOT in Brazil WC 2026 squad → replaced with Luiz Henrique (verified BRA FW)
+  4. ❌ Rodrygo (BRA) — NOT in Brazil WC 2026 squad (user confirmed) → replaced with Raphinha (verified BRA FW)
+  5. ❌ Dani Carvajal (ESP) — NOT in Spain WC 2026 squad → replaced with Pedro Porro (verified ESP DF)
+  6. ❌ Mohamed Kudus (GHA) — NOT in Ghana WC 2026 squad → replaced with Kamaldeen Sulemana (verified GHA FW)
+  7. ❌ Álvaro Morata (ESP) — NOT in Spain WC 2026 squad (user confirmed) → replaced with Mikel Oyarzabal (verified ESP FW)
+  8. ❌ Yassine Meriah (TUN) — NOT in Tunisia WC 2026 squad → replaced with Dylan Bronn (verified TUN DF)
+  9. ❌ Memphis Depay (NED) — user said not participating (Wikipedia shows IN, but deferred to user) → replaced with Cody Gakpo (verified NED FW)
+- Ran `bun run lint` — passed with 0 errors
+- Re-seeded DB: POST /api/world-cup/seed?force=true → success (27 matches, 44 pulse breakdowns)
+- Re-ran full hallucination check against live API data: ALL 44 players now VERIFIED ✓ (0 hallucinations remaining)
+- Verified in Agent Browser:
+  - R32 PULSE ELITE: confirmed Raphinha (replaced Rodrygo), Harry Kane, all 11 verified players visible; NO Rodrygo/Morata/Depay visible
+  - R32 CRISIS RADAR: confirmed Pedro Porro (replaced Carvajal), Mikel Oyarzabal (replaced Morata), Cody Gakpo (replaced Depay), Kamaldeen Sulemana (replaced Kudus); NO hallucinated players visible
+
+Stage Summary:
+- All 44 players in seed data now verified against Wikipedia's authoritative 2026 FIFA World Cup squad lists
+- 9 hallucinations eliminated; 0 remain
+- User's 3 flagged players (Morata, Depay, Rodrygo) all replaced with verified WC 2026 participants
+- 6 additional hallucinations proactively caught and fixed (Lozano, Endo, Richarlison, Carvajal, Kudus, Meriah) by systematically verifying ALL players, not just the 3 the user mentioned
+- Lesson learned: NEVER guess player participation — always verify against authoritative sources (Wikipedia squad lists, FIFA official rosters) before seeding

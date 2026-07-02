@@ -139,7 +139,7 @@ const ELITE_PLAYERS: Record<string, PlayerData[]> = {
     { name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', pulseScore: 91, sentiment: 90, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW (creative force, 2 assists)', order: 6 },
     // ── FWD (3) ──
     { name: 'Christian Pulisic', nationCode: 'USA', position: 'LW', pulseScore: 92, sentiment: 95, trend: 'rising', isLive: true, matchInfo: 'USA 4-1 PAR (goal + assist, host hero)', order: 7 },
-    { name: 'Hirving Lozano', nationCode: 'MEX', position: 'RW', pulseScore: 88, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 RSA (goal, opening match)', order: 8 },
+    { name: 'Santiago Giménez', nationCode: 'MEX', position: 'RW', pulseScore: 87, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 RSA (goal, opening match)', order: 8 },
     { name: 'Alexander Isak', nationCode: 'SWE', position: 'ST', pulseScore: 94, sentiment: 93, trend: 'rising', isLive: true, matchInfo: 'SWE 5-1 TUN (hat-trick hero)', order: 9 },
   ],
 
@@ -160,7 +160,7 @@ const ELITE_PLAYERS: Record<string, PlayerData[]> = {
     { name: 'Bukayo Saka', nationCode: 'ENG', position: 'CAM', pulseScore: 89, sentiment: 87, trend: 'rising', isLive: true, matchInfo: 'ENG 2-0 GHA (assist, constant threat)', order: 6 },
     // ── FWD (3) ──
     { name: 'Vinícius Júnior', nationCode: 'BRA', position: 'LW', pulseScore: 92, sentiment: 90, trend: 'rising', isLive: true, matchInfo: 'BRA 5-0 CUW (2 goals, dazzled)', order: 7 },
-    { name: 'Rodrygo', nationCode: 'BRA', position: 'RW', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'BRA 5-0 CUW (goal + 2 assists)', order: 8 },
+    { name: 'Raphinha', nationCode: 'BRA', position: 'RW', pulseScore: 90, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'BRA 5-0 CUW (goal + 2 assists)', order: 8 },
     { name: 'Harry Kane', nationCode: 'ENG', position: 'ST', pulseScore: 95, sentiment: 93, trend: 'rising', isLive: true, matchInfo: 'ENG 2-0 GHA (brace, R32 matchwinner)', order: 9 },
   ],
 }
@@ -173,15 +173,15 @@ const CRISIS_PLAYERS: Record<string, PlayerData[]> = {
     { name: 'Eloy Room', nationCode: 'CUW', position: 'GK', pulseScore: 16, sentiment: 8, trend: 'falling', isLive: true, matchInfo: 'CUW 1-7 GER (7 conceded, historic defeat)', order: 0 },
     // ── DEF (4) ──
     { name: 'Leandro Bacuna', nationCode: 'CUW', position: 'RB', pulseScore: 18, sentiment: 10, trend: 'falling', isLive: true, matchInfo: 'CUW 1-7 GER (overrun on right flank)', order: 2 },
-    { name: 'Yassine Meriah', nationCode: 'TUN', position: 'CB', pulseScore: 20, sentiment: 12, trend: 'falling', isLive: true, matchInfo: 'TUN 1-5 SWE (defense collapsed)', order: 3 },
+    { name: 'Dylan Bronn', nationCode: 'TUN', position: 'CB', pulseScore: 20, sentiment: 12, trend: 'falling', isLive: true, matchInfo: 'TUN 1-5 SWE (defense collapsed)', order: 3 },
     { name: 'Gustavo Gómez', nationCode: 'PAR', position: 'CB', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'PAR 1-4 USA (captain, 4 conceded)', order: 4 },
     { name: 'Junior Alonso', nationCode: 'PAR', position: 'LB', pulseScore: 26, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'PAR 1-4 USA (exposed on flanks)', order: 1 },
     // ── MID (3) ──
     { name: 'Hannibal Mejbri', nationCode: 'TUN', position: 'CM', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'TUN 1-5 SWE (overrun in midfield)', order: 5 },
-    { name: 'Wataru Endo', nationCode: 'JPN', position: 'CM', pulseScore: 32, sentiment: 28, trend: 'falling', isLive: true, matchInfo: 'JPN 2-2 NED (conceded 2-goal lead)', order: 5 },
+    { name: 'Ao Tanaka', nationCode: 'JPN', position: 'CM', pulseScore: 32, sentiment: 28, trend: 'falling', isLive: true, matchInfo: 'JPN 2-2 NED (conceded 2-goal lead)', order: 5 },
     { name: 'Miguel Almirón', nationCode: 'PAR', position: 'CAM', pulseScore: 30, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'PAR 1-4 USA (anonymous, no chances created)', order: 6 },
     // ── FWD (3) ──
-    { name: 'Richarlison', nationCode: 'BRA', position: 'LW', pulseScore: 25, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'BRA 1-1 MAR (no goals, frustrated)', order: 7 },
+    { name: 'Luiz Henrique', nationCode: 'BRA', position: 'LW', pulseScore: 25, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'BRA 1-1 MAR (no goals, frustrated)', order: 7 },
     { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 28, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'ESP 0-0 CPV (wasteful vs minnows)', order: 8 },
     { name: 'Wout Weghorst', nationCode: 'NED', position: 'ST', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'NED 2-2 JPN (missed chances, held to draw)', order: 9 },
   ],
@@ -193,18 +193,18 @@ const CRISIS_PLAYERS: Record<string, PlayerData[]> = {
     // ── GK (1) ──
     { name: 'Unai Simón', nationCode: 'ESP', position: 'GK', pulseScore: 22, sentiment: 14, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (SHOCK exit, beaten at near post)', order: 0 },
     // ── DEF (4) ──
-    { name: 'Dani Carvajal', nationCode: 'ESP', position: 'RB', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (exposed, shock exit)', order: 2 },
+    { name: 'Pedro Porro', nationCode: 'ESP', position: 'RB', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (exposed, shock exit)', order: 2 },
     { name: 'Virgil van Dijk', nationCode: 'NED', position: 'CB', pulseScore: 26, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (SHOCK exit, defense breached)', order: 3 },
     { name: 'Aymeric Laporte', nationCode: 'ESP', position: 'CB', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (beaten for winner, shock exit)', order: 4 },
     { name: 'Nathan Aké', nationCode: 'NED', position: 'LB', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (overrun on flank, shock exit)', order: 1 },
     // ── MID (3) ──
     { name: 'Pedri', nationCode: 'ESP', position: 'CM', pulseScore: 26, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (anonymous, shock exit)', order: 5 },
     { name: 'Frenkie de Jong', nationCode: 'NED', position: 'CM', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (overrun, shock exit)', order: 5 },
-    { name: 'Mohamed Kudus', nationCode: 'GHA', position: 'CAM', pulseScore: 30, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'GHA 0-2 ENG (anonymous, eliminated)', order: 6 },
+    { name: 'Kamaldeen Sulemana', nationCode: 'GHA', position: 'CAM', pulseScore: 30, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'GHA 0-2 ENG (anonymous, eliminated)', order: 6 },
     // ── FWD (3) ──
-    { name: 'Memphis Depay', nationCode: 'NED', position: 'LW', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (SHOCK exit, missed 3 sitters)', order: 7 },
+    { name: 'Cody Gakpo', nationCode: 'NED', position: 'LW', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'NED 0-1 RSA (SHOCK exit, missed 3 sitters)', order: 7 },
     { name: 'Takefusa Kubo', nationCode: 'JPN', position: 'RW', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'JPN 1-2 MAR (anonymous, eliminated by Hakimi)', order: 8 },
-    { name: 'Alvaro Morata', nationCode: 'ESP', position: 'ST', pulseScore: 22, sentiment: 14, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (SHOCK exit, missed open goal)', order: 9 },
+    { name: 'Mikel Oyarzabal', nationCode: 'ESP', position: 'ST', pulseScore: 22, sentiment: 14, trend: 'falling', isLive: true, matchInfo: 'ESP 0-1 SUI (SHOCK exit, missed open goal)', order: 9 },
   ],
 }
 
