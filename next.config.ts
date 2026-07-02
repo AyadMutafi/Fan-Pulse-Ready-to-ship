@@ -5,14 +5,16 @@ import type { NextConfig } from "next";
 // z-cdn.chatglm.cn (logo icon), inline styles + scripts (Next.js runtime
 // requires these for hydration), data: URIs (for unoptimized images).
 //
-// IMPORTANT — frame-ancestors: MUST allow the Z.ai preview panel origins,
-// otherwise the preview iframe shows a blank/sad-face icon. Allowed:
-//   - 'self'                → same-origin embedding
-//   - https://*.space-z.ai  → Z.ai preview/chat panels (preview-chat-*.space-z.ai)
+// IMPORTANT — frame-ancestors: The Z.ai preview panel embeds this app in an
+// iframe. The parent origin varies (chat UI may be served from *.space-z.ai,
+// *.z.ai, or other infra domains depending on deployment). To guarantee the
+// preview ALWAYS loads, we allow ANY https origin to frame us. This is a dev
+// preview — embeddability is the priority. tighten for production.
 //
-// Note: 'unsafe-inline' for scripts is a pragmatic trade-off — Next.js App
-// Router injects inline scripts for hydration. Removing it would break the
-// app.
+// X-Frame-Options is deliberately OMITTED. When both X-Frame-Options and CSP
+// frame-ancestors are present, some browsers honor the stricter of the two,
+// which can cause "refused to connect" errors. CSP frame-ancestors is the
+// modern standard; relying on it alone avoids conflicts.
 const cspHeader = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is",
@@ -20,7 +22,7 @@ const cspHeader = [
   "img-src 'self' https://flagcdn.com https://z-cdn.chatglm.cn data:",
   "font-src 'self' data:",
   "connect-src 'self' https://cloud.umami.is",
-  "frame-ancestors 'self' https://*.space-z.ai https://space-z.ai",
+  "frame-ancestors 'self' https: http:",
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
@@ -32,13 +34,10 @@ const securityHeaders = [
     key: 'Content-Security-Policy',
     value: cspHeader,
   },
-  {
-    key: 'X-Frame-Options',
-    // MUST be SAMEORIGIN (not DENY) so the Z.ai preview panel iframe can
-    // embed the app. CSP frame-ancestors above is the authoritative control
-    // for modern browsers; this is the legacy fallback.
-    value: 'SAMEORIGIN',
-  },
+  // X-Frame-Options intentionally NOT set. CSP frame-ancestors above is the
+  // sole authority for framing policy. Setting X-Frame-Options to SAMEORIGIN
+  // here would block cross-origin embedding (the Z.ai preview panel is a
+  // different origin) and re-introduce the "refused to connect" error.
   {
     key: 'X-Content-Type-Options',
     value: 'nosniff', // Prevents MIME-type sniffing
