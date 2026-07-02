@@ -1044,3 +1044,30 @@ Stage Summary:
 - Fix: replaced all match data with web-verified facts (Wikipedia/Olympics.com/ESPN/FIFA), removed fabricated R32 Elite/Crisis XI, corrected group-stage player claims, fixed the "WC Group R32" → "WC Round of 32" label.
 - Artifact: /home/z/my-project/VERIFIED_DATA.md documents every fact + source for future reference; seed file carries an ANTI-HALLUCINATION NOTICE.
 - Verified end-to-end in browser: hallucinated card gone, real matches show with correct labels, no errors.
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Fix "why I can't see the teams" — Round of 32 tab shows blank space below PULSE ELITE / CRISIS RADAR buttons
+
+Work Log:
+- User reported blank space on World Cup tab (screenshot: pasted_image_1783008471196.png). VLM analysis confirmed: stage tabs + PULSE ELITE/CRISIS RADAR buttons visible, but main content area below completely empty.
+- Queried database directly via tsx script: confirmed only Group Stage (order=1) has elite (11 players) + crisis (11 players) selections. Round of 32 (order=2, status=live) and all later stages have ZERO selections.
+- Root cause traced to Task hallucination-fix-1: the previous assistant deliberately removed the fabricated R32 Elite/Crisis XI (which contained hallucinated match results like "GER 4-0 QAT" and unverified player claims) and left the seed file with explicit comments "Round of 32: NO Elite XI" / "NO Crisis XI" for anti-hallucination compliance.
+- The UI gap: page.tsx rendered PULSE ELITE / CRISIS RADAR toggle buttons whenever stageStatus !== 'upcoming', but the formation pitch Card only rendered when `currentData` was truthy (line 1732 `{currentData && (...)}`). With both eliteData and crisisData null for R32, the pitch area rendered nothing — leaving blank space with no explanation.
+- Fix approach: did NOT fabricate R32 player data (would re-introduce the hallucination problem the user explicitly flagged). Instead added an honest empty-state UI that explains the situation.
+- Added 3 translation keys to src/context/LanguageContext.tsx: wc.lineups_pending_title ("Lineups Being Verified"), wc.lineups_pending_desc ("This stage's Elite & Crisis teams are being verified against official sources. They'll appear here once confirmed."), wc.lineups_pending_btn ("Switch to Group Stage to see verified teams").
+- Added ShieldCheck + ArrowLeft to lucide-react imports in page.tsx.
+- Inserted empty-state block in page.tsx between the toggle buttons and the formation card: renders when `!currentData` (and stage is live/completed, not loading). Shows a ShieldCheck icon in a purple circle, the title, description, and a button that switches to the Group Stage (order===1) so users can immediately see verified teams.
+- Ran `bun run lint` — passed with 0 errors.
+- Browser-verified with agent-browser:
+  * Navigated to / → clicked WORLD CUP tab → Round of 32 (LIVE) auto-selected.
+  * Screenshot confirmed the empty-state: "Lineups Being Verified" + description + "Switch to Group Stage to see verified teams" button, NO blank space.
+  * Clicked the switch button → switched to Group Stage (COMPLETED) → confirmed real verified players render on the pitch (Andrew Robertson, Jamal Musiala, Vinícius, Achraf Hakimi, Jude Bellingham, etc.) with PULSE ELITE active.
+- Dev log clean: all API calls 200 OK, no errors.
+
+Stage Summary:
+- Root cause: R32 stage has no elite/crisis selections seeded (deliberately removed in Task hallucination-fix-1 to eliminate fabricated data), but the UI showed blank space with no explanation.
+- Fix: added honest empty-state UI explaining lineups are pending verification + a one-click switch to Group Stage where verified teams exist. No player data fabricated.
+- Anti-hallucination stance preserved: R32 teams remain unseeded until verified against authoritative sources (Wikipedia squads + official match results). User can see Group Stage teams immediately via the switch button.
+- To fully populate R32 teams in future: use web_search + page_reader to verify each R32 player's WC 2026 participation AND their actual R32 match performance before seeding — do NOT guess.

@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Activity, TrendingUp, TrendingDown, Minus, Play, Star, AlertTriangle,
-  Lock, Clock, Zap, Shield, CircleDot,
-  Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X, ChevronRight, Check
+  Lock, Clock, Zap, Shield, ShieldCheck, CircleDot,
+  Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X, ChevronRight, Check, ArrowLeft
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { FanCardButton } from '@/components/common/FanCardButton'
@@ -1727,6 +1727,39 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
               {t('wc.crisis_radar')}
             </button>
           </div>
+
+          {/* Empty state — stage is live/completed but no selections seeded yet */}
+          {!currentData && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center rounded-2xl border border-[#E0E0E0]/50 dark:border-white/5 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-12 px-4 text-center"
+            >
+              <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-[#6C2BD9]/10 dark:bg-[#6C2BD9]/20">
+                <ShieldCheck className="size-6 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+              </div>
+              <p className="text-base font-bold text-[#1A1A1A] dark:text-white">
+                {t('wc.lineups_pending_title')}
+              </p>
+              <p className="mt-2 max-w-md text-sm text-[#666] dark:text-[#CCCCCC]">
+                {t('wc.lineups_pending_desc')}
+              </p>
+              {stages.find(s => s.order === 1) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const gs = stages.find(s => s.order === 1)
+                    if (gs) setSelectedStageId(gs.id)
+                  }}
+                  className="mt-4 gap-1.5 border-[#6C2BD9]/30 text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/5"
+                >
+                  <ArrowLeft className="size-3.5" />
+                  {t('wc.lineups_pending_btn')}
+                </Button>
+              )}
+            </motion.div>
+          )}
 
           {/* Formation Card */}
           {currentData && (

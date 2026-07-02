@@ -91,6 +91,9 @@ const translations: Record<string, string> = {
   'wc.crisis_avg': 'Crisis Avg Pulse',
   'wc.live_players': 'Live Players',
   'wc.total_votes': 'Total Votes',
+  'wc.lineups_pending_title': 'Lineups Being Verified',
+  'wc.lineups_pending_desc': 'This stage\'s Elite & Crisis teams are being verified against official sources. They\'ll appear here once confirmed.',
+  'wc.lineups_pending_btn': 'Switch to Group Stage to see verified teams',
 }
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
