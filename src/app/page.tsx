@@ -22,6 +22,24 @@ import FlagImage from '@/components/common/FlagImage'
 import { FanTalkPanel } from '@/components/FanTalkPanel'
 import { getPulseScoreColor, getPulseScoreColorClass } from '@/types'
 
+// ── World Cup stage label helper ─────────────────────────────
+// Renders an accurate label for a WC match based on its `group` value.
+// Group-stage matches use letters A-L; knockout rounds use R32/R16/QF/SF/Final.
+// (Previously everything was labelled "WC Group {x}", which produced the
+// nonsensical "WC Group R32" for knockout matches.)
+function wcStageLabel(group: string | null | undefined): string {
+  if (!group) return 'World Cup 2026'
+  if (/^[A-L]$/.test(group)) return `WC Group ${group}`
+  switch (group) {
+    case 'R32': return 'WC Round of 32'
+    case 'R16': return 'WC Round of 16'
+    case 'QF': return 'WC Quarter Finals'
+    case 'SF': return 'WC Semi Finals'
+    case 'Final': return 'WC Final'
+    default: return 'World Cup 2026'
+  }
+}
+
 // ── Types ────────────────────────────────────────────────────
 
 interface WCSelectionPlayer {
@@ -255,7 +273,7 @@ function HomeTab() {
             homeSentiment: Math.round(m.homeTeam.sentiment),
             awaySentiment: Math.round(m.awayTeam.sentiment),
             live: m.status === 'live',
-            league: m.league === 'WC' ? `WC Group ${m.group}` : m.league,
+            league: m.league === 'WC' ? wcStageLabel(m.group) : m.league,
           }))
           setApiMatches(mapped)
         }

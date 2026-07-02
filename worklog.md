@@ -1005,3 +1005,42 @@ Stage Summary:
 - User's 3 flagged players (Morata, Depay, Rodrygo) all replaced with verified WC 2026 participants
 - 6 additional hallucinations proactively caught and fixed (Lozano, Endo, Richarlison, Carvajal, Kudus, Meriah) by systematically verifying ALL players, not just the 3 the user mentioned
 - Lesson learned: NEVER guess player participation — always verify against authoritative sources (Wikipedia squad lists, FIFA official rosters) before seeding
+
+---
+Task ID: hallucination-fix-1
+Agent: Main Agent
+Task: Eliminate hallucinated 2026 World Cup match/player data — user flagged the "GER 4-0 QAT" card labelled "WC Group R32" as fabrication. Verify all data against real live web sources instead of guessing.
+
+Work Log:
+- Read /home/z/my-project/worklog.md to understand prior work (flags, pitch, elite/crisis teams)
+- Analyzed uploaded screenshot (pasted_image_1782995050841.png) via VLM: showed two match cards — "GER vs QAT 4-0 / WC Group R32" (hallucinated) and "IRN vs NZL 2-2 / WC Group G" (real)
+- Inspected data sources: src/app/api/matches/route.ts, src/app/api/fetch-live-matches/route.ts, src/app/api/world-cup/seed/route.ts (the source of the fabricated data)
+- Ran z-ai web_search + page_reader against Wikipedia (2026_FIFA_World_Cup + knockout_stage), Olympics.com R32 bracket, ESPN, Sky Sports
+- Extracted VERIFIED real data:
+  * 24 group-stage Matchday-1 matches (Groups A-L) with real scores + goalscorers
+  * 16 R32 matches: 10 completed (Jun 28-Jul 2) + 6 upcoming (Jul 3)
+- Confirmed the seed's R32 data was 100% fabricated: "GER 4-0 QAT" (real: GER 1-1 PAR, Germany eliminated on pens), "ENG 2-0 GHA" (real: ENG 2-1 COD), "RSA 1-0 NED" (real: RSA 0-1 CAN), "MAR 2-1 JPN" (real: BRA 2-1 JPN), "BRA 5-0 CUW" (real: BRA 2-1 JPN), "AUS 1-0 ECU" (real: AUS vs EGY upcoming), "SCO 2-1 HAI"/"SWE 3-1 TUN"/"MEX 2-0 PAR"/"SUI 1-0 ESP" (all wrong)
+- Confirmed Groups I-L Matchday-1 were wrongly marked "not yet played" — they WERE played (FRA 3-1 SEN, ENG 4-2 CRO, POR 1-1 COD, etc.)
+- Confirmed player claims were fabricated: e.g. "Isak hat-trick" for SWE 5-1 TUN was really an Ayari brace + Isak 1 goal
+- Created /home/z/my-project/VERIFIED_DATA.md as single source of truth (every fact + source citation)
+- Rewrote src/app/api/world-cup/seed/route.ts with ONLY verified data:
+  * 24 group-stage + 16 R32 matches (10 completed + 6 upcoming, status='upcoming')
+  * Group-stage Elite/Crisis XI rebuilt from VERIFIED goalscorers; matchInfo cites only verified score + verified goal minute (no invented "MOTM"/"masterclass")
+  * Removed fabricated R32 Elite/Crisis XI entirely (stage still live; player-level claims unverifiable)
+  * Excluded Morata/Depay/Rodrygo per user (non-participants)
+  * Added ANTI-HALLUCINATION NOTICE at top of file
+- Fixed "WC Group R32" label bug in src/app/page.tsx: added wcStageLabel() helper — group letters A-L → "WC Group X"; R32 → "WC Round of 32"; R16/QF/SF/Final handled
+- Ran `bun run lint` — passed (no errors)
+- Re-seeded DB: POST /api/world-cup/seed?force=true with admin password → success (7 stages, 48 teams, 40 matches, 22 players, 0 errors)
+- Verified /api/matches?league=WC returns correct data: no GER-QAT, real GER 1-1 PAR, ENG 2-1 COD, RSA 0-1 CAN, BRA 2-1 JPN, NED 1-1 MAR, plus 6 upcoming Jul 3 matches
+- Browser-verified with agent-browser:
+  * Page text contains "Round of 32", does NOT contain "Group R32" or "GER 4-0 QAT"
+  * VLM confirmed visible cards show "WC Round of 32" label (ESP-AUT 0-0, POR-CRO 0-0, BEL-SEN 3-2, NED-MAR 1-1)
+  * Group K cards (POR 1-1 COD, UZB 1-3 COL) correctly labeled "WC Group K"
+  * No console errors, no runtime errors in dev.log
+
+Stage Summary:
+- Root cause: seed file contained fabricated R32 match results and player-performance claims presented as "REAL" and "verified against FIFA/ESPN/Wikipedia" — that verification claim was itself false.
+- Fix: replaced all match data with web-verified facts (Wikipedia/Olympics.com/ESPN/FIFA), removed fabricated R32 Elite/Crisis XI, corrected group-stage player claims, fixed the "WC Group R32" → "WC Round of 32" label.
+- Artifact: /home/z/my-project/VERIFIED_DATA.md documents every fact + source for future reference; seed file carries an ANTI-HALLUCINATION NOTICE.
+- Verified end-to-end in browser: hallucinated card gone, real matches show with correct labels, no errors.
