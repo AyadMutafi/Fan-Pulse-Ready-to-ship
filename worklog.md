@@ -1283,3 +1283,88 @@ Stage Summary:
 - reddit-article.md: false Pulisic-in-Elite-XI claim replaced with verified Messi/Musiala/Bellingham/Isak claim (cross-checked against VERIFIED_DATA.md Part 4). Yamal/Weghorst Crisis reference preserved (factually correct).
 - ARCHITECTURE.md: target-architecture document now clearly marked as aspirational at the very top; readers can no longer mistake the described component/hook/React-Query structure for the current implementation.
 - No source code changed — documentation-only fix. No lint run needed (lint covers .ts/.tsx only).
+
+---
+Task ID: final-anti-hallucination-audit
+Agent: Main Agent
+Task: Final anti-hallucination audit of entire codebase — grep for fabricated data, verify hardcoded player names + scorelines, audit goals route, browser-verify all 5 criteria.
+
+Work Log:
+
+## 1. Fake-data string grep (src/ tree) — classification
+
+Grep targets: @angry_supporter, @football_daily, @neutral_watcher, tactical_nerd, happy_gooner, disappointed_fan, stat_lover, ESPN Match Report, Math.random, MOCK_, mock, fake, dummy, placeholder, TODO, FIXME.
+
+**Fake author handles (@angry_supporter etc.)** — all hits in src/lib/live-fan-talk.ts (FAKE_AUTHOR_PATTERNS detection array lines 40-46 + comments) and src/app/api/fan-talk/route.ts (comments + purge logic). CLASSIFICATION: anti-hallucination DETECTION infrastructure, NOT seeding. LEGITIMATE.
+
+**ESPN Match Report** — 2 hits, both in comments documenting fake-author detection. LEGITIMATE.
+
+**Math.random (5 hits)**:
+- src/lib/pulse-engine.ts:12 — comment "No Math.random()". LEGITIMATE.
+- src/app/page.tsx:301 — generates anonymous session ID for fan votes (anon-${Date.now()}-${Math.random()...}). Internal session identifier, never displayed as content. LEGITIMATE.
+- src/components/ui/sidebar.tsx:611 — shadcn/ui Skeleton default width. LEGITIMATE (UI library boilerplate).
+- src/app/api/social-sentiment/route.ts:320 — comment "Previously these were Math.random()". LEGITIMATE.
+- src/app/api/pulse-score/route.ts:11 — comment "No Math.random()". LEGITIMATE.
+
+**mock/fake/dummy/placeholder**:
+- src/lib/live-fan-talk.ts, feed-sentiment.ts, pulse-engine.ts, fan-talk/route.ts — all comments documenting the anti-fake system / "replaces old placeholder". LEGITIMATE.
+- src/app/page.tsx:76-125,1134,1243,1253,1336 — MOCK_RATINGS, MOCK_GOALS, MOCK_TOTW arrays + RatingsTab/GoalsTab/TOTWTab. CLASSIFICATION: DEAD CODE. All 3 tabs render <PausedTabOverlay> (COMING SOON lock screen) at lines 2171-2173; functions never invoked. Contains scoreline mismatches (see §3) but NOT displayed. Latent risk only.
+- src/app/admin/feed-monitor/page.tsx — placeholder= HTML attributes. LEGITIMATE.
+- src/components/ui/* (input-otp hasFakeCaret, input/textarea/select/command placeholder: classes) — shadcn/ui internal. LEGITIMATE.
+
+**TODO/FIXME** — 0 matches. CLEAN.
+
+## 2. Hardcoded player names — cross-reference vs VERIFIED_DATA.md Parts 1-4
+
+- Elite XI (seed route lines 176-189): 11/11 match Part 4 (Ochoa, Hakimi, Souttar, Montes, Robertson, Musiala, Bellingham, Wirtz, Vinícius, Isak, Messi). NO mismatches.
+- Crisis XI (seed route lines 203-216): 11/11 match Part 4 (Room, Bacuna, Bronn, Gómez, Alonso, Mejbri, Tanaka, Almirón, Luiz Henrique, Yamal, Weghorst). NO mismatches.
+- Arena Intelligence (page.tsx lines 440-490): Messi, Mbappé, Quiñones, Jiménez — all in Part 1. NO mismatches.
+- MOCK_RATINGS/MOCK_GOALS/MOCK_TOTW (dead code): contains Richarlison, Maguire, Van Dijk, Dias, Hernández, Alisson, Rodri, Doué, Olise — NOT in VERIFIED_DATA, but in DEAD CODE (paused tabs), NOT displayed to users.
+- r32-buzz-ranker.ts VERIFIED_POOL: file does NOT exist (confirmed in Prompt 3). N/A.
+- RESULT: No hardcoded player names DISPLAYED to users that contradict VERIFIED_DATA. PASS.
+
+## 3. Hardcoded scorelines — verify against VERIFIED_DATA.md
+
+- src/app/page.tsx MOCK_GOALS (DEAD CODE, lines 95-110): contains "ENG 2-1 CRO" (should be 4-2), "GER 3-0 CUW" (should be 7-1), "FRA 2-0 SEN" (should be 3-1) — 3 MISMATCHES, but in dead code (Goals tab paused). Also friendlies with non-WC teams (NIR, ISL, PER, CRC) — dead code.
+- src/app/page.tsx Arena Intelligence (lines 440-490): Mexico 2-0 South Africa ✓, Germany 7-1 Curaçao ✓, Argentina 3-0 Algeria ✓, England 4-2 Croatia ✓, Spain 0-0 Cape Verde ✓, France 3-1 Senegal ✓, Iran 2-2 New Zealand ✓, NED 2-2 JPN ✓. ALL 8 MATCH.
+- src/app/api/world-cup/seed/route.ts: all 40 scorelines (24 group + 16 R32) match VERIFIED_DATA.md Parts 1-2. ALL MATCH.
+- src/components: no scorelines (only FlagImage code-mapping comment).
+- RESULT: All DISPLAYED scorelines match VERIFIED_DATA.md. The 3 mismatches are confined to dead MOCK_GOALS code. PASS.
+
+## 4. /api/goals/route.ts audit — REMOVED
+
+- Line 26: minute: [23, 45, 12, 67, 34, 56, 78, 89][i] ?? 45 — INVENTED minutes (hardcoded array indexed by position). CONFIRMED fabrication.
+- Line 31: ...(i % 2 === 0 ? ['HEADER'] : []) — INVENTED HEADER tag on even indices. CONFIRMED fabrication.
+- Caller check: grep /api/goals|fetchGoals|goals/route in src/ → 0 matches. DEAD CODE.
+- ACTION: Removed src/app/api/goals/route.ts + directory. Lint passes.
+
+## 5. Browser verification (Agent Browser, all 5 criteria)
+
+Opened http://localhost:3000/, clicked through Home / Sentiments / World Cup tabs, opened Fan Talk panel on MEX-ECU match.
+
+(a) No fabricated authors in Fan Talk — PASS. Fan Talk panel showed 8 real posts with source-domain authors (📰 www.instagram.com, 📰 www.euronews.com, 📰 www.reutersconnect.com, etc.). DOM scan for 8 fake handles (@angry_supporter, @football_daily, @neutral_watcher, tactical_nerd, happy_gooner, disappointed_fan, stat_lover, ESPN Match Report) returned []. 
+
+(b) No false claims in Arena Intelligence — PASS. All 7 verified insights match VERIFIED_DATA.md: Mexico 2-0 South Africa opener (Jun 11), Germany 7-1 Curaçao largest margin, Messi hat-trick vs Algeria (17',60',76'), England 4-2 Croatia highest-scoring, Spain 0-0 Cape Verde shock, France 3-1 Senegal Mbappé brace (66',90+6'), Iran 2-2 New Zealand tied with NED 2-2 JPN.
+
+(c) All match scorelines match VERIFIED_DATA.md — PASS. Home page showed all R32 upcoming (ESP 0-0 AUT, POR 0-0 CRO, SUI 0-0 ALG, AUS 0-0 EGY, ARG 0-0 CPV, COL 0-0 GHA ✓), R32 completed (USA 2-0 BIH, ENG 2-1 COD, BEL 3-2 SEN, NED 1-1 MAR, CIV 1-2 NOR, FRA 3-0 SWE, BRA 2-1 JPN, GER 1-1 PAR, MEX 2-0 ECU, RSA 0-1 CAN ✓), and group stage (POR 1-1 COD, UZB 1-3 COL, ENG 4-2 CRO, GHA 1-0 PAN, IRN 2-2 NZL, FRA 3-1 SEN, IRQ 1-4 NOR, ARG 3-0 ALG ✓). All 24 displayed scorelines match.
+
+(d) All player names in Elite/Crisis XI match verified selections — PASS. Elite XI (Group Stage): Guillermo Ochoa (GK), Andrew Robertson (LB), Achraf Hakimi (RB), Harry Souttar (CB), César Montes (CB), Jamal Musiala (CM), Jude Bellingham (CM), Florian Wirtz (CAM), Vinícius Júnior (LW), Lionel Messi (RW), Alexander Isak (ST) — 11/11 match Part 4. Crisis XI: Eloy Room (GK), Junior Alonso (LB), Leandro Bacuna (RB), Dylan Bronn (CB), Gustavo Gómez (CB), Hannibal Mejbri (CM), Ao Tanaka (CM), Miguel Almirón (CAM), Luiz Henrique (LW), Lamine Yamal (RW), Wout Weghorst (ST) — 11/11 match Part 4. Sentiments Hub: all 22 verified players, no forbidden names (Morata/Depay/Rodrygo absent). R32 stage correctly shows empty Elite/Crisis (per Part 4: "REMOVE ENTIRELY" until stage completes).
+
+(e) Every Source link in Fan Talk points to real external URL — PASS. 8 real external URLs found: instagram.com/p/DaPOQ4ElZvM, facebook.com/cnn/videos/..., euronews.com/video/2026/07/01/mexico-fans-celebrate..., reutersconnect.com/item/fifa-world-cup-2026-round-of-32-mexico-v-ecuador..., youtube.com/watch?v=P2QWa_mce1Q, theguardian.com/football/live/2026/jul/01/fifa-world-cup-2026-live-mexico-v-ecuador..., youtube.com/watch?v=nWcycS2Zl_E, facebook.com/popdownload/posts/.... DOM scan for synthetic cuid pattern /post/cm[a-z0-9]+-\d+ returned []. Zero synthetic URLs.
+
+Dev log check: no errors/warnings during browsing session.
+
+## Follow-up fix applied
+- Removed dead /api/goals/route.ts (invented minutes [23,45,12,67,...] + HEADER-on-even-indices tags; 0 callers confirmed). Lint clean.
+
+## Remaining dead code (reported, NOT removed — not displayed to users)
+- MOCK_RATINGS, MOCK_GOALS, MOCK_TOTW + RatingsTab/GoalsTab/TOTWTab in src/app/page.tsx. All 3 tabs behind PausedTabOverlay (COMING SOON). Contains 3 scoreline mismatches (ENG 2-1 CRO vs 4-2, GER 3-0 CUW vs 7-1, FRA 2-0 SEN vs 3-1) + friendlies with non-WC teams. Latent risk only — recommend future cleanup to remove dead mock arrays and unreachable tab functions.
+
+Stage Summary:
+- AUDIT RESULT: PASS. All 5 browser-verification criteria pass. No fabricated data reaches the user.
+- Fake-data string grep: all hits classified as (1) anti-hallucination detection infrastructure, (2) legitimate comments, (3) shadcn/ui internals, or (4) dead mock code behind paused tabs. Zero live fake data.
+- Hardcoded player names: all displayed names (Elite XI, Crisis XI, Arena Intelligence, Sentiments Hub) match VERIFIED_DATA.md Parts 1 & 4. Non-verified names exist only in dead MOCK_* code.
+- Hardcoded scorelines: all displayed scorelines (home featured matches, Arena Intelligence, World Cup tab) match VERIFIED_DATA.md Parts 1-2. 3 mismatches confined to dead MOCK_GOALS code.
+- /api/goals/route.ts: removed (dead code with invented minutes/tags, 0 callers).
+- Fan Talk: 8 real posts with real source-domain authors + 8 real external URLs; 0 fake handles; 0 synthetic cuid URLs.
+- Lint clean. Dev log clean. No runtime errors.
