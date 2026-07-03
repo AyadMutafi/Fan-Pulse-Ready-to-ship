@@ -1168,3 +1168,25 @@ Stage Summary:
 - Fix: replaced the entire auto-generator with a hardcoded set of 7 verified insights sourced from VERIFIED_DATA.md (each with an inline Part/Group/match citation) + 1 dynamic fan-vote count. Extended the apiMatches state type to include status/group/matchDate for correct stage labeling elsewhere. Added a block comment documenting the original hallucinations and their root causes to prevent regression.
 - Browser-verified: Arena Intelligence section shows Mexico 2-0 South Africa as the opener (Jun 11), Germany 7-1 Curaçao as biggest win, Messi hat-trick, England 4-2 Croatia, Spain 0-0 Cape Verde shock, Mbappé brace, Iran/NZ 2-2 draw, and the live fan-vote count. ZERO forbidden strings found in the DOM. All 16 required verified facts present.
 - Artifacts modified: src/app/page.tsx (apiMatches type extended + arenaIntel useMemo replaced with verified hardcoded insights + block comment).
+
+---
+Task ID: r32-buzz-label-fix
+Agent: Main Agent
+Task: Fix misleading buzzSource labeling in src/lib/r32-buzz-ranker.ts (claimed: rankR32Teams() always sets buzzSource='live' at ~line 198 even when using embedded static buzzScore values from VERIFIED_POOL; required: default to 'baseline', only 'live' when forceRefresh && a live score differs; add comment above VERIFIED_POOL; update 'LIVE BUZZ' badge in page.tsx to show 'VERIFIED BUZZ' when buzzSource==='baseline').
+
+Work Log:
+- Attempted to read src/lib/r32-buzz-ranker.ts → FILE DOES NOT EXIST (cat: No such file or directory).
+- Ran Glob **/r32-buzz-ranker.ts → no results.
+- Ran Grep for buzzSource|VERIFIED_POOL|rankR32Teams|r32-buzz across the entire /home/z/my-project tree → no matches.
+- Ran Grep for LIVE BUZZ|live buzz|buzzScore|buzz_score → no matches in any source file.
+- Ran Grep for r32|R32|roundOf32|round-of-32 in src/ → only 2 files matched: src/app/page.tsx (wcStageLabel helper for match labels — no buzz logic) and src/app/api/world-cup/seed/route.ts (R32 match seeding — no buzz logic). Neither contains any buzz-ranker, buzzSource, or VERIFIED_POOL references.
+- Listed src/lib/ contents: admin-auth.ts, db.ts, feed-sentiment.ts, flag-mode.ts, live-fan-talk.ts, national-teams.ts, pulse-engine.ts, rate-limit.ts, utils.ts. No r32-buzz-ranker.ts present.
+- The only file containing the substring "buzz" is src/app/api/fan-card/route.tsx, and the match is an unrelated string literal ("Fans are absolutely buzzing") in a fan-card subtitle — not a buzz-ranker module.
+- Checked worklog.md for any prior mention of buzz/r32-buzz/rankR32/VERIFIED_POOL → no matches. No prior task created or removed such a file.
+- Conclusion: the premise of this prompt is FALSE. The file src/lib/r32-buzz-ranker.ts does not exist, and no buzzSource/VERIFIED_POOL/rankR32Teams/buzzScore/"LIVE BUZZ" badge exists anywhere in the codebase. There is nothing to fix.
+
+Stage Summary:
+- NO CODE CHANGES MADE. Refused to fabricate a file or feature to "fix" a non-existent bug, because doing so would itself be a hallucination — the exact failure mode eliminated in the preceding fan-talk-hallucination-fix and arena-intel-hallucination-fix tasks.
+- Verified the absence via 5 independent searches: direct file read, glob, content grep for 4 distinct identifiers (buzzSource, VERIFIED_POOL, rankR32Teams, r32-buzz), content grep for buzzScore/"LIVE BUZZ", and full-tree grep for "buzz". Also cross-checked the worklog for any history of the file being created/removed. All searches came up empty.
+- If the user intended a different file path or a differently-named module, they should clarify the actual location. As written, the prompt references a file that is not part of this project.
+- Artifact: this worklog entry is the only output. No source files were modified.
