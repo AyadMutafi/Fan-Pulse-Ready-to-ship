@@ -1006,3 +1006,69 @@
   1006→- 6 additional hallucinations proactively caught and fixed (Lozano, Endo, Richarlison, Carvajal, Kudus, Meriah) by systematically verifying ALL players, not just the 3 the user mentioned
   1007→- Lesson learned: NEVER guess player participation — always verify against authoritative sources (Wikipedia squad lists, FIFA official rosters) before seeding
   1008→
+  1009→---
+  1010→Task ID: hallucination-fix-1
+  1011→Agent: Main Agent
+  1012→Task: Eliminate hallucinated 2026 World Cup match/player data — user flagged the "GER 4-0 QAT" card labelled "WC Group R32" as fabrication. Verify all data against real live web sources instead of guessing.
+  1013→
+  1014→Work Log:
+  1015→- Read /home/z/my-project/worklog.md to understand prior work (flags, pitch, elite/crisis teams)
+  1016→- Analyzed uploaded screenshot (pasted_image_1782995050841.png) via VLM: showed two match cards — "GER vs QAT 4-0 / WC Group R32" (hallucinated) and "IRN vs NZL 2-2 / WC Group G" (real)
+  1017→- Inspected data sources: src/app/api/matches/route.ts, src/app/api/fetch-live-matches/route.ts, src/app/api/world-cup/seed/route.ts (the source of the fabricated data)
+  1018→- Ran z-ai web_search + page_reader against Wikipedia (2026_FIFA_World_Cup + knockout_stage), Olympics.com R32 bracket, ESPN, Sky Sports
+  1019→- Extracted VERIFIED real data:
+  1020→  * 24 group-stage Matchday-1 matches (Groups A-L) with real scores + goalscorers
+  1021→  * 16 R32 matches: 10 completed (Jun 28-Jul 2) + 6 upcoming (Jul 3)
+  1022→- Confirmed the seed's R32 data was 100% fabricated: "GER 4-0 QAT" (real: GER 1-1 PAR, Germany eliminated on pens), "ENG 2-0 GHA" (real: ENG 2-1 COD), "RSA 1-0 NED" (real: RSA 0-1 CAN), "MAR 2-1 JPN" (real: BRA 2-1 JPN), "BRA 5-0 CUW" (real: BRA 2-1 JPN), "AUS 1-0 ECU" (real: AUS vs EGY upcoming), "SCO 2-1 HAI"/"SWE 3-1 TUN"/"MEX 2-0 PAR"/"SUI 1-0 ESP" (all wrong)
+  1023→- Confirmed Groups I-L Matchday-1 were wrongly marked "not yet played" — they WERE played (FRA 3-1 SEN, ENG 4-2 CRO, POR 1-1 COD, etc.)
+  1024→- Confirmed player claims were fabricated: e.g. "Isak hat-trick" for SWE 5-1 TUN was really an Ayari brace + Isak 1 goal
+  1025→- Created /home/z/my-project/VERIFIED_DATA.md as single source of truth (every fact + source citation)
+  1026→- Rewrote src/app/api/world-cup/seed/route.ts with ONLY verified data:
+  1027→  * 24 group-stage + 16 R32 matches (10 completed + 6 upcoming, status='upcoming')
+  1028→  * Group-stage Elite/Crisis XI rebuilt from VERIFIED goalscorers; matchInfo cites only verified score + verified goal minute (no invented "MOTM"/"masterclass")
+  1029→  * Removed fabricated R32 Elite/Crisis XI entirely (stage still live; player-level claims unverifiable)
+  1030→  * Excluded Morata/Depay/Rodrygo per user (non-participants)
+  1031→  * Added ANTI-HALLUCINATION NOTICE at top of file
+  1032→- Fixed "WC Group R32" label bug in src/app/page.tsx: added wcStageLabel() helper — group letters A-L → "WC Group X"; R32 → "WC Round of 32"; R16/QF/SF/Final handled
+  1033→- Ran `bun run lint` — passed (no errors)
+  1034→- Re-seeded DB: POST /api/world-cup/seed?force=true with admin password → success (7 stages, 48 teams, 40 matches, 22 players, 0 errors)
+  1035→- Verified /api/matches?league=WC returns correct data: no GER-QAT, real GER 1-1 PAR, ENG 2-1 COD, RSA 0-1 CAN, BRA 2-1 JPN, NED 1-1 MAR, plus 6 upcoming Jul 3 matches
+  1036→- Browser-verified with agent-browser:
+  1037→  * Page text contains "Round of 32", does NOT contain "Group R32" or "GER 4-0 QAT"
+  1038→  * VLM confirmed visible cards show "WC Round of 32" label (ESP-AUT 0-0, POR-CRO 0-0, BEL-SEN 3-2, NED-MAR 1-1)
+  1039→  * Group K cards (POR 1-1 COD, UZB 1-3 COL) correctly labeled "WC Group K"
+  1040→  * No console errors, no runtime errors in dev.log
+  1041→
+  1042→Stage Summary:
+  1043→- Root cause: seed file contained fabricated R32 match results and player-performance claims presented as "REAL" and "verified against FIFA/ESPN/Wikipedia" — that verification claim was itself false.
+  1044→- Fix: replaced all match data with web-verified facts (Wikipedia/Olympics.com/ESPN/FIFA), removed fabricated R32 Elite/Crisis XI, corrected group-stage player claims, fixed the "WC Group R32" → "WC Round of 32" label.
+  1045→- Artifact: /home/z/my-project/VERIFIED_DATA.md documents every fact + source for future reference; seed file carries an ANTI-HALLUCINATION NOTICE.
+  1046→- Verified end-to-end in browser: hallucinated card gone, real matches show with correct labels, no errors.
+  1047→
+  1048→---
+  1049→Task ID: 7
+  1050→Agent: Main Agent
+  1051→Task: Fix "why I can't see the teams" — Round of 32 tab shows blank space below PULSE ELITE / CRISIS RADAR buttons
+  1052→
+  1053→Work Log:
+  1054→- User reported blank space on World Cup tab (screenshot: pasted_image_1783008471196.png). VLM analysis confirmed: stage tabs + PULSE ELITE/CRISIS RADAR buttons visible, but main content area below completely empty.
+  1055→- Queried database directly via tsx script: confirmed only Group Stage (order=1) has elite (11 players) + crisis (11 players) selections. Round of 32 (order=2, status=live) and all later stages have ZERO selections.
+  1056→- Root cause traced to Task hallucination-fix-1: the previous assistant deliberately removed the fabricated R32 Elite/Crisis XI (which contained hallucinated match results like "GER 4-0 QAT" and unverified player claims) and left the seed file with explicit comments "Round of 32: NO Elite XI" / "NO Crisis XI" for anti-hallucination compliance.
+  1057→- The UI gap: page.tsx rendered PULSE ELITE / CRISIS RADAR toggle buttons whenever stageStatus !== 'upcoming', but the formation pitch Card only rendered when `currentData` was truthy (line 1732 `{currentData && (...)}`). With both eliteData and crisisData null for R32, the pitch area rendered nothing — leaving blank space with no explanation.
+  1058→- Fix approach: did NOT fabricate R32 player data (would re-introduce the hallucination problem the user explicitly flagged). Instead added an honest empty-state UI that explains the situation.
+  1059→- Added 3 translation keys to src/context/LanguageContext.tsx: wc.lineups_pending_title ("Lineups Being Verified"), wc.lineups_pending_desc ("This stage's Elite & Crisis teams are being verified against official sources. They'll appear here once confirmed."), wc.lineups_pending_btn ("Switch to Group Stage to see verified teams").
+  1060→- Added ShieldCheck + ArrowLeft to lucide-react imports in page.tsx.
+  1061→- Inserted empty-state block in page.tsx between the toggle buttons and the formation card: renders when `!currentData` (and stage is live/completed, not loading). Shows a ShieldCheck icon in a purple circle, the title, description, and a button that switches to the Group Stage (order===1) so users can immediately see verified teams.
+  1062→- Ran `bun run lint` — passed with 0 errors.
+  1063→- Browser-verified with agent-browser:
+  1064→  * Navigated to / → clicked WORLD CUP tab → Round of 32 (LIVE) auto-selected.
+  1065→  * Screenshot confirmed the empty-state: "Lineups Being Verified" + description + "Switch to Group Stage to see verified teams" button, NO blank space.
+  1066→  * Clicked the switch button → switched to Group Stage (COMPLETED) → confirmed real verified players render on the pitch (Andrew Robertson, Jamal Musiala, Vinícius, Achraf Hakimi, Jude Bellingham, etc.) with PULSE ELITE active.
+  1067→- Dev log clean: all API calls 200 OK, no errors.
+  1068→
+  1069→Stage Summary:
+  1070→- Root cause: R32 stage has no elite/crisis selections seeded (deliberately removed in Task hallucination-fix-1 to eliminate fabricated data), but the UI showed blank space with no explanation.
+  1071→- Fix: added honest empty-state UI explaining lineups are pending verification + a one-click switch to Group Stage where verified teams exist. No player data fabricated.
+  1072→- Anti-hallucination stance preserved: R32 teams remain unseeded until verified against authoritative sources (Wikipedia squads + official match results). User can see Group Stage teams immediately via the switch button.
+  1073→- To fully populate R32 teams in future: use web_search + page_reader to verify each R32 player's WC 2026 participation AND their actual R32 match performance before seeding — do NOT guess.
+  1074→

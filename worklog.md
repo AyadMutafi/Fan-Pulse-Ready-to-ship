@@ -1071,3 +1071,48 @@ Stage Summary:
 - Fix: added honest empty-state UI explaining lineups are pending verification + a one-click switch to Group Stage where verified teams exist. No player data fabricated.
 - Anti-hallucination stance preserved: R32 teams remain unseeded until verified against authoritative sources (Wikipedia squads + official match results). User can see Group Stage teams immediately via the switch button.
 - To fully populate R32 teams in future: use web_search + page_reader to verify each R32 player's WC 2026 participation AND their actual R32 match performance before seeding — do NOT guess.
+
+---
+Task ID: fan-talk-hallucination-fix
+Agent: Main Agent
+Task: Fix the Fan Talk panel that was displaying fabricated templated posts (fake authors @angry_supporter, @football_daily, @neutral_watcher, u/tactical_nerd, u/happy_gooner, u/disappointed_fan, u/stat_lover, "ESPN Match Report" with synthetic cuid URLs and boilerplate content about Cape Verde shown on the Spain vs Austria card). Source of fakes: scripts/seed-fan-talk.ts.
+
+Work Log:
+- Read current pipeline: src/app/api/fan-talk/route.ts (served stale DB data), src/lib/feed-sentiment.ts (existing cron-style refreshMonitor with SDK web_search + page_reader + LLM scoring), scripts/seed-fan-talk.ts (the source of fabricated templated posts), src/components/FanTalkPanel.tsx (UI panel).
+- Confirmed src/lib/live-fan-talk.ts and FAKE_AUTHOR_PATTERNS did NOT exist yet — created them.
+- Created src/lib/live-fan-talk.ts exporting:
+  • FAKE_AUTHOR_PATTERNS — list of substrings/regexps matching all 8 fake handles + the templated "r/soccer · u/" and "r/worldcup · u/" format + generic "r/<sub> · u/" pattern.
+  • isFakeAuthor(author) — case-insensitive matcher used by both the API route and the purge script.
+  • fetchLiveFanTalk(database, teamCodes) — on-demand real SDK fetch: finds-or-creates a FeedMonitor (5-min refresh cooldown to prevent SDK spam), runs 1-2 web_search queries via z-ai-web-dev-sdk, optionally enriches scrape-friendly news domains via page_reader (capped at 3 calls for speed), filters block messages + fake authors + short content, de-duplicates by URL, LLM-scores in a single batch, persists FeedPost rows. NEVER fabricates — returns { newPosts: 0, error? } on any SDK failure or empty result.
+- Rewrote src/app/api/fan-talk/route.ts to enforce the anti-hallucination contract on EVERY GET:
+  • Step 1: purgeFakeAuthorPosts(database) — unconditional DELETE of every FeedPost whose author matches any FAKE_AUTHOR_PATTERNS entry (scans last 7 days, batches deletes in 200-row chunks to respect SQLite param limits).
+  • Step 2: find matching monitors; count real posts.
+  • Step 3: if realPostCount < 3, call fetchLiveFanTalk(database, teamCodes). Capture liveFetchAttempted + liveFetchError.
+  • Step 4: re-fetch real posts; defensive filter (fake author + block message + short content).
+  • Step 5: if 0 posts remain, return honest empty state { posts: [], liveFetchAttempted, liveFetchError } — NEVER falls back to fake templated posts.
+  • Step 6: otherwise compute sentiment split, sort (popular/latest), return MAX_POSTS=8.
+  • Response now includes liveFetchAttempted:boolean and liveFetchError:string|null fields.
+- Wrote scripts/purge-fake-fan-talk.ts (one-off) that deletes every FeedPost matching FAKE_AUTHOR_PATTERNS, PLUS catches boilerplate by content fingerprint ("pressing structure was incredible", "no plan b, no in-game adjustments", "the system is broken", "clinical counter-attacking display", "this generation could win the whole thing", "var got the big calls right") and by synthetic cuid-style URLs (https://reddit.com/r/soccer/post/<cuid>-<n>, https://example.com/post/...). Also deletes any FeedMonitor that consequently has zero posts.
+- Ran purge script against live DB: deleted 24 fake-author posts + 3 empty monitors. Survivors: 2 monitors (England vs Congo DR R16, ESP vs KSA Matchday 2) with 46 real posts from real hostnames (reddit.com/r/..., foxsports.com, youtube.com, nytimes.com, reutersconnect.com, instagram.com).
+- Updated src/components/FanTalkPanel.tsx:
+  • Added Inbox icon import from lucide-react.
+  • Extended FanTalkData interface with liveFetchAttempted? and liveFetchError?.
+  • Replaced the old "No fan posts yet for this match / Sentiment data appears once admin monitoring begins" empty state with an honest empty state: Inbox icon in a circle + "Fan posts are loading / unavailable for this match right now." + context line that adapts to liveFetchAttempted/liveFetchError + italic "We never show fabricated or templated posts." footer.
+- Verified end-to-end with Agent Browser:
+  • Opened http://localhost:3000/, clicked "WHAT FANS ARE SAYING" on the ESP vs AUT card (first card, button @e8).
+  • First click triggered live fetch (27.3s, 8 real posts saved). Panel rendered 8 posts with REAL hostnames: www.foxsports.com (Pedro Porro header), www.youtube.com (Spain vs Austria Extended Highlights), www.nytimes.com/The Athletic (How stylish Spain saw off Austria), www.foxsports.com (Oyarzabal goal), www.reutersconnect.com (Fans gather in Madrid), www.instagram.com, www.youtube.com x2 (LIVE streams). Fan Sentiment Split: 50% positive / 50% neutral / 0% negative. Footer: "Updated 12h ago · ESP vs AUT — WC 2026".
+  • Second click returned cached result in 22ms (liveFetchAttempted: false).
+  • Comprehensive DOM scan: queried document.body.innerText AND document.documentElement.innerHTML for ALL forbidden strings (@angry_supporter, @football_daily, @neutral_watcher, u/tactical_nerd, u/happy_gooner, u/disappointed_fan, u/stat_lover, ESPN Match Report, pressing structure was incredible, No plan B, no in-game adjustments, plus bare-fragment variants). Result: 0 matches in innerText, 0 matches in innerHTML. Verdict: PASS.
+  • Verified honest empty state: mocked /api/fan-talk to return {posts:[], liveFetchAttempted:true, liveFetchError:"SDK returned no usable results"}. Panel rendered "Fan posts are loading / unavailable for this match right now." + "Live fetch attempted: SDK returned no usable results. Real posts will appear once the source is reachable." + "We never show fabricated or templated posts." Confirmed via DOM scan (hasEmptyMsg=true, hasNeverMsg=true). Removed mock after verification.
+  • Cleaned up the ZZZ,XXX test monitor created during empty-state verification.
+- Final dev log shows clean operation: ESP,AUT cached call 13-22ms; ZZZ,XXX triggered a 30.6s live fetch and saved 8 real posts; no errors, no crashes. Lint passes clean.
+
+Stage Summary:
+- Root cause: scripts/seed-fan-talk.ts seeded 8 boilerplate templated posts per match under fabricated handles (@angry_supporter, @football_daily, @neutral_watcher, r/soccer · u/tactical_nerd, r/soccer · u/disappointed_fan, r/worldcup · u/stat_lover, r/soccer · u/happy_gooner, ESPN Match Report) with synthetic cuid URLs (https://reddit.com/r/soccer/post/<monitorId>-<n>) and boilerplate content templates ("pressing structure was incredible", "No plan B, no in-game adjustments", etc.). The old API route served these stale DB rows whenever no live data was available, so the ESP vs AUT card showed Cape Verde boilerplate (a leftover from a different seed run).
+- Fix: three-layer anti-hallucination contract.
+  1. src/lib/live-fan-talk.ts is the single source of truth for FAKE_AUTHOR_PATTERNS + isFakeAuthor() + fetchLiveFanTalk() (real SDK fetch, never fabricates).
+  2. src/app/api/fan-talk/route.ts enforces the contract on every GET: purge fake-author posts → if <3 real remain, attempt live fetch → if 0 posts, honest empty state (NEVER fake fallback).
+  3. src/components/FanTalkPanel.tsx renders an honest empty state (Inbox icon + "Fan posts are loading / unavailable for this match right now." + "We never show fabricated or templated posts.") when posts.length === 0.
+- DB state after fix: 3 monitors, 54 posts, ALL from real sources (reddit.com, foxsports.com, youtube.com, nytimes.com, reutersconnect.com, instagram.com).
+- Browser-verified: ESP vs AUT panel shows 8 real posts with real hostnames; comprehensive DOM scan of both innerText and innerHTML returns 0 matches for any of the 20+ forbidden fake-string variants. Honest empty state also verified via API mock.
+- Artifacts: src/lib/live-fan-talk.ts (new), src/app/api/fan-talk/route.ts (rewritten), src/components/FanTalkPanel.tsx (empty-state updated), scripts/purge-fake-fan-talk.ts (new one-off purge), scripts/seed-fan-talk.ts (left in place but its output is now purged on every API GET — it can be deleted in a future cleanup).

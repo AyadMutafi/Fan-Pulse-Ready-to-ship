@@ -1,0 +1,833 @@
+     1→     1→/**
+     2→     2→ * Feed Sentiment Service — admin-seeded fan sentiment pipeline.
+     3→     3→ *
+     4→     4→ * Implements Layers 1+2+3 of the sentiment strategy:
+     5→     5→ *   - Layer 1: SDK scraping via z-ai-web-dev-sdk (web_search + page_reader)
+     6→     6→ *   - Layer 2: Reddit-focused search (free, high-quality tactical discussion)
+     7→     7→ *   - Layer 3: Admin-curated hashtags + seed URLs (anchor the conversation)
+     8→     8→ *
+     9→     9→ * The cron job (or admin manual trigger) calls refreshMonitor() every 5 min
+    10→    10→ * for each active FeedMonitor. The function:
+    11→    11→ *   1. Builds a search query from the monitor's hashtags + match label
+    12→    12→ *   2. Calls web_search to find new posts (Twitter, Reddit, news)
+    13→    13→ *   3. Calls page_reader on each result URL to extract post content
+    14→    14→ *   4. Skips URLs already in FeedPost table (de-duplication)
+    15→    15→ *   5. Calls LLM to score each post's sentiment (0-100) + extract:
+    16→    16→ *        - mentioned player IDs (matched against the monitor's tracked players)
+    17→    17→ *        - a notable quote (for UI display)
+    18→    18→ *   6. Saves new FeedPost records
+    19→    19→ *   7. Recomputes PlayerSentiment aggregates for each tracked player
+    20→    20→ *
+    21→    21→ * The Pulse Engine then reads PlayerSentiment to compute the 25% Fan Sentiment
+    22→    22→ * component of the Pulse Score (replaces the old "95% baseline" placeholder).
+    23→    23→ */
+    24→    24→
+    25→    25→import ZAI from 'z-ai-web-dev-sdk'
+    26→    26→import type { PrismaClient } from '@prisma/client'
+    27→    27→
+    28→    28→// ── Types ────────────────────────────────────────────────────────────────────
+    29→    29→
+    30→    30→interface FeedMonitorData {
+    31→    31→  id: string
+    32→    32→  matchLabel: string
+    33→    33→  teamCodes: string[]
+    34→    34→  playerIds: string[]
+    35→    35→  hashtags: string[]
+    36→    36→  seedUrls: string[]
+    37→    37→}
+    38→    38→
+    39→    39→interface TrackedPlayer {
+    40→    40→  id: string
+    41→    41→  playerName: string
+    42→    42→  nationCode: string
+    43→    43→  position: string
+    44→    44→}
+    45→    45→
+    46→    46→interface ScrapedPost {
+    47→    47→  url: string
+    48→    48→  platform: 'twitter' | 'reddit' | 'web'
+    49→    49→  author: string
+    50→    50→  content: string
+    51→    51→  postedAt: Date
+    52→    52→}
+    53→    53→
+    54→    54→interface LLMAnalysisResult {
+    55→    55→  sentiment: number // 0-100
+    56→    56→  positiveRatio: number // 0-1
+    57→    57→  mentionedPlayerIds: string[] // player IDs found in content
+    58→    58→  topQuote: string | null // notable fan quote extracted by LLM
+    59→    59→  language: string // detected language code
+    60→    60→}
+    61→    61→
+    62→    62→export interface RefreshResult {
+    63→    63→  monitorId: string
+    64→    64→  newPosts: number
+    65→    65→  skippedDuplicates: number
+    66→    66→  failedPosts: number
+    67→    67→  playersUpdated: number
+    68→    68→  errors: string[]
+    69→    69→  durationMs: number
+    70→    70→}
+    71→    71→
+    72→    72→// ── Constants ────────────────────────────────────────────────────────────────
+    73→    73→
+    74→    74→const MAX_POSTS_PER_REFRESH = 20 // cap to control LLM cost
+    75→    75→const MAX_CONTENT_LENGTH = 2000 // truncate long pages before LLM scoring
+    76→    76→const LLM_BATCH_SIZE = 5 // posts per LLM call
+    77→    77→
+    78→    78→// Rate limiting: the z-ai SDK enforces ~10 requests/min on free tier.
+    79→    79→// We add a delay between SDK calls to avoid 429 errors.
+    80→    80→// At 2s delay between page_reader calls, 20 posts = 40s — acceptable.
+    81→    81→const SDK_CALL_DELAY_MS = 2000
+    82→    82→
+    83→    83→/** Sleep helper for rate limiting. */
+    84→    84→const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+    85→    85→
+    86→    86→// ── Public API ───────────────────────────────────────────────────────────────
+    87→    87→
+    88→    88→/**
+    89→    89→ * Refresh a single FeedMonitor: search → scrape → score → aggregate.
+    90→    90→ * Called by the cron job (every 5 min) or admin manual trigger.
+    91→    91→ */
+    92→    92→export async function refreshMonitor(
+    93→    93→  database: PrismaClient,
+    94→    94→  monitorId: string,
+    95→    95→): Promise<RefreshResult> {
+    96→    96→  const startedAt = Date.now()
+    97→    97→  const errors: string[] = []
+    98→    98→  let newPosts = 0
+    99→    99→  let skippedDuplicates = 0
+   100→   100→  let failedPosts = 0
+   101→   101→  let playersUpdated = 0
+   102→   102→
+   103→   103→  // ── 1. Load the monitor + tracked players ──────────────────────────────
+   104→   104→  const monitor = await database.feedMonitor.findUnique({
+   105→   105→    where: { id: monitorId },
+   106→   106→  })
+   107→   107→  if (!monitor) {
+   108→   108→    return {
+   109→   109→      monitorId,
+   110→   110→      newPosts: 0,
+   111→   111→      skippedDuplicates: 0,
+   112→   112→      failedPosts: 0,
+   113→   113→      playersUpdated: 0,
+   114→   114→      errors: ['Monitor not found'],
+   115→   115→      durationMs: Date.now() - startedAt,
+   116→   116→    }
+   117→   117→  }
+   118→   118→  if (monitor.status !== 'active') {
+   119→   119→    return {
+   120→   120→      monitorId,
+   121→   121→      newPosts: 0,
+   122→   122→      skippedDuplicates: 0,
+   123→   123→      failedPosts: 0,
+   124→   124→      playersUpdated: 0,
+   125→   125→      errors: [`Monitor status is '${monitor.status}', skipping refresh`],
+   126→   126→      durationMs: Date.now() - startedAt,
+   127→   127→    }
+   128→   128→  }
+   129→   129→
+   130→   130→  const monitorData: FeedMonitorData = {
+   131→   131→    id: monitor.id,
+   132→   132→    matchLabel: monitor.matchLabel,
+   133→   133→    teamCodes: safeJsonParse(monitor.teamCodes, []),
+   134→   134→    playerIds: safeJsonParse(monitor.playerIds, []),
+   135→   135→    hashtags: safeJsonParse(monitor.hashtags, []),
+   136→   136→    seedUrls: safeJsonParse(monitor.seedUrls, []),
+   137→   137→  }
+   138→   138→
+   139→   139→  // Load tracked players so we can match them in post content
+   140→   140→  const trackedPlayers: TrackedPlayer[] = monitorData.playerIds.length
+   141→   141→    ? await database.wCSelectionPlayer.findMany({
+   142→   142→        where: { id: { in: monitorData.playerIds } },
+   143→   143→        select: {
+   144→   144→          id: true,
+   145→   145→          playerName: true,
+   146→   146→          nationCode: true,
+   147→   147→          position: true,
+   148→   148→        },
+   149→   149→      })
+   150→   150→    : []
+   151→   151→  // Map of lowercase name → player ID for case-insensitive matching
+   152→   152→  const playerNameIndex = new Map<string, string>()
+   153→   153→  for (const p of trackedPlayers) {
+   154→   154→    playerNameIndex.set(p.playerName.toLowerCase(), p.id)
+   155→   155→    // Also index by last name (more common in tweets)
+   156→   156→    const lastWord = p.playerName.split(' ').pop()
+   157→   157→    if (lastWord && lastWord.length >= 4) {
+   158→   158→      playerNameIndex.set(lastWord.toLowerCase(), p.id)
+   159→   159→    }
+   160→   160→  }
+   161→   161→
+   162→   162→  // ── 2. Initialize SDK + run searches ───────────────────────────────────
+   163→   163→  let zai: any
+   164→   164→  try {
+   165→   165→    zai = await ZAI.create()
+   166→   166→  } catch (err) {
+   167→   167→    return {
+   168→   168→      monitorId,
+   169→   169→      newPosts: 0,
+   170→   170→      skippedDuplicates: 0,
+   171→   171→      failedPosts: 0,
+   172→   172→      playersUpdated: 0,
+   173→   173→      errors: [`SDK init failed: ${String(err)}`],
+   174→   174→      durationMs: Date.now() - startedAt,
+   175→   175→    }
+   176→   176→  }
+   177→   177→
+   178→   178→  // Build search queries from hashtags + match label
+   179→   179→  const queries = buildSearchQueries(monitorData)
+   180→   180→  const scrapedPosts: ScrapedPost[] = []
+   181→   181→
+   182→   182→  console.log(
+   183→   183→    `[feed-sentiment] Refreshing monitor ${monitor.id} (${monitor.matchLabel}) — ${queries.length} queries`,
+   184→   184→  )
+   185→   185→
+   186→   186→  for (const query of queries) {
+   187→   187→    try {
+   188→   188→      console.log(`[feed-sentiment] web_search: "${query}"`)
+   189→   189→      await sleep(SDK_CALL_DELAY_MS) // rate limit
+   190→   190→      const searchResults = (await zai.functions.invoke('web_search', {
+   191→   191→        query,
+   192→   192→        num: 10,
+   193→   193→      })) as any[]
+   194→   194→
+   195→   195→      if (!Array.isArray(searchResults)) {
+   196→   196→        console.log(`[feed-sentiment] web_search returned non-array: ${typeof searchResults}`)
+   197→   197→        continue
+   198→   198→      }
+   199→   199→      console.log(`[feed-sentiment] Got ${searchResults.length} search results`)
+   200→   200→
+   201→   201→      for (const result of searchResults) {
+   202→   202→        if (!result?.url) continue
+   203→   203→        // Stop if we've hit the per-refresh cap
+   204→   204→        if (scrapedPosts.length >= MAX_POSTS_PER_REFRESH) break
+   205→   205→
+   206→   206→        const domain = extractDomain(result.url)
+   207→   207→        const platform = detectPlatform(result.url)
+   208→   208→
+   209→   209→        // ── ANTI-BLOCK STRATEGY ────────────────────────────────────────────
+   210→   210→        // Primary content = search snippet + title. These come straight from
+   211→   211→        // the search engine's index and are NEVER blocked (Reddit/Instagram
+   212→   212→        // block page_reader, but they can't block the search snippet Google
+   213→   213→        // already cached). This is our reliable baseline.
+   214→   214→        const snippet = String(result.snippet || result.description || result.summary || '').trim()
+   215→   215→        const title = String(result.name || result.title || '').trim()
+   216→   216→        let content = [title, snippet].filter(Boolean).join(' — ')
+   217→   217→
+   218→   218→        // Skip results with no usable snippet at all
+   219→   219→        if (!content || content.length < 20) {
+   220→   220→          console.log(`[feed-sentiment] No snippet for ${domain}, skipping`)
+   221→   221→          continue
+   222→   222→        }
+   223→   223→
+   224→   224→        // ── ENRICHMENT (optional, domain-specific) ─────────────────────────
+   225→   225→        // Only call page_reader for domains known to allow scraping (news
+   226→   226→        // sites). Social media (Reddit, Instagram, X, TikTok) get snippet-
+   227→   227→        // only — page_reader returns anti-bot block pages for them.
+   228→   228→        if (isScrapeFriendlyDomain(domain)) {
+   229→   229→          try {
+   230→   230→            await sleep(SDK_CALL_DELAY_MS) // rate limit
+   231→   231→            const pageData = await zai.functions.invoke('page_reader', {
+   232→   232→              url: result.url,
+   233→   233→            })
+   234→   234→            const rawContent =
+   235→   235→              pageData?.data?.html ||
+   236→   236→              pageData?.data?.content ||
+   237→   237→              (typeof pageData === 'string' ? pageData : '')
+   238→   238→            // Only use enriched content if it's substantial AND not a block msg
+   239→   239→            if (rawContent && rawContent.length > 200 && !isBlockMessage(rawContent)) {
+   240→   240→              const fullText = stripHtml(rawContent).slice(0, MAX_CONTENT_LENGTH)
+   241→   241→              if (fullText.length > content.length) {
+   242→   242→                content = fullText
+   243→   243→              }
+   244→   244→            }
+   245→   245→          } catch (pageErr) {
+   246→   246→            // page_reader failed — fall back to snippet (already set above)
+   247→   247→            if (String(pageErr).includes('429')) {
+   248→   248→              console.log(`[feed-sentiment] 429 rate limit, waiting 5s...`)
+   249→   249→              await sleep(5000)
+   250→   250→            }
+   251→   251→          }
+   252→   252→        }
+   253→   253→
+   254→   254→        // ── REDDIT JSON API FALLBACK ───────────────────────────────────────
+   255→   255→        // Reddit exposes a public JSON API: append .json to any reddit.com
+   256→   256→        // URL and you get the post + comments as JSON (no auth, not blocked).
+   257→   257→        // This gives us the actual post body + top comment, far richer than
+   258→   258→        // the snippet. We fetch via page_reader on the .json URL.
+   259→   259→        if (platform === 'reddit' && result.url.includes('reddit.com/r/')) {
+   260→   260→          try {
+   261→   261→            const jsonUrl = result.url.replace(/\/?$/, '.json')
+   262→   262→            await sleep(SDK_CALL_DELAY_MS) // rate limit
+   263→   263→            const redditData = await zai.functions.invoke('page_reader', {
+   264→   264→              url: jsonUrl,
+   265→   265→            })
+   266→   266→            const redditJson =
+   267→   267→              redditData?.data?.html ||
+   268→   268→              redditData?.data?.content ||
+   269→   269→              (typeof redditData === 'string' ? redditData : '')
+   270→   270→            const extracted = extractRedditContent(redditJson)
+   271→   271→            if (extracted && extracted.length > content.length && !isBlockMessage(extracted)) {
+   272→   272→              content = extracted
+   273→   273→            }
+   274→   274→          } catch {
+   275→   275→            // JSON fetch failed — snippet is still our fallback
+   276→   276→          }
+   277→   277→        }
+   278→   278→
+   279→   279→        // ── FINAL SAFETY CHECK ─────────────────────────────────────────────
+   280→   280→        // Reject the post entirely if the final content (even snippet-based)
+   281→   281→        // looks like an anti-bot block page. This catches cases where the
+   282→   282→        // search snippet itself is a block message (e.g. Instagram's
+   283→   283→        // "Log into Instagram" or Reddit's "blocked by network security").
+   284→   284→        if (isBlockMessage(content)) {
+   285→   285→          console.log(`[feed-sentiment] Block message detected in content for ${domain}, skipping`)
+   286→   286→          failedPosts++
+   287→   287→          continue
+   288→   288→        }
+   289→   289→
+   290→   290→        scrapedPosts.push({
+   291→   291→          url: result.url,
+   292→   292→          platform,
+   293→   293→          author: result.author || result.source || result.host_name || '',
+   294→   294→          content: content.slice(0, MAX_CONTENT_LENGTH),
+   295→   295→          postedAt: result.datePublished || result.date
+   296→   296→            ? new Date(result.datePublished || result.date)
+   297→   297→            : new Date(),
+   298→   298→        })
+   299→   299→      }
+   300→   300→    } catch (searchErr) {
+   301→   301→      errors.push(`web_search failed for query="${query}": ${String(searchErr)}`)
+   302→   302→      // If web_search itself hit 429, wait longer
+   303→   303→      if (String(searchErr).includes('429')) {
+   304→   304→        console.log(`[feed-sentiment] web_search 429 rate limit, waiting 5s...`)
+   305→   305→        await sleep(5000)
+   306→   306→      }
+   307→   307→    }
+   308→   308→
+   309→   309→    if (scrapedPosts.length >= MAX_POSTS_PER_REFRESH) break
+   310→   310→  }
+   311→   311→
+   312→   312→  console.log(
+   313→   313→    `[feed-sentiment] Scraped ${scrapedPosts.length} posts, ${failedPosts} failed, ${skippedDuplicates} duplicates`,
+   314→   314→  )
+   315→   315→
+   316→   316→  // ── 3. De-duplicate against existing FeedPosts (by URL) ───────────────
+   317→   317→  const existingUrls = new Set(
+   318→   318→    (
+   319→   319→      await database.feedPost.findMany({
+   320→   320→        where: { url: { in: scrapedPosts.map((p) => p.url) } },
+   321→   321→        select: { url: true },
+   322→   322→      })
+   323→   323→    ).map((p) => p.url),
+   324→   324→  )
+   325→   325→
+   326→   326→  const newPostsToAnalyze = scrapedPosts.filter((p) => {
+   327→   327→    if (existingUrls.has(p.url)) {
+   328→   328→      skippedDuplicates++
+   329→   329→      return false
+   330→   330→    }
+   331→   331→    return true
+   332→   332→  })
+   333→   333→
+   334→   334→  // ── 4. LLM scoring (batches of LLM_BATCH_SIZE) ────────────────────────
+   335→   335→  console.log(
+   336→   336→    `[feed-sentiment] LLM scoring ${newPostsToAnalyze.length} posts in batches of ${LLM_BATCH_SIZE}`,
+   337→   337→  )
+   338→   338→  for (let i = 0; i < newPostsToAnalyze.length; i += LLM_BATCH_SIZE) {
+   339→   339→    const batch = newPostsToAnalyze.slice(i, i + LLM_BATCH_SIZE)
+   340→   340→    try {
+   341→   341→      const analyses = await scorePostBatchWithLLM(batch, playerNameIndex, zai)
+   342→   342→      const successCount = analyses.filter((a) => a !== null).length
+   343→   343→      console.log(
+   344→   344→        `[feed-sentiment] LLM batch ${Math.floor(i / LLM_BATCH_SIZE) + 1}: ${successCount}/${batch.length} scored`,
+   345→   345→      )
+   346→   346→      for (let j = 0; j < batch.length; j++) {
+   347→   347→        const post = batch[j]
+   348→   348→        const analysis = analyses[j]
+   349→   349→        if (!analysis) {
+   350→   350→          failedPosts++
+   351→   351→          continue
+   352→   352→        }
+   353→   353→        try {
+   354→   354→          await database.feedPost.create({
+   355→   355→            data: {
+   356→   356→              monitorId: monitor.id,
+   357→   357→              platform: post.platform,
+   358→   358→              url: post.url,
+   359→   359→              author: post.author,
+   360→   360→              content: post.content,
+   361→   361→              language: analysis.language,
+   362→   362→              sentimentScore: analysis.sentiment,
+   363→   363→              positiveRatio: analysis.positiveRatio,
+   364→   364→              mentionedPlayers: JSON.stringify(analysis.mentionedPlayerIds),
+   365→   365→              topQuote: analysis.topQuote,
+   366→   366→              postedAt: post.postedAt,
+   367→   367→              analyzedAt: new Date(),
+   368→   368→            },
+   369→   369→          })
+   370→   370→          newPosts++
+   371→   371→        } catch (dbErr) {
+   372→   372→          // Likely a race condition (URL inserted by another refresh) — skip
+   373→   373→          errors.push(`feedPost.create failed: ${String(dbErr)}`)
+   374→   374→        }
+   375→   375→      }
+   376→   376→    } catch (llmErr) {
+   377→   377→      errors.push(`LLM batch failed: ${String(llmErr)}`)
+   378→   378→      failedPosts += batch.length
+   379→   379→    }
+   380→   380→    // Rate limit between LLM batches too
+   381→   381→    if (i + LLM_BATCH_SIZE < newPostsToAnalyze.length) {
+   382→   382→      await sleep(SDK_CALL_DELAY_MS)
+   383→   383→    }
+   384→   384→  }
+   385→   385→
+   386→   386→  // ── 5. Recompute PlayerSentiment aggregates ───────────────────────────
+   387→   387→  // For each tracked player: average sentiment across all FeedPosts in this
+   388→   388→  // monitor that mention the player. Weighted by recency (last 24h preferred).
+   389→   389→  if (trackedPlayers.length > 0) {
+   390→   390→    const allMonitorPosts = await database.feedPost.findMany({
+   391→   391→      where: { monitorId: monitor.id },
+   392→   392→      select: {
+   393→   393→        sentimentScore: true,
+   394→   394→        positiveRatio: true,
+   395→   395→        mentionedPlayers: true,
+   396→   396→        topQuote: true,
+   397→   397→        analyzedAt: true,
+   398→   398→      },
+   399→   399→    })
+   400→   400→
+   401→   401→    for (const player of trackedPlayers) {
+   402→   402→      const mentioningPosts = allMonitorPosts.filter((p) => {
+   403→   403→        try {
+   404→   404→          const ids = JSON.parse(p.mentionedPlayers || '[]') as string[]
+   405→   405→          return ids.includes(player.id)
+   406→   406→        } catch {
+   407→   407→          return false
+   408→   408→        }
+   409→   409→      })
+   410→   410→
+   411→   411→      if (mentioningPosts.length === 0) continue
+   412→   412→
+   413→   413→      const avgSentiment =
+   414→   414→        mentioningPosts.reduce((s, p) => s + p.sentimentScore, 0) /
+   415→   415→        mentioningPosts.length
+   416→   416→      const avgPositive =
+   417→   417→        mentioningPosts.reduce((s, p) => s + p.positiveRatio, 0) /
+   418→   418→        mentioningPosts.length
+   419→   419→
+   420→   420→      // Pick top 3 quotes (highest sentiment for elite, lowest for crisis,
+   421→   421→      // mixed for neutral — we just pick the most extreme ones for variety)
+   422→   422→      const quotesWithScores = mentioningPosts
+   423→   423→        .filter((p) => p.topQuote)
+   424→   424→        .map((p) => ({ quote: p.topQuote!, score: p.sentimentScore }))
+   425→   425→        .sort((a, b) => Math.abs(b.score - 50) - Math.abs(a.score - 50))
+   426→   426→        .slice(0, 3)
+   427→   427→
+   428→   428→      await database.playerSentiment.upsert({
+   429→   429→        where: { playerId: player.id },
+   430→   430→        create: {
+   431→   431→          playerId: player.id,
+   432→   432→          monitorId: monitor.id,
+   433→   433→          sentiment: Math.round(avgSentiment * 10) / 10,
+   434→   434→          postCount: mentioningPosts.length,
+   435→   435→          positiveRatio: Math.round(avgPositive * 100) / 100,
+   436→   436→          topQuotes: JSON.stringify(quotesWithScores),
+   437→   437→          avgEngagement: 0, // not available from scraping
+   438→   438→          analyzedAt: new Date(),
+   439→   439→        },
+   440→   440→        update: {
+   441→   441→          monitorId: monitor.id,
+   442→   442→          sentiment: Math.round(avgSentiment * 10) / 10,
+   443→   443→          postCount: mentioningPosts.length,
+   444→   444→          positiveRatio: Math.round(avgPositive * 100) / 100,
+   445→   445→          topQuotes: JSON.stringify(quotesWithScores),
+   446→   446→          avgEngagement: 0,
+   447→   447→          analyzedAt: new Date(),
+   448→   448→        },
+   449→   449→      })
+   450→   450→      playersUpdated++
+   451→   451→    }
+   452→   452→  }
+   453→   453→
+   454→   454→  // ── 6. Update monitor's lastRefreshedAt ───────────────────────────────
+   455→   455→  await database.feedMonitor.update({
+   456→   456→    where: { id: monitor.id },
+   457→   457→    data: { lastRefreshedAt: new Date() },
+   458→   458→  })
+   459→   459→
+   460→   460→  return {
+   461→   461→    monitorId,
+   462→   462→    newPosts,
+   463→   463→    skippedDuplicates,
+   464→   464→    failedPosts,
+   465→   465→    playersUpdated,
+   466→   466→    errors,
+   467→   467→    durationMs: Date.now() - startedAt,
+   468→   468→  }
+   469→   469→}
+   470→   470→
+   471→   471→/**
+   472→   472→ * Mark all monitors past their endsAt time as 'ended'.
+   473→   473→ * Called by the cron job before triggering refreshes.
+   474→   474→ */
+   475→   475→export async function endExpiredMonitors(
+   476→   476→  database: PrismaClient,
+   477→   477→): Promise<number> {
+   478→   478→  const result = await database.feedMonitor.updateMany({
+   479→   479→    where: {
+   480→   480→      status: 'active',
+   481→   481→      endsAt: { lt: new Date() },
+   482→   482→    },
+   483→   483→    data: { status: 'ended' },
+   484→   484→  })
+   485→   485→  return result.count
+   486→   486→}
+   487→   487→
+   488→   488→// ── Internal helpers ─────────────────────────────────────────────────────────
+   489→   489→
+   490→   490→function safeJsonParse<T>(raw: string, fallback: T): T {
+   491→   491→  try {
+   492→   492→    return JSON.parse(raw) as T
+   493→   493→  } catch {
+   494→   494→    return fallback
+   495→   495→  }
+   496→   496→}
+   497→   497→
+   498→   498→function stripHtml(html: string): string {
+   499→   499→  // Crude HTML stripper — good enough for content extraction.
+   500→   500→  // The LLM only needs the text, not the markup.
+   501→   501→  return html
+   502→   502→    .replace(/<script[\s\S]*?<\/script>/gi, '')
+   503→   503→    .replace(/<style[\s\S]*?<\/style>/gi, '')
+   504→   504→    .replace(/<[^>]+>/g, ' ')
+   505→   505→    .replace(/&nbsp;/g, ' ')
+   506→   506→    .replace(/&amp;/g, '&')
+   507→   507→    .replace(/&lt;/g, '<')
+   508→   508→    .replace(/&gt;/g, '>')
+   509→   509→    .replace(/&quot;/g, '"')
+   510→   510→    .replace(/&#39;/g, "'")
+   511→   511→    .replace(/\s+/g, ' ')
+   512→   512→    .trim()
+   513→   513→}
+   514→   514→
+   515→   515→// ── Anti-block helpers ───────────────────────────────────────────────────────
+   516→   516→
+   517→   517→/** Extract the hostname from a URL (without www. prefix). */
+   518→   518→function extractDomain(url: string): string {
+   519→   519→  try {
+   520→   520→    return new URL(url).hostname.replace(/^www\./, '')
+   521→   521→  } catch {
+   522→   522→    return ''
+   523→   523→  }
+   524→   524→}
+   525→   525→
+   526→   526→/** Classify a URL into a platform for display in the UI. */
+   527→   527→function detectPlatform(url: string): 'twitter' | 'reddit' | 'web' {
+   528→   528→  if (url.includes('reddit.com')) return 'reddit'
+   529→   529→  if (url.includes('x.com') || url.includes('twitter.com')) return 'twitter'
+   530→   530→  return 'web'
+   531→   531→}
+   532→   532→
+   533→   533→/**
+   534→   534→ * Domains known to allow page_reader scraping (news sites, sports media).
+   535→   535→ * Social media (Reddit, Instagram, X, TikTok) are deliberately EXCLUDED —
+   536→   536→ * they return anti-bot block pages to page_reader. For those, we rely on
+   537→   537→ * the search snippet (always available) + Reddit's public .json API.
+   538→   538→ */
+   539→   539→const SCRAPE_FRIENDLY_DOMAINS: readonly string[] = [
+   540→   540→  'yahoo.com',
+   541→   541→  'espn.com',
+   542→   542→  'bbc.com',
+   543→   543→  'bbc.co.uk',
+   544→   544→  'theguardian.com',
+   545→   545→  'goal.com',
+   546→   546→  'skysports.com',
+   547→   547→  'reuters.com',
+   548→   548→  'apnews.com',
+   549→   549→  'cbssports.com',
+   550→   550→  'sportingnews.com',
+   551→   551→  'fourfourtwo.com',
+   552→   552→  'marca.com',
+   553→   553→  'as.com',
+   554→   554→  'mundodeportivo.com',
+   555→   555→  'sportsmole.com',
+   556→   556→  '90min.com',
+   557→   557→  'football365.com',
+   558→   558→  'talksport.com',
+   559→   559→  'fifa.com',
+   560→   560→  'mlssoccer.com',
+   561→   561→  'worldsoccer.com',
+   562→   562→  'espn.co.uk',
+   563→   563→  'sportskeeda.com',
+   564→   564→  'essentiallysports.com',
+   565→   565→]
+   566→   566→
+   567→   567→/** Returns true if the domain is in the scrape-friendly allowlist. */
+   568→   568→function isScrapeFriendlyDomain(domain: string): boolean {
+   569→   569→  if (!domain) return false
+   570→   570→  return SCRAPE_FRIENDLY_DOMAINS.some(
+   571→   571→    (d) => domain === d || domain.endsWith('.' + d),
+   572→   572→  )
+   573→   573→}
+   574→   574→
+   575→   575→/**
+   576→   576→ * Known anti-bot block-message patterns. If page_reader returns content
+   577→   577→ * matching any of these, we discard it and fall back to the search snippet.
+   578→   578→ * This catches Reddit's "blocked by network security", Instagram's
+   579→   579→ * "Log into Instagram", Cloudflare's "Attention Required", etc.
+   580→   580→ */
+   581→   581→const BLOCK_MESSAGE_PATTERNS: readonly string[] = [
+   582→   582→  'blocked by network security',
+   583→   583→  'log into instagram',
+   584→   584→  'please enable javascript',
+   585→   585→  'access denied',
+   586→   586→  'attention required',
+   587→   587→  'enable javascript and cookies to continue',
+   588→   588→  'are you a robot',
+   589→   589→  'unusual traffic',
+   590→   590→  'sorry, you have been blocked',
+   591→   591→  'checking your browser',
+   592→   592→  'cf-browser-verification',
+   593→   593→  'cloudflare',
+   594→   594→  'please verify you are a human',
+   595→   595→  'captcha-bypass',
+   596→   596→  'request blocked',
+   597→   597→  'whoops, looks like this page',
+   598→   598→  'this page is not available',
+   599→   599→  'sorry, this content',
+   600→   600→]
+   601→   601→
+   602→   602→/** Returns true if the content looks like an anti-bot block page. */
+   603→   603→function isBlockMessage(content: string): boolean {
+   604→   604→  if (!content) return true
+   605→   605→  const lower = content.toLowerCase()
+   606→   606→  return BLOCK_MESSAGE_PATTERNS.some((p) => lower.includes(p))
+   607→   607→}
+   608→   608→
+   609→   609→/**
+   610→   610→ * Extract post title + body + top comment from a Reddit .json API response.
+   611→   611→ * Reddit's public JSON API (append .json to any reddit URL) returns the
+   612→   612→ * post + comments as JSON — no auth, not blocked by anti-bot measures.
+   613→   613→ * We parse out the most useful text for sentiment scoring.
+   614→   614→ */
+   615→   615→function extractRedditContent(rawJson: string): string {
+   616→   616→  try {
+   617→   617→    // page_reader may return the JSON wrapped in HTML or as raw text.
+   618→   618→    // Try to extract the JSON payload either way.
+   619→   619→    let jsonStr = rawJson
+   620→   620→    // If it's HTML-wrapped, extract text content
+   621→   621→    if (jsonStr.includes('<')) {
+   622→   622→      jsonStr = stripHtml(jsonStr)
+   623→   623→    }
+   624→   624→    const parsed = JSON.parse(jsonStr)
+   625→   625→
+   626→   626→    // Reddit JSON structure: [{ data: { children: [{ data: { title, selftext, ... } }] } }, { data: { children: [comments] } }]
+   627→   627→    const postListing = Array.isArray(parsed) ? parsed[0] : parsed
+   628→   628→    const postData = postListing?.data?.children?.[0]?.data
+   629→   629→    if (!postData) return ''
+   630→   630→
+   631→   631→    const title = String(postData.title || '').trim()
+   632→   632→    const body = String(postData.selftext || '').trim()
+   633→   633→    const author = String(postData.author || '').trim()
+   634→   634→    const subreddit = String(postData.subreddit_name_prefixed || postData.subreddit || '').trim()
+   635→   635→
+   636→   636→    // Try to get top comment (second listing in the array)
+   637→   637→    let topComment = ''
+   638→   638→    if (Array.isArray(parsed) && parsed[1]?.data?.children) {
+   639→   639→      const comments = parsed[1].data.children
+   640→   640→      for (const c of comments) {
+   641→   641→        const text = String(c?.data?.body || '').trim()
+   642→   642→        if (text && text.length > 20 && !text.includes('[deleted]')) {
+   643→   643→          topComment = text
+   644→   644→          break
+   645→   645→        }
+   646→   646→      }
+   647→   647→    }
+   648→   648→
+   649→   649→    const parts = [
+   650→   650→      subreddit ? `[${subreddit}]` : '',
+   651→   651→      title,
+   652→   652→      body,
+   653→   653→      topComment ? `Top comment: ${topComment}` : '',
+   654→   654→    ].filter(Boolean)
+   655→   655→
+   656→   656→    return parts.join(' — ').slice(0, MAX_CONTENT_LENGTH)
+   657→   657→  } catch {
+   658→   658→    // Not valid JSON — return empty so caller falls back to snippet
+   659→   659→    return ''
+   660→   660→  }
+   661→   661→}
+   662→   662→
+   663→   663→/**
+   664→   664→ * Build search queries from the monitor's hashtags + match label.
+   665→   665→ * We run multiple targeted queries to maximize coverage:
+   666→   666→ *   1. Hashtag-focused query (catches X/Twitter posts)
+   667→   667→ *   2. Reddit-focused query (catches r/soccer tactical threads)
+   668→   668→ *   3. Match-label query (catches news articles quoting fans)
+   669→   669→ */
+   670→   670→function buildSearchQueries(monitor: FeedMonitorData): string[] {
+   671→   671→  const queries: string[] = []
+   672→   672→
+   673→   673→  // Query 1: Hashtags combined with match label (last 24h implied by freshness)
+   674→   674→  if (monitor.hashtags.length > 0) {
+   675→   675→    const hashtagPart = monitor.hashtags.slice(0, 3).join(' OR ')
+   676→   676→    queries.push(`${hashtagPart} ${monitor.matchLabel}`.trim())
+   677→   677→  }
+   678→   678→
+   679→   679→  // Query 2: Reddit-focused (free, high-quality tactical discussion)
+   680→   680→  if (monitor.teamCodes.length > 0) {
+   681→   681→    const teams = monitor.teamCodes.join(' OR ')
+   682→   682→    queries.push(`"${monitor.matchLabel}" (${teams}) site:reddit.com`)
+   683→   683→  }
+   684→   684→
+   685→   685→  // Query 3: General match label + "World Cup 2026"
+   686→   686→  queries.push(`"${monitor.matchLabel}" "World Cup 2026" fan reaction`)
+   687→   687→
+   688→   688→  return queries.slice(0, 3) // cap at 3 queries per refresh for cost control
+   689→   689→}
+   690→   690→
+   691→   691→const LLM_SENTIMENT_SYSTEM_PROMPT = `You are a football fan sentiment analyzer. For each post, output a JSON object with these fields:
+   692→   692→{
+   693→   693→  "s": <number 0-100>,           // sentiment score: 0=furious, 50=neutral, 100=euphoric
+   694→   694→  "p": <number 0-1>,              // positive ratio: fraction of post that is positive
+   695→   695→  "q": <string|null>,             // notable quote: a short, punchy, quotable fan reaction (max 140 chars) or null
+   696→   696→  "l": <string>                   // detected language code: "en", "es", "ar", "fr", etc.
+   697→   697→}
+   698→   698→
+   699→   699→Scoring guidance:
+   700→   700→- 90-100: Euphoric (won dramatically, hat-trick heroics, last-minute winner)
+   701→   701→- 70-89: Happy (won comfortably, good performance)
+   702→   702→- 50-69: Neutral (draw, mixed feelings)
+   703→   703→- 30-49: Worried (lost narrowly, underperformed)
+   704→   704→- 0-29: Furious (humiliated, defensive collapse, historic defeat)
+   705→   705→
+   706→   706→Rules:
+   707→   707→- Score based on the post's tone about the team/player, not the post's existence
+   708→   708→- "q" should be a memorable quote IF one exists in the post, otherwise null
+   709→   709→- Output ONE JSON object per post, separated by newlines
+   710→   710→- Do not output anything else`
+   711→   711→
+   712→   712→/**
+   713→   713→ * LLM-score a batch of posts. Returns analyses aligned with the input array.
+   714→   714→ * Also extracts mentioned player IDs by matching post content against the
+   715→   715→ * tracked-player name index.
+   716→   716→ */
+   717→   717→async function scorePostBatchWithLLM(
+   718→   718→  batch: ScrapedPost[],
+   719→   719→  playerNameIndex: Map<string, string>,
+   720→   720→  zai: any,
+   721→   721→): Promise<(LLMAnalysisResult | null)[]> {
+   722→   722→  const results: (LLMAnalysisResult | null)[] = new Array(batch.length).fill(null)
+   723→   723→
+   724→   724→  // Build user payload: array of {i, t} where t is truncated to 600 chars
+   725→   725→  const userPayload = batch.map((p, idx) => ({
+   726→   726→    i: idx,
+   727→   727→    t: (p.content || '').slice(0, 600),
+   728→   728→  }))
+   729→   729→
+   730→   730→  let raw = ''
+   731→   731→  try {
+   732→   732→    const completion = await zai.chat.completions.create({
+   733→   733→      messages: [
+   734→   734→        { role: 'assistant', content: LLM_SENTIMENT_SYSTEM_PROMPT },
+   735→   735→        { role: 'user', content: JSON.stringify(userPayload) },
+   736→   736→      ],
+   737→   737→      thinking: { type: 'disabled' },
+   738→   738→    })
+   739→   739→    raw = completion?.choices?.[0]?.message?.content || ''
+   740→   740→  } catch (err) {
+   741→   741→    console.warn('[feed-sentiment] LLM call failed:', String(err))
+   742→   742→    return results
+   743→   743→  }
+   744→   744→
+   745→   745→  if (!raw.trim()) return results
+   746→   746→
+   747→   747→  // The LLM may return either a JSON array OR newline-separated JSON objects.
+   748→   748→  // Handle both formats gracefully. Also handle the case where the LLM omits
+   749→   749→  // the "i" field (we fall back to the response position as the index).
+   750→   750→  let parsed: any[] = []
+   751→   751→  try {
+   752→   752→    // Try array first
+   753→   753→    const cleaned = raw
+   754→   754→      .replace(/^\s*```(?:json)?\s*/i, '')
+   755→   755→      .replace(/\s*```\s*$/i, '')
+   756→   756→      .trim()
+   757→   757→    const arrayParsed = JSON.parse(cleaned)
+   758→   758→    if (Array.isArray(arrayParsed)) {
+   759→   759→      parsed = arrayParsed
+   760→   760→    } else {
+   761→   761→      // Single object, not an array — wrap it
+   762→   762→      parsed = [arrayParsed]
+   763→   763→    }
+   764→   764→  } catch {
+   765→   765→    // Fall back to newline-delimited JSON objects
+   766→   766→    const lines = raw.split('\n').filter((l) => l.trim().startsWith('{'))
+   767→   767→    for (const line of lines) {
+   768→   768→      try {
+   769→   769→        const obj = JSON.parse(line.trim())
+   770→   770→        parsed.push(obj)
+   771→   771→      } catch {
+   772→   772→        // skip malformed line
+   773→   773→      }
+   774→   774→    }
+   775→   775→  }
+   776→   776→
+   777→   777→  console.log(
+   778→   778→    `[feed-sentiment] LLM returned ${parsed.length} parsed objects for batch of ${batch.length}`,
+   779→   779→  )
+   780→   780→  if (parsed.length > 0) {
+   781→   781→    console.log(`[feed-sentiment] Sample LLM output: ${JSON.stringify(parsed[0]).substring(0, 200)}`)
+   782→   782→  }
+   783→   783→
+   784→   784→  for (let responseIdx = 0; responseIdx < parsed.length; responseIdx++) {
+   785→   785→    const item = parsed[responseIdx]
+   786→   786→    if (!item || typeof item !== 'object') continue
+   787→   787→
+   788→   788→    // Use the "i" field if present, otherwise fall back to the response position
+   789→   789→    let idx: number
+   790→   790→    if (typeof item.i === 'number') {
+   791→   791→      idx = item.i
+   792→   792→    } else if (typeof item.i === 'string' && item.i.trim()) {
+   793→   793→      idx = parseInt(item.i, 10)
+   794→   794→    } else {
+   795→   795→      // LLM omitted "i" — assume responses are in the same order as inputs
+   796→   796→      idx = responseIdx
+   797→   797→    }
+   798→   798→    if (!Number.isInteger(idx) || idx < 0 || idx >= batch.length) continue
+   799→   799→
+   800→   800→    const score =
+   801→   801→      typeof item.s === 'number' ? item.s : parseFloat(String(item.s))
+   802→   802→    if (!Number.isFinite(score)) continue
+   803→   803→
+   804→   804→    const positiveRatio =
+   805→   805→      typeof item.p === 'number'
+   806→   806→        ? item.p
+   807→   807→        : parseFloat(String(item.p)) || 0.5
+   808→   808→
+   809→   809→    const language = typeof item.l === 'string' ? item.l : 'en'
+   810→   810→    const topQuote =
+   811→   811→      typeof item.q === 'string' && item.q.trim() ? item.q.trim() : null
+   812→   812→
+   813→   813→    // Match mentioned players by scanning content for tracked player names
+   814→   814→    const content = batch[idx].content.toLowerCase()
+   815→   815→    const mentionedPlayerIds: string[] = []
+   816→   816→    for (const [nameLower, playerId] of playerNameIndex) {
+   817→   817→      if (content.includes(nameLower)) {
+   818→   818→        mentionedPlayerIds.push(playerId)
+   819→   819→      }
+   820→   820→    }
+   821→   821→
+   822→   822→    results[idx] = {
+   823→   823→      sentiment: Math.max(0, Math.min(100, Math.round(score))),
+   824→   824→      positiveRatio: Math.max(0, Math.min(1, positiveRatio)),
+   825→   825→      mentionedPlayerIds,
+   826→   826→      topQuote,
+   827→   827→      language,
+   828→   828→    }
+   829→   829→  }
+   830→   830→
+   831→   831→  return results
+   832→   832→}
+   833→   833→

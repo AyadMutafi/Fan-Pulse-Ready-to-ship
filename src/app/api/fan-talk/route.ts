@@ -1,12 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/db'
+import {
+  isFakeAuthor,
+  fetchLiveFanTalk,
+} from '@/lib/live-fan-talk'
 
 /**
  * GET /api/fan-talk?teamCodes=ESP,KSA
  *
  * Public endpoint that powers the "What Fans Are Saying" UI panel on match
- * cards. Returns aggregated fan posts from admin-seeded FeedMonitors that
- * track the requested team codes.
+ * cards. Returns aggregated fan posts for the requested team codes.
+ *
+ * ── ANTI-HALLUCINATION CONTRACT (enforced on EVERY GET) ────────────────────
+ *
+ * 1. DELETE every FeedPost whose author matches any pattern in
+ *    FAKE_AUTHOR_PATTERNS. These are fabricated templated posts originally
+ *    seeded by scripts/seed-fan-talk.ts (handles like @angry_supporter,
+ *    u/tactical_nerd, "ESPN Match Report"). They are deleted, not merely
+ *    filtered, so they cannot re-appear in any future request.
+ *
+ * 2. After deletion, if fewer than 3 real posts remain for the requested
+ *    team codes, the route attempts a LIVE fetch via fetchLiveFanTalk()
+ *    (z-ai-web-dev-sdk web_search + LLM scoring). Real posts always carry
+ *    a real source URL with a real hostname (espn.com, aljazeera.com,
+ *    reddit.com, youtube.com, etc.).
+ *
+ * 3. If the live fetch returns 0 posts (SDK down, rate-limited, or no
+ *    results), the route returns { posts: [], ... } with an honest empty
+ *    state. It NEVER falls back to serving fake templated posts.
  *
  * Response:
  *   {
@@ -15,15 +36,15 @@ import { getDb } from '@/lib/db'
  *     totalPosts: number,
  *     monitorLabel: string | null,
  *     lastUpdated: string | null,  // ISO timestamp of newest post
- *     freshnessLabel: string | null
+ *     freshnessLabel: string | null,
+ *     liveFetchAttempted: boolean, // true if fetchLiveFanTalk was called
+ *     liveFetchError: string | null // human-readable error if fetch failed
  *   }
- *
- * This endpoint is the Fan Pulse equivalent of Google Search's
- * "What People Are Saying" panel — but purpose-built for World Cup 2026
- * with per-player sentiment, fan voting, and shareable Fan Cards.
  */
 
 const MAX_POSTS = 8
+/** Minimum real posts required to skip the live fetch attempt. */
+const MIN_REAL_POSTS_BEFORE_FETCH = 3
 
 export async function GET(request: NextRequest) {
   try {
@@ -36,32 +57,28 @@ export async function GET(request: NextRequest) {
       .filter(Boolean)
 
     if (teamCodes.length === 0) {
-      return NextResponse.json({
-        posts: [],
-        sentimentSplit: { positive: 0, neutral: 0, negative: 0 },
-        totalPosts: 0,
-        monitorLabel: null,
-        lastUpdated: null,
-        freshnessLabel: null,
-      })
+      return NextResponse.json(emptyResponse())
     }
 
     const database = getDb()
 
-    // Find monitors that track ANY of the requested team codes.
-    // SQLite doesn't have native JSON array queries, so we fetch candidate
-    // monitors (active or recently ended) and filter in JS by parsing the
-    // teamCodes JSON field.
+    // ── 1. PURGE fake-author posts on EVERY GET ────────────────────────────
+    // This is a defensive delete that runs unconditionally. It catches:
+    //   - legacy seeded fake posts that survived the one-off purge script
+    //   - any future accidental seeding of fake authors
+    // We delete posts whose author matches any FAKE_AUTHOR_PATTERNS entry.
+    // SQLite doesn't support regex in WHERE, so we fetch candidate authors
+    // and filter in JS. Authors are short strings, so this is cheap.
+    await purgeFakeAuthorPosts(database)
+
+    // ── 2. Find matching monitors for these team codes ─────────────────────
     const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000) // last 48h
     const candidateMonitors = await database.feedMonitor.findMany({
-      where: {
-        createdAt: { gte: cutoff },
-      },
+      where: { createdAt: { gte: cutoff } },
       orderBy: { createdAt: 'desc' },
-      take: 20,
+      take: 30,
     })
 
-    // Filter monitors that track at least one of the requested team codes
     const matchingMonitors = candidateMonitors.filter((m) => {
       try {
         const codes: string[] = JSON.parse(m.teamCodes)
@@ -71,66 +88,99 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    if (matchingMonitors.length === 0) {
+    // ── 3. Count current REAL posts for these monitors ─────────────────────
+    let monitorIds = matchingMonitors.map((m) => m.id)
+
+    // If no monitor exists yet for these team codes, we still want to
+    // attempt a live fetch below — fetchLiveFanTalk will create one.
+    if (monitorIds.length === 0) {
+      // Track that we have no monitor yet
+    }
+
+    const realPostCount =
+      monitorIds.length > 0
+        ? await database.feedPost.count({
+            where: { monitorId: { in: monitorIds } },
+          })
+        : 0
+
+    // ── 4. Attempt live fetch if too few real posts ────────────────────────
+    let liveFetchAttempted = false
+    let liveFetchError: string | null = null
+    if (realPostCount < MIN_REAL_POSTS_BEFORE_FETCH) {
+      liveFetchAttempted = true
+      console.log(
+        `[fan-talk] Only ${realPostCount} real posts for ${teamCodes.join(',')} — attempting live fetch`,
+      )
+      try {
+        const result = await fetchLiveFanTalk(database, teamCodes)
+        if (result.error) {
+          liveFetchError = result.error
+        }
+        // The fetch may have created a new monitor — re-query monitors
+        if (result.monitorId) {
+          const refreshed = await database.feedMonitor.findUnique({
+            where: { id: result.monitorId },
+          })
+          if (refreshed && !monitorIds.includes(refreshed.id)) {
+            monitorIds.push(refreshed.id)
+          }
+        }
+        console.log(
+          `[fan-talk] Live fetch: +${result.newPosts} new posts (${result.durationMs}ms)`,
+        )
+      } catch (err) {
+        liveFetchError = `Live fetch failed: ${String(err)}`
+        console.error(`[fan-talk] fetchLiveFanTalk threw:`, err)
+      }
+    }
+
+    // ── 5. If still no monitors, return honest empty state ─────────────────
+    if (monitorIds.length === 0) {
       return NextResponse.json({
-        posts: [],
-        sentimentSplit: { positive: 0, neutral: 0, negative: 0 },
-        totalPosts: 0,
-        monitorLabel: null,
-        lastUpdated: null,
-        freshnessLabel: null,
+        ...emptyResponse(),
+        liveFetchAttempted,
+        liveFetchError,
       })
     }
 
-    const monitorIds = matchingMonitors.map((m) => m.id)
-
-    // Fetch posts from matching monitors
+    // ── 6. Fetch real posts from matching monitors ─────────────────────────
     let allPosts = await database.feedPost.findMany({
       where: { monitorId: { in: monitorIds } },
       orderBy: tab === 'latest' ? [{ postedAt: 'desc' }] : undefined,
-      take: MAX_POSTS * 3, // over-fetch for popularity sort + sentiment stats
+      take: MAX_POSTS * 4, // over-fetch for popularity sort + sentiment stats
     })
 
-    // ── Safety net: filter out any posts with anti-bot block messages ──────
-    // The scraper now rejects block messages before saving, but this catches
-    // any legacy seeded data that slipped through. Posts with content like
-    // "Log into Instagram" or "blocked by network security" add zero value
-    // to the panel and get filtered here.
-    const BLOCK_PATTERNS = [
-      'blocked by network security',
-      'log into instagram',
-      'please enable javascript',
-      'access denied',
-      'attention required',
-      'enable javascript and cookies',
-      'are you a robot',
-      'unusual traffic',
-      'sorry, you have been blocked',
-      'checking your browser',
-      'cloudflare',
-      'please verify you are a human',
-      'request blocked',
-      'see everyday moments from your close friends',
-    ]
+    // ── 7. Defensive filter (block messages, fake authors, short content) ──
+    // The purge above should have removed fake authors, but we filter again
+    // here as a belt-and-suspenders safety net (in case a fake-author row
+    // was inserted between purge and this read).
     allPosts = allPosts.filter((p) => {
-      const lower = (p.content || '').toLowerCase()
-      // Also filter very-short content (likely block pages or empty snippets)
-      if ((p.content || '').length < 40) return false
+      if (isFakeAuthor(p.author)) return false
+      const content = p.content || ''
+      if (content.length < 40) return false
+      const lower = content.toLowerCase()
       return !BLOCK_PATTERNS.some((pat) => lower.includes(pat))
     })
 
+    // ── 8. Honest empty state if no real posts remain ──────────────────────
     if (allPosts.length === 0) {
+      const monitorLabel =
+        (matchingMonitors[0]?.matchLabel) ??
+        (await database.feedMonitor.findUnique({
+          where: { id: monitorIds[0] },
+          select: { matchLabel: true },
+        }))?.matchLabel ??
+        null
       return NextResponse.json({
-        posts: [],
-        sentimentSplit: { positive: 0, neutral: 0, negative: 0 },
-        totalPosts: 0,
-        monitorLabel: matchingMonitors[0]?.matchLabel ?? null,
-        lastUpdated: null,
-        freshnessLabel: null,
+        ...emptyResponse(),
+        monitorLabel,
+        liveFetchAttempted,
+        liveFetchError: liveFetchError ?? (liveFetchAttempted ? 'No posts found' : null),
       })
     }
 
-    // Compute sentiment split across ALL posts (not just the displayed subset)
+    // ── 9. Compute sentiment split across ALL real posts ───────────────────
     const totalForStats = allPosts.length
     let positive = 0
     let neutral = 0
@@ -146,26 +196,18 @@ export async function GET(request: NextRequest) {
       negative: totalForStats > 0 ? Math.round((negative / totalForStats) * 100) : 0,
     }
 
-    // Sort posts
+    // ── 10. Sort posts ─────────────────────────────────────────────────────
     let sortedPosts = allPosts
     if (tab === 'popular') {
-      // "Popular" sort: posts with a real LLM-extracted quote rank highest
-      // (they have the most "punchy" fan reaction), then by sentiment
-      // conviction (distance from 50), then by recency. This surfaces the
-      // most quotable, opinionated fan reactions first — exactly what a
-      // "What Fans Are Saying" panel should show.
       sortedPosts = [...allPosts].sort((a, b) => {
-        // Tier 1: posts with a quote always beat posts without
         const aHasQuote = a.topQuote ? 1 : 0
         const bHasQuote = b.topQuote ? 1 : 0
         if (aHasQuote !== bHasQuote) return bHasQuote - aHasQuote
-        // Tier 2: higher sentiment conviction (extreme praise/criticism)
         const aConviction = Math.abs(a.sentimentScore - 50)
         const bConviction = Math.abs(b.sentimentScore - 50)
         if (Math.abs(aConviction - bConviction) > 5) {
           return bConviction - aConviction
         }
-        // Tier 3: most recent first
         return b.postedAt.getTime() - a.postedAt.getTime()
       })
     }
@@ -183,7 +225,6 @@ export async function GET(request: NextRequest) {
       url: p.url,
     }))
 
-    // Find the newest post timestamp for freshness label
     const newestPost = allPosts.reduce(
       (latest, p) => (p.postedAt > latest ? p.postedAt : latest),
       allPosts[0].postedAt,
@@ -196,17 +237,79 @@ export async function GET(request: NextRequest) {
       monitorLabel: matchingMonitors[0]?.matchLabel ?? null,
       lastUpdated: newestPost.toISOString(),
       freshnessLabel: getRelativeTime(newestPost),
+      liveFetchAttempted,
+      liveFetchError,
     })
   } catch (error) {
     console.error('Failed to fetch fan talk:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch fan talk', posts: [] },
+      {
+        ...emptyResponse(),
+        error: 'Failed to fetch fan talk',
+        liveFetchAttempted: false,
+        liveFetchError: String(error),
+      },
       { status: 500 },
     )
   }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function emptyResponse() {
+  return {
+    posts: [],
+    sentimentSplit: { positive: 0, neutral: 0, negative: 0 },
+    totalPosts: 0,
+    monitorLabel: null,
+    lastUpdated: null,
+    freshnessLabel: null,
+    liveFetchAttempted: false,
+    liveFetchError: null as string | null,
+  }
+}
+
+/**
+ * Delete every FeedPost whose author matches any FAKE_AUTHOR_PATTERNS entry.
+ * Runs on every GET request as a defensive cleanup. Cheap because:
+ *   - We only scan FeedPosts created in the last 7 days (cutoff)
+ *   - Authors are short strings, JS-side filter is fast
+ */
+async function purgeFakeAuthorPosts(database: ReturnType<typeof getDb>): Promise<void> {
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  // Fetch candidate posts (id + author only) created in the last 7 days.
+  // This bounds the scan even if the table grows large.
+  const candidates = await database.feedPost.findMany({
+    where: { analyzedAt: { gte: cutoff } },
+    select: { id: true, author: true },
+    take: 5000,
+  })
+  const fakeIds = candidates.filter((p) => isFakeAuthor(p.author)).map((p) => p.id)
+  if (fakeIds.length === 0) return
+  // Delete in batches of 200 to avoid SQLite param limits
+  for (let i = 0; i < fakeIds.length; i += 200) {
+    const batch = fakeIds.slice(i, i + 200)
+    await database.feedPost.deleteMany({ where: { id: { in: batch } } })
+  }
+  console.log(`[fan-talk] Purged ${fakeIds.length} fake-author posts`)
+}
+
+const BLOCK_PATTERNS = [
+  'blocked by network security',
+  'log into instagram',
+  'please enable javascript',
+  'access denied',
+  'attention required',
+  'enable javascript and cookies',
+  'are you a robot',
+  'unusual traffic',
+  'sorry, you have been blocked',
+  'checking your browser',
+  'cloudflare',
+  'please verify you are a human',
+  'request blocked',
+  'see everyday moments from your close friends',
+]
 
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageCircle, ChevronDown, RefreshCw, ExternalLink } from 'lucide-react'
+import { MessageCircle, ChevronDown, RefreshCw, ExternalLink, Inbox } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,10 @@ interface FanTalkData {
   monitorLabel: string | null
   lastUpdated: string | null
   freshnessLabel: string | null
+  /** True if the API attempted a live SDK fetch for this request. */
+  liveFetchAttempted?: boolean
+  /** Human-readable error if the live fetch failed or returned nothing. */
+  liveFetchError?: string | null
 }
 
 interface FanTalkPanelProps {
@@ -184,16 +188,24 @@ export function FanTalkPanel({ teamCodes, matchLabel }: FanTalkPanelProps) {
                 </div>
               )}
 
-              {/* Empty state */}
+              {/* Empty state — honest, NO fabricated content */}
               {!loading && !hasData && (
-                <div className="text-center py-4">
-                  <p className="text-[10px] text-[#999] dark:text-gray-500">
-                    {totalPosts === 0
-                      ? 'No fan posts yet for this match.'
-                      : 'Loading fan reactions…'}
+                <div className="text-center py-6 px-3">
+                  <div className="inline-flex items-center justify-center size-9 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] mb-2">
+                    <Inbox className="size-4 text-[#999] dark:text-gray-500" />
+                  </div>
+                  <p className="text-[10px] font-semibold text-[#666] dark:text-[#CCCCCC]">
+                    Fan posts are loading / unavailable for this match right now.
                   </p>
-                  <p className="text-[9px] text-[#BBB] dark:text-gray-600 mt-1">
-                    Sentiment data appears once admin monitoring begins.
+                  <p className="text-[9px] text-[#999] dark:text-gray-500 mt-1.5 leading-relaxed">
+                    {data?.liveFetchAttempted
+                      ? data?.liveFetchError
+                        ? `Live fetch attempted: ${data.liveFetchError}. Real posts will appear once the source is reachable.`
+                        : 'Live fetch attempted but no real posts were found. Try refreshing in a few minutes.'
+                      : 'Real fan posts will appear here once we can reach live social/news sources for this match.'}
+                  </p>
+                  <p className="text-[8px] text-[#BBB] dark:text-gray-600 mt-2 italic">
+                    We never show fabricated or templated posts.
                   </p>
                 </div>
               )}
