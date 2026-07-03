@@ -27,7 +27,7 @@ Click any player and you get the full breakdown. No black box.
 
 ## Elite XI vs Crisis XI
 
-Every matchday I build two 4-3-3 formations: the **highest-rated XI** and the **lowest-rated XI** of the round, with trend arrows. Matchday 1 had Pulisic, Musiala, Isak in the Elite team. Yamal and Weghorst landed in Crisis after that Spain 0-0 vs Cape Verde (sorry Lamine, I don't make the rules).
+Every matchday I build two 4-3-3 formations: the **highest-rated XI** and the **lowest-rated XI** of the round, with trend arrows. Matchday 1 had Messi, Musiala, Bellingham, and Isak in the Elite team. Yamal and Weghorst landed in Crisis after that Spain 0-0 vs Cape Verde.
 
 ## Fan Cards
 

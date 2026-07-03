@@ -1,5 +1,7 @@
 # FanPulse Architecture
 
+> **NOTE: This document describes the TARGET architecture.** The current implementation is a single-file `src/app/page.tsx` using raw `fetch` + `useState` (no React Query, no tab-component split). The structure below is aspirational and will be migrated incrementally.
+
 > The bridge between the AI selection engine and the UI rendering layer.
 
 ## Problem Statement

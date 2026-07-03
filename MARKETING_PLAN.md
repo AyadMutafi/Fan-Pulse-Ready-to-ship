@@ -120,7 +120,7 @@ moment we go live + a free sentiment snapshot for the first match."
 
 ## 4. Hard Launch Week (Jun 28 – Jul 5)
 
-### Launch Day — Jun 28 (Round of 16 begins)
+### Launch Day — Jun 28 (Round of 32 begins)
 
 **The strategy:** Don't launch into a vacuum. Launch *into* the match conversation.
 
@@ -297,8 +297,8 @@ localStorage counter + a small badge on their vote. Drives daily return visits.
 
 | Date | Match | Marketing move |
 |---|---|---|
-| **Jun 28** | R16 begins | LAUNCH. All channels fire. |
-| **Jul 1** | R16 concludes | "Round of 16 Fan Pulse Awards" post (most loved team, most hated player, etc.) |
+| **Jun 28** | R32 begins | LAUNCH. All channels fire. |
+| **Jul 2** | R32 concludes | "Round of 32 Fan Pulse Awards" post (most loved team, most hated player, etc.) |
 | **Jul 4–5** | Quarter-finals | Peak engagement — double down on real-time content |
 | **Jul 8–9** | Semi-finals | "Final 4 Fan Mood" — biggest push, this is your moment |
 | **Jul 14** | 3rd place | Light content (lower stakes) |

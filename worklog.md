@@ -1248,3 +1248,38 @@ Stage Summary:
 - Defense in depth: even if a future editor re-adds a non-WC entry to TEAM_NAME_TO_CODE or TEAM_INFO, the NATIONAL_TEAMS-derived Set guard will still block phantom matches from reaching the database
 - Fixed latent bug: 'iran' was previously mapped to non-existent code 'IRI'; now correctly mapped to 'IRN' (matches NATIONAL_TEAMS and ISO 3166)
 - Lint clean. No runtime changes to existing WC 2026 match scraping behavior — all 48 verified teams continue to be scraped and persisted as before.
+
+---
+Task ID: docs-accuracy-fix
+Agent: Main Agent
+Task: Correct three documentation files (MARKETING_PLAN.md, reddit-article.md, ARCHITECTURE.md) that contain claims contradicting verified data or actual app state.
+
+Work Log:
+- Read all three target files to locate the exact false claims:
+  * MARKETING_PLAN.md: grepped for "R16|Round of 16|Jun 28|Jul 1|Jul 2" — found 2 knockout-stage start references wrong (line 123 "Round of 16 begins", line 300 "R16 begins") and 1 conclusion-date reference wrong (line 301 "Jul 1 / R16 concludes / Round of 16 Fan Pulse Awards")
+  * reddit-article.md: grepped for "Pulisic|Musiala|Isak|Elite" — found line 30 falsely claims "Matchday 1 had Pulisic, Musiala, Isak in the Elite team"
+  * ARCHITECTURE.md: read top of file — confirmed it describes a React Query + tab-component-split architecture that does not exist in the codebase (src/app/page.tsx is a single-file monolith using raw fetch + useState)
+
+- Fix 1 — MARKETING_PLAN.md (Round of 16 → Round of 32):
+  * Line 123: "Launch Day — Jun 28 (Round of 16 begins)" → "Launch Day — Jun 28 (Round of 32 begins)"
+  * Line 300: "| **Jun 28** | R16 begins | LAUNCH. All channels fire. |" → "| **Jun 28** | R32 begins | LAUNCH. All channels fire. |"
+  * Line 301: "| **Jul 1** | R16 concludes | "Round of 16 Fan Pulse Awards" post ... |" → "| **Jul 2** | R32 concludes | "Round of 32 Fan Pulse Awards" post ... |"
+  * Verified via grep: 0 occurrences of "R16" or "Round of 16" remain in the file
+
+- Fix 2 — reddit-article.md (false Elite XI claim):
+  * Replaced: "Matchday 1 had Pulisic, Musiala, Isak in the Elite team. Yamal and Weghorst landed in Crisis after that Spain 0-0 vs Cape Verde (sorry Lamine, I don't make the rules)."
+  * With: "Matchday 1 had Messi, Musiala, Bellingham, and Isak in the Elite team. Yamal and Weghorst landed in Crisis after that Spain 0-0 vs Cape Verde."
+  * Cross-checked against VERIFIED_DATA.md Part 4 group-stage Elite XI: Ochoa, Hakimi, Souttar, Montes, Robertson, Musiala, Bellingham, Wirtz, Vinícius, Isak, Messi — Pulisic confirmed NOT in it (he appears only in the R32 buzz ranker). Removed the casual "sorry Lamine, I don't make the rules" aside to keep the corrected line clean and factual.
+  * Verified via grep: "Pulisic" no longer appears in the file; "Messi", "Bellingham" now present.
+
+- Fix 3 — ARCHITECTURE.md (aspirational banner):
+  * Added a prominent blockquote banner immediately after the H1 title, before any structural content:
+    > **NOTE: This document describes the TARGET architecture.** The current implementation is a single-file `src/app/page.tsx` using raw `fetch` + `useState` (no React Query, no tab-component split). The structure below is aspirational and will be migrated incrementally.
+  * Did NOT delete any of the existing target-structure content (data flow diagrams, component trees, hook signatures) — only marked it as aspirational per the prompt's explicit instruction.
+  * Verified via head -6: banner is now the first content line after the title.
+
+Stage Summary:
+- MARKETING_PLAN.md: all 3 R16/Round-of-16 references corrected to R32/Round-of-32; "Jul 1 R16 concludes" corrected to "Jul 2 R32 concludes"; "Round of 16 Fan Pulse Awards" corrected to "Round of 32 Fan Pulse Awards". Zero R16/Round-of-16 strings remain.
+- reddit-article.md: false Pulisic-in-Elite-XI claim replaced with verified Messi/Musiala/Bellingham/Isak claim (cross-checked against VERIFIED_DATA.md Part 4). Yamal/Weghorst Crisis reference preserved (factually correct).
+- ARCHITECTURE.md: target-architecture document now clearly marked as aspirational at the very top; readers can no longer mistake the described component/hook/React-Query structure for the current implementation.
+- No source code changed — documentation-only fix. No lint run needed (lint covers .ts/.tsx only).
