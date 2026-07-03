@@ -245,6 +245,7 @@ function HomeTab() {
   const [apiMatches, setApiMatches] = useState<Array<{
     id: string; home: string; away: string; homeFlag: string; awayFlag: string
     score: string; homeSentiment: number; awaySentiment: number; live: boolean; league: string
+    status: string; group: string; matchDate: string
   }>>([])
 
   // Fan vote state
@@ -274,6 +275,9 @@ function HomeTab() {
             awaySentiment: Math.round(m.awayTeam.sentiment),
             live: m.status === 'live',
             league: m.league === 'WC' ? wcStageLabel(m.group) : m.league,
+            status: m.status || 'upcoming',
+            group: m.group || '',
+            matchDate: m.matchDate || '',
           }))
           setApiMatches(mapped)
         }
@@ -404,106 +408,99 @@ function HomeTab() {
     ? 'Be the first to vote in the Fan Mood section below'
     : `${totalVoteCount.toLocaleString()} fan votes tallied for World Cup 2026 Group Stage`
 
-  // ── Arena Intelligence: derived from REAL match data, not hardcoded strings ──
-  // Previously this was 7 hardcoded strings with fake "2m ago" / "8m ago"
-  // timestamps that never changed. Now we compute insights from apiMatches:
-  // biggest win, shock result, clean sheets, highest-scoring draw, etc.
-  // All timestamps are labeled "Matchday 1" (the real matchday) instead of fake
-  // relative times.
-  const arenaIntel = useMemo(() => {
+  // ── Arena Intelligence: VERIFIED insights only ──────────────────────────
+  // Every insight below is a historical fact sourced from VERIFIED_DATA.md
+  // (the project's single source of truth, cross-checked against Wikipedia,
+  // ESPN, Olympics.com, FIFA.com on 2026-07-02). We deliberately do NOT
+  // auto-generate insights from apiMatches because that approach produced two
+  // verifiable hallucinations in production:
+  //   (1) "World Cup 2026 kicked off with ESP 0-0 AUT in the opener" — FALSE.
+  //       The old code used parsed[0] (first array element) as "the opener",
+  //       but the first row happened to be an UPCOMING R32 match (ESP vs AUT,
+  //       scheduled Jul 3, not yet played). The real opener was MEX 2-0 RSA
+  //       on Jun 11 (the earliest matchDate among completed matches).
+  //   (2) "Shock in Group Stage: ESP 0-0 AUT" — FALSE. The old code used
+  //       league.includes('WC') to label the stage as "Group Stage", but ALL
+  //       WC matches (including R32) match that check. ESP vs AUT is an R32
+  //       match, not a group-stage match. The real group-stage shock was
+  //       ESP 0-0 CPV (Spain held scoreless by Cape Verde).
+  //
+  // Fix: hardcode the verified insight set with explicit VERIFIED_DATA.md
+  // citations. Only the fan-vote count stays dynamic (it is live data).
+  // This guarantees we never describe an upcoming match as played, never
+  // mislabel a knockout match as a group-stage match, and never invent stats.
+  const arenaIntel = useMemo<Array<{ icon: typeof Sparkles; text: string; color: string }>>(() => {
     const items: Array<{ icon: typeof Sparkles; text: string; color: string }> = []
 
-    if (apiMatches.length === 0) {
-      return [
-        { icon: Activity, text: 'Loading live match data…', color: 'text-[#6C2BD9]' },
-      ]
-    }
-
-    // Parse scores (format: "2-0" or "1-1") from the score string
-    const parsed = apiMatches.map(m => {
-      const [h, a] = (m.score || '0-0').split('-').map(s => parseInt(s.trim(), 10) || 0)
-      return { ...m, homeScore: h, awayScore: a, goalDiff: Math.abs(h - a), totalGoals: h + a }
+    // 1. Tournament opener — VERIFIED_DATA.md Part 1, Group A, match 1
+    //    "Mexico 2-0 South Africa — Jun 11, Mexico City. Scorers: Quiñones 9', Jiménez 67'."
+    //    This is the earliest completed match in the DB (matchDate 2026-06-11).
+    items.push({
+      icon: Trophy,
+      text: 'Mexico 2-0 South Africa opened the 2026 World Cup on Jun 11 (Quiñones 9\', Jiménez 67\')',
+      color: 'text-[#FF6B35]',
     })
 
-    // 1. Biggest win (largest goal difference)
-    const biggestWin = [...parsed].sort((a, b) => b.goalDiff - a.goalDiff)[0]
-    if (biggestWin && biggestWin.goalDiff >= 3) {
-      items.push({
-        icon: Flame,
-        text: `${biggestWin.home} ${biggestWin.score} ${biggestWin.away} — ${biggestWin.goalDiff}-goal margin sets the tone for Matchday 1`,
-        color: 'text-[#FF6B35]',
-      })
-    }
+    // 2. Biggest win — VERIFIED_DATA.md Part 1, Group E, match 9
+    //    "Germany 7-1 Curaçao — Jun 14, Houston." 6-goal margin = largest of Matchday 1.
+    items.push({
+      icon: Flame,
+      text: "Germany's 7-1 win over Curaçao is the largest victory margin of Matchday 1",
+      color: 'text-[#FF6B35]',
+    })
 
-    // 2. Shock result (lower sentiment team won or drew against higher)
-    const shock = parsed.find(m =>
-      m.homeScore <= m.awayScore && m.homeSentiment > m.awaySentiment + 20
-    ) || parsed.find(m =>
-      m.goalDiff === 0 && Math.abs(m.homeSentiment - m.awaySentiment) > 25
-    )
-    if (shock) {
-      items.push({
-        icon: BarChart3,
-        text: `Shock in Group ${shock.league?.includes('WC') ? 'Stage' : ''}: ${shock.home} ${shock.score} ${shock.away} — sentiment predicted a different outcome`,
-        color: 'text-[#EF4444]',
-      })
-    }
+    // 3. Hat-trick — VERIFIED_DATA.md Part 1, Group J, match 19
+    //    "Argentina 3-0 Algeria — Jun 16. Scorer: Messi 17', 60', 76' (hat-trick)."
+    items.push({
+      icon: Sparkles,
+      text: "Argentina's Messi scored a hat-trick vs Algeria (17', 60', 76')",
+      color: 'text-[#6C2BD9]',
+    })
 
-    // 3. Fan vote count (dynamic — already computed above)
+    // 4. Highest-scoring group match — VERIFIED_DATA.md Part 1, Group L, match 23
+    //    "England 4-2 Croatia — Jun 17." 6 goals = highest-scoring group match.
+    items.push({
+      icon: Activity,
+      text: 'England beat Croatia 4-2 in the highest-scoring group-stage match',
+      color: 'text-[#6C2BD9]',
+    })
+
+    // 5. Shock — VERIFIED_DATA.md Part 1, Group H, match 15
+    //    "Spain 0-0 Cape Verde — Jun 15, Atlanta. No scorers."
+    //    Spain (pre-tournament favorite) held scoreless by Cape Verde (debutants).
+    items.push({
+      icon: BarChart3,
+      text: 'Spain were held 0-0 by Cape Verde — the shock of Matchday 1',
+      color: 'text-[#EF4444]',
+    })
+
+    // 6. Mbappé brace — VERIFIED_DATA.md Part 1, Group I, match 17
+    //    "France 3-1 Senegal — Jun 16. Scorers: Mbappé 66', 90+6', Barcola 82' | Mbaye 90+5'."
+    items.push({
+      icon: Zap,
+      text: 'France beat Senegal 3-1 with a Mbappé brace (66\', 90+6\')',
+      color: 'text-[#6C2BD9]',
+    })
+
+    // 7. Highest-scoring draw — VERIFIED_DATA.md Part 1, Group G, match 14 + Group F, match 11
+    //    "Iran 2-2 New Zealand — Jun 16" and "Netherlands 2-2 Japan — Jun 14"
+    //    Both 2-2 (4 goals) — tied for highest-scoring draw of Matchday 1.
+    items.push({
+      icon: Activity,
+      text: 'Iran and New Zealand drew 2-2 — tied with NED 2-2 JPN as the highest-scoring draws of Matchday 1',
+      color: 'text-[#6C2BD9]',
+    })
+
+    // 8. Fan vote count (DYNAMIC — the only non-hardcoded insight)
+    //    Derived from the live /api/fan-vote response, not a verified fact.
     items.push({
       icon: Users,
       text: fanVoteIntelText,
       color: 'text-[#10B981]',
     })
 
-    // 4. Highest-scoring draw
-    const draw = parsed.filter(m => m.homeScore === m.awayScore && m.totalGoals >= 3)
-      .sort((a, b) => b.totalGoals - a.totalGoals)[0]
-    if (draw) {
-      items.push({
-        icon: Activity,
-        text: `${draw.home} ${draw.score} ${draw.away} — highest-scoring draw of Matchday 1 with ${draw.totalGoals} goals`,
-        color: 'text-[#6C2BD9]',
-      })
-    }
-
-    // 5. Clean sheet dominance
-    const cleanSheet = parsed.filter(m => m.awayScore === 0 && m.homeScore >= 2)
-      .sort((a, b) => b.homeScore - a.homeScore)[0]
-    if (cleanSheet) {
-      items.push({
-        icon: Shield,
-        text: `${cleanSheet.home} keep a clean sheet in ${cleanSheet.score} win — defensive statement to open the tournament`,
-        color: 'text-[#10B981]',
-      })
-    }
-
-    // 6. Highest fan sentiment winner
-    const topSentiment = [...parsed].sort((a, b) =>
-      Math.max(b.homeSentiment, b.awaySentiment) - Math.max(a.homeSentiment, a.awaySentiment)
-    )[0]
-    if (topSentiment) {
-      const dominant = topSentiment.homeSentiment > topSentiment.awaySentiment
-        ? topSentiment.home : topSentiment.away
-      items.push({
-        icon: Sparkles,
-        text: `${dominant} riding highest fan mood (${Math.max(topSentiment.homeSentiment, topSentiment.awaySentiment)}/100) after Matchday 1`,
-        color: 'text-[#6C2BD9]',
-      })
-    }
-
-    // 7. Tournament opener
-    const opener = parsed[0]
-    if (opener) {
-      items.push({
-        icon: Trophy,
-        text: `World Cup 2026 kicked off with ${opener.home} ${opener.score} ${opener.away} in the opener`,
-        color: 'text-[#FF6B35]',
-      })
-    }
-
-    return items.slice(0, 7)
-  }, [apiMatches, fanVoteIntelText])
+    return items
+  }, [fanVoteIntelText])
 
   const moodTeamEntries = FAN_MOOD_TEAM_CODES.map(code => {
     const team = NATIONAL_TEAMS.find(t => t.code === code)

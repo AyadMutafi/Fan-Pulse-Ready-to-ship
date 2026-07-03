@@ -1116,3 +1116,55 @@ Stage Summary:
 - DB state after fix: 3 monitors, 54 posts, ALL from real sources (reddit.com, foxsports.com, youtube.com, nytimes.com, reutersconnect.com, instagram.com).
 - Browser-verified: ESP vs AUT panel shows 8 real posts with real hostnames; comprehensive DOM scan of both innerText and innerHTML returns 0 matches for any of the 20+ forbidden fake-string variants. Honest empty state also verified via API mock.
 - Artifacts: src/lib/live-fan-talk.ts (new), src/app/api/fan-talk/route.ts (rewritten), src/components/FanTalkPanel.tsx (empty-state updated), scripts/purge-fake-fan-talk.ts (new one-off purge), scripts/seed-fan-talk.ts (left in place but its output is now purged on every API GET — it can be deleted in a future cleanup).
+
+---
+Task ID: arena-intel-hallucination-fix
+Agent: Main Agent
+Task: Fix the Arena Intelligence section on the Home tab which contained two verifiably false statements: (1) "World Cup 2026 kicked off with ESP 0 - 0 AUT in the opener" — FALSE (the real opener was Mexico 2-0 South Africa on Jun 11; ESP vs AUT is an upcoming R32 match scheduled Jul 3 that has not been played); (2) "Shock in Group Stage: ESP 0 - 0 AUT — sentiment predicted a different outcome" — FALSE (ESP vs AUT is an R32 match, not a group-stage match; the real group-stage shock was ESP 0-0 CPV — Spain held scoreless by Cape Verde).
+
+Work Log:
+- Located the Arena Intelligence source in src/app/page.tsx (lines 407-506, a `useMemo` block computing `arenaIntel` from `apiMatches`). The insights were AUTO-GENERATED, not hardcoded.
+- Read VERIFIED_DATA.md (the project's single source of truth, cross-checked against Wikipedia, ESPN, Olympics.com, FIFA.com on 2026-07-02) to ground the replacement insights. Confirmed:
+  • Opener: Mexico 2-0 South Africa, Jun 11 (Part 1, Group A, match 1) — earliest matchDate among completed matches.
+  • Biggest win: Germany 7-1 Curaçao (Part 1, Group E, match 9) — 6-goal margin.
+  • Hat-trick: Argentina's Messi 17', 60', 76' vs Algeria (Part 1, Group J, match 19).
+  • Highest-scoring group match: England 4-2 Croatia (Part 1, Group L, match 23) — 6 goals.
+  • Shock: Spain 0-0 Cape Verde (Part 1, Group H, match 15) — Spain held scoreless by debutants.
+  • Mbappé brace: France 3-1 Senegal, Mbappé 66' + 90+6' (Part 1, Group I, match 17).
+  • Highest-scoring draws: Iran 2-2 New Zealand (Group G) AND Netherlands 2-2 Japan (Group F) — both 4 goals, tied.
+- Inspected /api/matches?league=WC to confirm DB structure: 40 matches total (34 completed: 24 group + 10 R32; 6 upcoming R32 scheduled Jul 3). Confirmed ESP vs AUT is status="upcoming", group="R32", matchDate="2026-07-03" — NOT played. Confirmed ESP vs CPV is status="completed", group="H", score="0 - 0", matchDate="2026-06-15".
+- Root-caused the two hallucinations:
+  • Bug 1 (opener): old code used `parsed[0]` (first array element) as "the opener". The matches API returns upcoming R32 matches FIRST (sorted by matchDate ascending, but upcoming matches with Jul 3 dates appeared before the Jun 11 group-stage matches in the array order the frontend received). ESP vs AUT was row 0, so it was wrongly labeled "the opener". The fix must use the earliest matchDate among COMPLETED matches, not array index 0.
+  • Bug 2 (shock labeling): old code used `league.includes('WC')` to decide the label, outputting "Group Stage" for ALL WC matches. But R32 matches also have league="WC", so ESP vs AUT (an R32 match) got mislabeled as "Group Stage". The real group-stage shock was ESP 0-0 CPV (group "H"), not ESP vs AUT (group "R32").
+- Decided to HARDCODE the verified insight set (per the prompt's explicit fallback guidance: "If you cannot safely auto-generate insights, hardcode the verified set above with a comment citing VERIFIED_DATA.md"). Rationale: the auto-generator had already produced two distinct hallucinations through two different code paths (opener array index + stage labeling). A third auto-generated path would risk a third hallucination. Hardcoding verified facts with explicit citations is the safest approach. Only the fan-vote count stays dynamic (it is live data, not a historical fact).
+- Extended the `apiMatches` state type to include `status`, `group`, and `matchDate` fields (previously dropped during mapping) so the data is available for correct stage labeling elsewhere and for future auto-generation if ever re-enabled safely.
+- Replaced the entire `arenaIntel` useMemo block (src/app/page.tsx lines ~411-503) with 8 verified insights, each with an inline comment citing the exact VERIFIED_DATA.md Part/Group/match number:
+  1. 🏆 "Mexico 2-0 South Africa opened the 2026 World Cup on Jun 11 (Quiñones 9', Jiménez 67')" — Part 1, Group A, match 1
+  2. 🔥 "Germany's 7-1 win over Curaçao is the largest victory margin of Matchday 1" — Part 1, Group E, match 9
+  3. ✨ "Argentina's Messi scored a hat-trick vs Algeria (17', 60', 76')" — Part 1, Group J, match 19
+  4. 📊 "England beat Croatia 4-2 in the highest-scoring group-stage match" — Part 1, Group L, match 23
+  5. 📉 "Spain were held 0-0 by Cape Verde — the shock of Matchday 1" — Part 1, Group H, match 15
+  6. ⚡ "France beat Senegal 3-1 with a Mbappé brace (66', 90+6')" — Part 1, Group I, match 17
+  7. 📊 "Iran and New Zealand drew 2-2 — tied with NED 2-2 JPN as the highest-scoring draws of Matchday 1" — Part 1, Group G match 14 + Group F match 11
+  8. 👥 Fan vote count (DYNAMIC — derived from live /api/fan-vote response)
+- Added a detailed block comment above the useMemo documenting the two original hallucinations, their root causes, and why hardcoding is the fix. This prevents a future developer from re-introducing the auto-generator without understanding why it was removed.
+- Verified end-to-end with Agent Browser:
+  • Opened http://localhost:3000/, waited for network idle.
+  • Extracted the Arena Intelligence section text via JS eval. Confirmed all 8 insights render correctly:
+    - "Mexico 2-0 South Africa opened the 2026 World Cup on Jun 11 (Quiñones 9', Jiménez 67')"
+    - "Germany's 7-1 win over Curaçao is the largest victory margin of Matchday 1"
+    - "Argentina's Messi scored a hat-trick vs Algeria (17', 60', 76')"
+    - "England beat Croatia 4-2 in the highest-scoring group-stage match"
+    - "Spain were held 0-0 by Cape Verde — the shock of Matchday 1"
+    - "France beat Senegal 3-1 with a Mbappé brace (66', 90+6')"
+    - "Iran and New Zealand drew 2-2 — tied with NED 2-2 JPN as the highest-scoring draws of Matchday 1"
+    - "16 fan votes tallied for World Cup 2026 Group Stage" (dynamic — reflects live vote count)
+  • Scanned document.body.innerText for 7 forbidden string variants: "ESP 0 - 0 AUT in the opener", "ESP 0-0 AUT in the opener", "ESP 0 - 0 AUT", "kicked off with ESP", "Shock in Group Stage: ESP 0 - 0 AUT", "Shock in Group Stage: ESP", "ESP 0-0 AUT — sentiment". Result: 0 matches. Verdict: PASS.
+  • Verified all 16 required verified facts are present in the DOM: "Mexico 2-0 South Africa", "Jun 11", "Germany", "7-1", "Curaçao", "Messi", "hat-trick", "England", "Croatia", "4-2", "Cape Verde", "Mbappé", "Senegal", "Iran", "New Zealand", "2-2". Result: 16/16 present, 0 missing.
+- Lint passes clean. Dev server recompiled with no errors. Screenshot saved to arena-intel-fixed.png.
+
+Stage Summary:
+- Root cause: the `arenaIntel` useMemo auto-generated insights from `apiMatches` using two buggy code paths: (1) `parsed[0]` as "the opener" — but array index 0 was an upcoming R32 match (ESP vs AUT, Jul 3, not yet played), not the earliest completed match (MEX vs RSA, Jun 11); (2) `league.includes('WC')` → "Group Stage" label — but ALL WC matches (including R32) match that check, so ESP vs AUT (an R32 match) was mislabeled as a group-stage match.
+- Fix: replaced the entire auto-generator with a hardcoded set of 7 verified insights sourced from VERIFIED_DATA.md (each with an inline Part/Group/match citation) + 1 dynamic fan-vote count. Extended the apiMatches state type to include status/group/matchDate for correct stage labeling elsewhere. Added a block comment documenting the original hallucinations and their root causes to prevent regression.
+- Browser-verified: Arena Intelligence section shows Mexico 2-0 South Africa as the opener (Jun 11), Germany 7-1 Curaçao as biggest win, Messi hat-trick, England 4-2 Croatia, Spain 0-0 Cape Verde shock, Mbappé brace, Iran/NZ 2-2 draw, and the live fan-vote count. ZERO forbidden strings found in the DOM. All 16 required verified facts present.
+- Artifacts modified: src/app/page.tsx (apiMatches type extended + arenaIntel useMemo replaced with verified hardcoded insights + block comment).
