@@ -81,6 +81,16 @@ const TEAM_INFO: Record<string, { name: string; flag: string }> = {
 // ── VERIFIED Match data ──────────────────────────────────────────────────────
 // Sources: Wikipedia (2026_FIFA_World_Cup), Olympics.com R32 bracket, ESPN, FIFA.
 // See /VERIFIED_DATA.md. Goalscorers listed in comments are the verified scorers.
+//
+// ── DISCLAIMER: sentiment values are NOT verified facts ──────────────────────
+// homeSentiment and awaySentiment are app-internal baseline sentiment estimates
+// (0-100) used as fallbacks by the Pulse Engine when no live fan-vote or
+// scraped-sentiment data exists. They are NOT verified facts and must not be
+// cited as such. Verified facts are: homeScore, awayScore, group, matchDate,
+// status, and the goalscorers in trailing comments. The sentiment numbers are
+// reasonable priors (e.g. the winner of a 7-1 rout gets a high score, the
+// loser a low one) but they are computed heuristics, not measured fan sentiment.
+// ─────────────────────────────────────────────────────────────────────────────
 const MATCHES_DATA: Array<{
   homeCode: string; awayCode: string
   homeScore: number; awayScore: number
