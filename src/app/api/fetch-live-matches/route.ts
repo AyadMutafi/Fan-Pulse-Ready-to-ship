@@ -1,11 +1,23 @@
 import { NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
+import { NATIONAL_TEAMS } from '@/lib/national-teams'
 
 // Cache duration: 30 minutes
 const CACHE_DURATION = 30 * 60 * 1000
 let lastFetchTime = 0
 let cachedResults: any = null
+
+/**
+ * Anti-hallucination guard: the canonical set of 48 verified World Cup 2026 team codes.
+ * Any scraped match whose home/away team code is NOT in this set MUST be skipped —
+ * otherwise friendlies, qualifiers, or unrelated ESPN/FIFA articles would create
+ * phantom WC matches in the database, polluting the verified data.
+ * Source of truth: src/lib/national-teams.ts NATIONAL_TEAMS.
+ */
+const WC_2026_TEAM_CODES: ReadonlySet<string> = new Set(
+  NATIONAL_TEAMS.map(t => t.code)
+)
 
 export async function GET() {
   try {
@@ -147,29 +159,47 @@ export async function GET() {
     }
 
     // Step 5: Map team names to codes and update database
+    // ONLY the 48 verified World Cup 2026 team codes are mapped here.
+    // Non-WC teams (Denmark, Italy, Chile, Nigeria, Peru, Jamaica, Costa Rica,
+    // Wales, Poland, Honduras, Iceland, Cameroon, ...) have been removed so that
+    // the ESPN/FIFA scraper cannot create phantom WC matches from friendlies or
+    // qualifiers. Cross-referenced against src/lib/national-teams.ts NATIONAL_TEAMS.
     const TEAM_NAME_TO_CODE: Record<string, string> = {
-      'mexico': 'MEX', 'south africa': 'RSA', 'south korea': 'KOR', 'korea republic': 'KOR',
-      'czechia': 'CZE', 'czech republic': 'CZE', 'canada': 'CAN',
+      // ── Group A ── Mexico, South Africa, Korea Republic, Czechia
+      'mexico': 'MEX', 'south africa': 'RSA',
+      'south korea': 'KOR', 'korea republic': 'KOR',
+      'czechia': 'CZE', 'czech republic': 'CZE',
+      // ── Group B ── Canada, Bosnia and Herzegovina, Qatar, Switzerland
+      'canada': 'CAN',
       'bosnia': 'BIH', 'bosnia and herzegovina': 'BIH',
-      'switzerland': 'SUI', 'denmark': 'DEN',
-      'brazil': 'BRA', 'morocco': 'MAR', 'scotland': 'SCO',
-      'cape verde': 'CPV', 'cabo verde': 'CPV',
+      'qatar': 'QAT', 'switzerland': 'SUI',
+      // ── Group C ── Brazil, Haiti, Morocco, Scotland
+      'brazil': 'BRA', 'haiti': 'HAI',
+      'morocco': 'MAR', 'scotland': 'SCO',
+      // ── Group D ── USA, Paraguay, Australia, Türkiye
       'united states': 'USA', 'paraguay': 'PAR', 'australia': 'AUS',
       'turkiye': 'TUR', 'turkey': 'TUR',
+      // ── Group E ── Germany, Curaçao, Côte d'Ivoire, Ecuador
       'germany': 'GER', 'curacao': 'CUW', 'curaçao': 'CUW',
-      'sweden': 'SWE', 'nigeria': 'NGA',
-      'argentina': 'ARG', 'colombia': 'COL', 'uzbekistan': 'UZB', 'cameroon': 'CMR',
-      'italy': 'ITA', 'chile': 'CHI', 'ecuador': 'ECU', 'algeria': 'ALG',
-      'france': 'FRA', 'portugal': 'POR', 'peru': 'PER', 'jamaica': 'JAM',
-      'netherlands': 'NED', 'senegal': 'SEN', 'costa rica': 'CRC', 'wales': 'WAL',
-      'england': 'ENG', 'uruguay': 'URU', 'poland': 'POL', 'ghana': 'GHA',
-      'spain': 'ESP', 'croatia': 'CRO', 'honduras': 'HON', 'iceland': 'ISL',
-      'japan': 'JPN', 'belgium': 'BEL', 'new zealand': 'NZL', 'saudi arabia': 'KSA',
-      // Additional common name variants
-      'qatar': 'QAT', 'haiti': 'HAI', 'iran': 'IRI', 'egypt': 'EGY',
-      'iraq': 'IRQ', 'norway': 'NOR', 'austria': 'AUT', 'jordan': 'JOR',
+      'ecuador': 'ECU',
       'ivory coast': 'CIV', "côte d'ivoire": 'CIV', "cote d'ivoire": 'CIV',
-      'dr congo': 'COD', 'congo dr': 'COD', 'panama': 'PAN',
+      // ── Group F ── Netherlands, Japan, Sweden, Tunisia
+      'netherlands': 'NED', 'japan': 'JPN', 'sweden': 'SWE', 'tunisia': 'TUN',
+      // ── Group G ── Belgium, Egypt, Iran, New Zealand
+      'belgium': 'BEL', 'egypt': 'EGY', 'iran': 'IRN', 'new zealand': 'NZL',
+      // ── Group H ── Spain, Cape Verde, Saudi Arabia, Uruguay
+      'spain': 'ESP', 'cape verde': 'CPV', 'cabo verde': 'CPV',
+      'saudi arabia': 'KSA', 'uruguay': 'URU',
+      // ── Group I ── France, Senegal, Iraq, Norway
+      'france': 'FRA', 'senegal': 'SEN', 'iraq': 'IRQ', 'norway': 'NOR',
+      // ── Group J ── Argentina, Algeria, Austria, Jordan
+      'argentina': 'ARG', 'algeria': 'ALG', 'austria': 'AUT', 'jordan': 'JOR',
+      // ── Group K ── Portugal, DR Congo, Uzbekistan, Colombia
+      'portugal': 'POR',
+      'dr congo': 'COD', 'congo dr': 'COD',
+      'uzbekistan': 'UZB', 'colombia': 'COL',
+      // ── Group L ── England, Croatia, Ghana, Panama
+      'england': 'ENG', 'croatia': 'CRO', 'ghana': 'GHA', 'panama': 'PAN',
     }
 
     // Map team name to FIFA code
@@ -181,32 +211,48 @@ export async function GET() {
       return null
     }
 
-    // Team info for creating matches — 48 WC 2026 teams
+    // Team info for creating matches — exactly the 48 verified WC 2026 teams.
+    // Non-WC entries (DEN, NGA, CMR, ITA, CHI, PER, JAM, CRC, WAL, POL, HON, ISL)
+    // have been removed; the 12 WC 2026 teams that were previously missing
+    // (QAT, HAI, CIV, TUN, EGY, IRN, IRQ, NOR, AUT, JOR, COD, PAN) have been added.
+    // Cross-referenced against src/lib/national-teams.ts NATIONAL_TEAMS.
     const TEAM_INFO: Record<string, { name: string; flag: string }> = {
+      // ── Group A ──
       MEX: { name: 'Mexico', flag: '🇲🇽' }, RSA: { name: 'South Africa', flag: '🇿🇦' },
       KOR: { name: 'South Korea', flag: '🇰🇷' }, CZE: { name: 'Czechia', flag: '🇨🇿' },
+      // ── Group B ──
       CAN: { name: 'Canada', flag: '🇨🇦' }, BIH: { name: 'Bosnia and Herzegovina', flag: '🇧🇦' },
-      SUI: { name: 'Switzerland', flag: '🇨🇭' }, DEN: { name: 'Denmark', flag: '🇩🇰' },
-      BRA: { name: 'Brazil', flag: '🇧🇷' }, MAR: { name: 'Morocco', flag: '🇲🇦' },
-      SCO: { name: 'Scotland', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' }, CPV: { name: 'Cape Verde', flag: '🇨🇻' },
+      QAT: { name: 'Qatar', flag: '🇶🇦' }, SUI: { name: 'Switzerland', flag: '🇨🇭' },
+      // ── Group C ──
+      BRA: { name: 'Brazil', flag: '🇧🇷' }, HAI: { name: 'Haiti', flag: '🇭🇹' },
+      MAR: { name: 'Morocco', flag: '🇲🇦' }, SCO: { name: 'Scotland', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
+      // ── Group D ──
       USA: { name: 'United States', flag: '🇺🇸' }, PAR: { name: 'Paraguay', flag: '🇵🇾' },
       AUS: { name: 'Australia', flag: '🇦🇺' }, TUR: { name: 'Turkiye', flag: '🇹🇷' },
+      // ── Group E ──
       GER: { name: 'Germany', flag: '🇩🇪' }, CUW: { name: 'Curacao', flag: '🇨🇼' },
-      SWE: { name: 'Sweden', flag: '🇸🇪' }, NGA: { name: 'Nigeria', flag: '🇳🇬' },
-      ARG: { name: 'Argentina', flag: '🇦🇷' }, COL: { name: 'Colombia', flag: '🇨🇴' },
-      UZB: { name: 'Uzbekistan', flag: '🇺🇿' }, CMR: { name: 'Cameroon', flag: '🇨🇲' },
-      ITA: { name: 'Italy', flag: '🇮🇹' }, CHI: { name: 'Chile', flag: '🇨🇱' },
-      ECU: { name: 'Ecuador', flag: '🇪🇨' }, ALG: { name: 'Algeria', flag: '🇩🇿' },
-      FRA: { name: 'France', flag: '🇫🇷' }, POR: { name: 'Portugal', flag: '🇵🇹' },
-      PER: { name: 'Peru', flag: '🇵🇪' }, JAM: { name: 'Jamaica', flag: '🇯🇲' },
-      NED: { name: 'Netherlands', flag: '🇳🇱' }, SEN: { name: 'Senegal', flag: '🇸🇳' },
-      CRC: { name: 'Costa Rica', flag: '🇨🇷' }, WAL: { name: 'Wales', flag: '🏴󠁧󠁢󠁷󠁬󠁳󠁿' },
-      ENG: { name: 'England', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' }, URU: { name: 'Uruguay', flag: '🇺🇾' },
-      POL: { name: 'Poland', flag: '🇵🇱' }, GHA: { name: 'Ghana', flag: '🇬🇭' },
-      ESP: { name: 'Spain', flag: '🇪🇸' }, CRO: { name: 'Croatia', flag: '🇭🇷' },
-      HON: { name: 'Honduras', flag: '🇭🇳' }, ISL: { name: 'Iceland', flag: '🇮🇸' },
-      JPN: { name: 'Japan', flag: '🇯🇵' }, BEL: { name: 'Belgium', flag: '🇧🇪' },
-      NZL: { name: 'New Zealand', flag: '🇳🇿' }, KSA: { name: 'Saudi Arabia', flag: '🇸🇦' },
+      CIV: { name: "Côte d'Ivoire", flag: '🇨🇮' }, ECU: { name: 'Ecuador', flag: '🇪🇨' },
+      // ── Group F ──
+      NED: { name: 'Netherlands', flag: '🇳🇱' }, JPN: { name: 'Japan', flag: '🇯🇵' },
+      SWE: { name: 'Sweden', flag: '🇸🇪' }, TUN: { name: 'Tunisia', flag: '🇹🇳' },
+      // ── Group G ──
+      BEL: { name: 'Belgium', flag: '🇧🇪' }, EGY: { name: 'Egypt', flag: '🇪🇬' },
+      IRN: { name: 'Iran', flag: '🇮🇷' }, NZL: { name: 'New Zealand', flag: '🇳🇿' },
+      // ── Group H ──
+      ESP: { name: 'Spain', flag: '🇪🇸' }, CPV: { name: 'Cape Verde', flag: '🇨🇻' },
+      KSA: { name: 'Saudi Arabia', flag: '🇸🇦' }, URU: { name: 'Uruguay', flag: '🇺🇾' },
+      // ── Group I ──
+      FRA: { name: 'France', flag: '🇫🇷' }, SEN: { name: 'Senegal', flag: '🇸🇳' },
+      IRQ: { name: 'Iraq', flag: '🇮🇶' }, NOR: { name: 'Norway', flag: '🇳🇴' },
+      // ── Group J ──
+      ARG: { name: 'Argentina', flag: '🇦🇷' }, ALG: { name: 'Algeria', flag: '🇩🇿' },
+      AUT: { name: 'Austria', flag: '🇦🇹' }, JOR: { name: 'Jordan', flag: '🇯🇴' },
+      // ── Group K ──
+      POR: { name: 'Portugal', flag: '🇵🇹' }, COD: { name: 'DR Congo', flag: '🇨🇩' },
+      UZB: { name: 'Uzbekistan', flag: '🇺🇿' }, COL: { name: 'Colombia', flag: '🇨🇴' },
+      // ── Group L ──
+      ENG: { name: 'England', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' }, CRO: { name: 'Croatia', flag: '🇭🇷' },
+      GHA: { name: 'Ghana', flag: '🇬🇭' }, PAN: { name: 'Panama', flag: '🇵🇦' },
     }
 
     // Step 6: Update database with fetched match data
@@ -217,6 +263,18 @@ export async function GET() {
       const awayCode = getTeamCode(match.awayTeam)
       if (!homeCode || !awayCode) {
         console.warn(`Could not map teams: ${match.homeTeam} vs ${match.awayTeam}`)
+        continue
+      }
+
+      // Anti-hallucination guard: both teams must be in the verified WC 2026
+      // 48-team set (sourced from NATIONAL_TEAMS). This prevents phantom WC
+      // matches from being created when the ESPN/FIFA regex scraper picks up
+      // scorelines involving non-WC teams (e.g. friendlies, qualifiers, youth
+      // tournaments). Skipped matches are logged for auditability.
+      if (!WC_2026_TEAM_CODES.has(homeCode) || !WC_2026_TEAM_CODES.has(awayCode)) {
+        console.warn(
+          `Skipping non-WC2026 match: ${match.homeTeam} (${homeCode}) vs ${match.awayTeam} (${awayCode}) — one or both teams not in WC 2026 48-team set`
+        )
         continue
       }
 

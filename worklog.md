@@ -1212,3 +1212,39 @@ Stage Summary:
 - Verification: cross-checked all 34 completed-match goalscorer comments (24 group + 10 R32) against VERIFIED_DATA.md Part 1 and Part 2 — all consistent, zero contradictions. No goalscorer comments needed fixing.
 - Lint: passes clean. Dev server: healthy (comment-only change, no runtime impact, no re-seed needed).
 - Artifacts modified: src/app/api/world-cup/seed/route.ts (added disclaimer comment block above MATCHES_DATA, lines 85-93).
+
+---
+Task ID: scraper-map-cleanup
+Agent: Main Agent
+Task: Clean non-WC2026 teams from the live-match scraper map in src/app/api/fetch-live-matches/route.ts to prevent phantom WC matches from friendlies/qualifiers.
+
+Work Log:
+- Read src/app/api/fetch-live-matches/route.ts (full file, 293 lines)
+- Read src/lib/national-teams.ts to derive the canonical 48-team WC 2026 code set
+- Cross-referenced TEAM_NAME_TO_CODE against NATIONAL_TEAMS:
+  * 12 non-WC teams identified for removal: Denmark (DEN), Italy (ITA), Chile (CHI), Nigeria (NGA), Peru (PER), Jamaica (JAM), Costa Rica (CRC), Wales (WAL), Poland (POL), Honduras (HON), Iceland (ISL), Cameroon (CMR)
+  * 1 wrong code found: 'iran' was mapped to 'IRI' but NATIONAL_TEAMS uses 'IRN' — fixed to IRN
+- Cross-referenced TEAM_INFO against NATIONAL_TEAMS:
+  * Same 12 non-WC entries present (DEN, NGA, CMR, ITA, CHI, PER, JAM, CRC, WAL, POL, HON, ISL) — removed
+  * 12 WC 2026 teams were MISSING from TEAM_INFO (QAT, HAI, CIV, TUN, EGY, IRN, IRQ, NOR, AUT, JOR, COD, PAN) — added with correct name + flag
+  * Final TEAM_INFO now has exactly 48 entries, one per verified WC 2026 team, grouped A-L
+- Added module-level anti-hallucination guard:
+  * Imported NATIONAL_TEAMS from '@/lib/national-teams'
+  * Built WC_2026_TEAM_CODES: ReadonlySet<string> = new Set(NATIONAL_TEAMS.map(t => t.code)) at module level (computed once)
+  * Added guard inside the match-processing loop, immediately after getTeamCode() resolution and before TEAM_INFO lookup:
+    if (!WC_2026_TEAM_CODES.has(homeCode) || !WC_2026_TEAM_CODES.has(awayCode)) {
+      console.warn(`Skipping non-WC2026 match: ... — one or both teams not in WC 2026 48-team set`)
+      continue
+    }
+  * Guard runs before BOTH db.match.update and db.match.create paths, so non-WC matches can neither be created nor update existing rows
+- Reorganized both TEAM_NAME_TO_CODE and TEAM_INFO with group-header comments (A-L) for readability and to make future drift immediately visible
+- Added explanatory comments documenting the source-of-truth (NATIONAL_TEAMS) and the rationale (prevent phantom WC matches from friendlies/qualifiers/youth tournaments)
+- Ran `bun run lint` — passed with zero errors/warnings
+
+Stage Summary:
+- TEAM_NAME_TO_CODE: pruned from ~60 entries (incl. 12 non-WC + 1 wrong code IRI) down to a clean 48-team-only map with name variants, organized by WC 2026 group
+- TEAM_INFO: corrected from 48 entries (12 wrong) to 48 entries (all correct WC 2026 teams), organized by group
+- Anti-hallucination guard added: any scraped match where homeCode OR awayCode is not in the 48-team WC 2026 set is now skipped with a console.warn audit log
+- Defense in depth: even if a future editor re-adds a non-WC entry to TEAM_NAME_TO_CODE or TEAM_INFO, the NATIONAL_TEAMS-derived Set guard will still block phantom matches from reaching the database
+- Fixed latent bug: 'iran' was previously mapped to non-existent code 'IRI'; now correctly mapped to 'IRN' (matches NATIONAL_TEAMS and ISO 3166)
+- Lint clean. No runtime changes to existing WC 2026 match scraping behavior — all 48 verified teams continue to be scraped and persisted as before.
