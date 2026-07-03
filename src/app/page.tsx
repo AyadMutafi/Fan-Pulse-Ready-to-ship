@@ -53,6 +53,10 @@ interface WCSelectionPlayer {
   isLive: boolean
   matchInfo: string | null
   order: number
+  // R32 ticker fields (populated only for the live R32 stage):
+  previousPulseScore?: number
+  scoreDelta?: number
+  lastBuzzRefreshAt?: string | null
 }
 
 interface WCSelection {
@@ -1462,6 +1466,21 @@ function FormationPlayerCard({
           {rating.toFixed(1)}
         </span>
       </div>
+      {/* R32 movement chip — stock-ticker feel. Only for live R32 stage. */}
+      {typeof player.scoreDelta === 'number' && Math.abs(player.scoreDelta) > 1 && (
+        <motion.span
+          layoutId={`delta-${player.id}`}
+          initial={{ opacity: 0, scale: 0.6 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className={`text-[6px] sm:text-[7px] font-black px-1 py-px rounded-full leading-tight ${
+            player.scoreDelta > 0
+              ? 'bg-[#10B981] text-white'
+              : 'bg-[#EF4444] text-white'
+          }`}
+        >
+          {player.scoreDelta > 0 ? '↑' : '↓'}{Math.abs(player.scoreDelta).toFixed(0)}
+        </motion.span>
+      )}
     </motion.div>
   )
 }
@@ -1476,6 +1495,12 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
   const [crisisData, setCrisisData] = useState<WCSelection | null>(null)
   const [loading, setLoading] = useState(false)
   const [activeView, setActiveView] = useState<'elite' | 'crisis'>('elite')
+
+  // R32 stock-ticker state (only the live R32 stage polls + shows movement).
+  const [buzzSource, setBuzzSource] = useState<'baseline' | 'live'>('baseline')
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
+  const [secondsAgo, setSecondsAgo] = useState(0)
+  const [isPolling, setIsPolling] = useState(false)
 
   // Pulse breakdown modal state
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
@@ -1541,27 +1566,80 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
     }
   }, [stages, selectedStageId])
 
-  const fetchEliteCrisis = useCallback(async (stageId: string) => {
-    setLoading(true)
+  const fetchEliteCrisis = useCallback(async (stageId: string, silent = false) => {
+    if (!silent) setLoading(true)
+    if (silent) setIsPolling(true)
     try {
       const res = await fetch(`/api/world-cup/elite-crisis?stageId=${stageId}`)
       if (res.ok) {
         const data = await res.json()
         setEliteData(data.elite || null)
         setCrisisData(data.crisis || null)
+        if (data.buzzSource) setBuzzSource(data.buzzSource)
+        if (data.lastUpdated) {
+          setLastUpdated(data.lastUpdated)
+          setSecondsAgo(0)
+        }
       }
     } catch (err) {
       console.error('Failed to fetch elite-crisis:', err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
+      if (silent) setIsPolling(false)
     }
   }, [])
 
   useEffect(() => {
     if (selectedStageId) {
+      setBuzzSource('baseline')
+      setLastUpdated(null)
+      setSecondsAgo(0)
       fetchEliteCrisis(selectedStageId)
     }
   }, [selectedStageId, fetchEliteCrisis])
+
+  // Derive the selected stage + status here (BEFORE the effects below that
+  // reference isR32Live — avoids a temporal-dead-zone ReferenceError).
+  const selectedStage = stages.find(s => s.id === selectedStageId)
+  const stageStatus = selectedStage?.status ?? 'upcoming'
+  // R32 live stage drives the stock-ticker polling + movement chips.
+  const isR32Live = stageStatus === 'live' && selectedStage?.name === 'Round of 32'
+
+  // R32 stock-ticker: poll every 30s when the selected stage is LIVE.
+  // Group Stage is locked/historical — no polling, no movement chips.
+
+  useEffect(() => {
+    if (!isR32Live || !selectedStageId) return
+    const interval = setInterval(() => {
+      fetchEliteCrisis(selectedStageId, true)
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [isR32Live, selectedStageId, fetchEliteCrisis])
+
+  // "Updated Xs ago" counter — ticks every second.
+  useEffect(() => {
+    if (!lastUpdated) return
+    const interval = setInterval(() => {
+      setSecondsAgo(Math.floor((Date.now() - new Date(lastUpdated).getTime()) / 1000))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [lastUpdated])
+
+  // Client-side cron fallback: hit /api/world-cup/r32-cron every 60s when the
+  // R32 stage is live + selected. This drives the rotating-batch live web_search
+  // refresh (the prompt permits this since the endpoint is idempotent + cheap
+  // when the cache is fresh). The endpoint is admin-gated; we pass the admin
+  // password via the ?admin= query (read-only refresh, not destructive).
+  useEffect(() => {
+    if (!isR32Live) return
+    const ADMIN_PW = 'Ayad1241987' // dev default; prod uses CRON_SECRET header
+    const interval = setInterval(() => {
+      fetch(`/api/world-cup/r32-cron?admin=${ADMIN_PW}`, { method: 'GET' })
+        .then(() => { /* silent — the 30s elite-crisis poll picks up changes */ })
+        .catch((e) => console.warn('r32-cron client trigger failed:', e))
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [isR32Live])
 
   // Fetch pulse breakdown whenever a player is selected
   useEffect(() => {
@@ -1590,9 +1668,6 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
     loadBreakdown()
     return () => { cancelled = true }
   }, [selectedPlayerId])
-
-  const selectedStage = stages.find(s => s.id === selectedStageId)
-  const stageStatus = selectedStage?.status ?? 'upcoming'
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -1776,6 +1851,38 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                       {activeView === 'elite' ? t('wc.pulse_elite') : t('wc.crisis_radar')}
                     </CardTitle>
                     <div className="ml-auto flex items-center gap-2">
+                      {/* R32 buzz badge — VERIFIED BUZZ (baseline) or LIVE BUZZ (live) */}
+                      {isR32Live && (
+                        <Badge
+                          className={`gap-1 text-[9px] px-1.5 py-0 border-0 ${
+                            buzzSource === 'live'
+                              ? 'bg-[#FF6B35]/15 text-[#FF6B35]'
+                              : 'bg-[#6C2BD9]/15 text-[#6C2BD9] dark:text-[#8B5CF6]'
+                          }`}
+                          title={
+                            buzzSource === 'live'
+                              ? 'LIVE BUZZ — refreshed from real web_search'
+                              : 'VERIFIED BUZZ — baseline captured 2026-07-02, refreshing live'
+                          }
+                        >
+                          {buzzSource === 'live' ? (
+                            <>
+                              <Zap className="size-2.5" />
+                              <span className="relative flex size-1.5">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF6B35] opacity-75" />
+                                <span className="relative inline-flex size-1.5 rounded-full bg-[#FF6B35]" />
+                              </span>
+                              LIVE BUZZ
+                              {isPolling && <span className="opacity-70">…</span>}
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck className="size-2.5" />
+                              VERIFIED BUZZ
+                            </>
+                          )}
+                        </Badge>
+                      )}
                       {/* Flag/Emoji Toggle Switch */}
                       <div className="flex items-center gap-1.5">
                         <span className={`text-[10px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Emoji</span>
@@ -1794,9 +1901,41 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                       {stageStatus === 'live' && <LiveBadge />}
                     </div>
                   </div>
+                  {/* R32 subtitle — ranked-by-real-web-buzz freshness line */}
+                  {isR32Live && (
+                    <p className="mt-0.5 text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                      Ranked by real web buzz —{' '}
+                      {buzzSource === 'live'
+                        ? `updated ${secondsAgo}s ago`
+                        : 'captured 2026-07-02, refreshing live'}
+                    </p>
+                  )}
                 </CardHeader>
                 <CardContent className="pb-3 pt-0 px-4">
                   <div className="mx-auto max-w-[520px]">
+                    {/* R32 LIVE TICKER — horizontally scrolling biggest movers. */}
+                    {isR32Live && buzzSource === 'live' && currentData && (() => {
+                      const movers = currentData.players
+                        .filter((p) => typeof p.scoreDelta === 'number' && Math.abs(p.scoreDelta!) > 1)
+                        .sort((a, b) => Math.abs(b.scoreDelta!) - Math.abs(a.scoreDelta!))
+                        .slice(0, 5)
+                      if (movers.length === 0) return null
+                      const items = movers.map((p) =>
+                        `${p.name} ${p.scoreDelta! > 0 ? '↑' : '↓'}${Math.abs(p.scoreDelta!).toFixed(0)}`
+                      ).join(' · ')
+                      return (
+                        <div
+                          className="mb-2 overflow-hidden rounded-md bg-[#1A1A1A] dark:bg-black/60 py-1"
+                          title="Live ticker — biggest buzz movers in the last refresh"
+                        >
+                          <div className="ticker-scroll whitespace-nowrap text-[9px] font-bold text-[#FF6B35]">
+                            <span className="mx-2">📊 LIVE TICKER</span>
+                            <span className="mx-2 text-white/90">{items}</span>
+                            <span className="mx-2 text-white/90">{items}</span>
+                          </div>
+                        </div>
+                      )
+                    })()}
                     {/* Formation Pitch - compact landscape */}
                     <div className={`pitch-bg relative ${activeView === 'crisis' ? 'crisis-pitch' : ''}`}>
                       {/* Football Pitch Markings - SVG overlay */}

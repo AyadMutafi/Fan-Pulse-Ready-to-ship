@@ -49,14 +49,16 @@ model WCSelectionPlayer {
   playerName   String
   nationCode   String   // ISO country code e.g. "BRA", "KSA"
   position     String   // GK, CB, LB, RB, CM, CAM, LW, RW, ST
-  pulseScore   Float    @default(0) // 0-100
-  sentiment    Float    @default(0) // fan sentiment %
-  trend        String   @default("stable") // "rising" | "stable" | "falling"
-  isLive       Boolean  @default(false)
-  matchInfo    String?  // e.g. "BRA vs ARG 2-1"
-  order        Int      @default(0) // position in formation
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  pulseScore         Float    @default(0) // 0-100
+  previousPulseScore Float    @default(0) // prior buzz score, for movement arrows
+  lastBuzzRefreshAt  DateTime? // last live web_search refresh (R32 ticker)
+  sentiment          Float    @default(0) // fan sentiment %
+  trend              String   @default("stable") // "rising" | "stable" | "falling"
+  isLive             Boolean  @default(false)
+  matchInfo          String?  // e.g. "BRA vs ARG 2-1"
+  order              Int      @default(0) // position in formation
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
   pulseBreakdown PulseBreakdown?
 }
 

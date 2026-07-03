@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { db, getDb } from '@/lib/db'
 import { computeAllPulseScores } from '@/lib/pulse-engine'
 import { isAdminAuthorized, unauthorizedResponse } from '@/lib/admin-auth'
+import { rankR32Teams, seedR32Teams } from '@/lib/r32-buzz-ranker'
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ANTI-HALLUCINATION NOTICE
@@ -395,12 +396,36 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── 6. Run the Pulse Score engine ───────────────────────────────────────
+    // ── 6. Run the Pulse Score engine (group-stage players only at this point) ──
+    // R32 is seeded AFTER the pulse engine so the engine's 4-component computed
+    // scores don't clobber the R32 web-buzz scores. R32 pulseScore = buzzScore.
     let pulseResult: { playersComputed: number; breakdownsWritten: number; errors: string[] } | null = null
     try {
       pulseResult = await computeAllPulseScores(getDb())
     } catch (err) {
       console.error('Pulse engine failed during seed:', err)
+    }
+
+    // ── 7. Seed R32 Elite XI + Crisis XI from the VERIFIED_POOL baseline ──────
+    // R32 teams are seeded from the VERIFIED_POOL baseline (real web-buzz captured
+    // 2026-07-02). A background cron refreshes with live web_search periodically —
+    // see /api/world-cup/r32-cron. The pool contains only web-verified players;
+    // see src/lib/r32-buzz-ranker.ts for the anti-hallucination contract.
+    // Seeded AFTER the pulse engine so R32 buzz scores are preserved.
+    let r32Seeded: { elite: number; crisis: number; buzzSource: string } | null = null
+    try {
+      const r32Stage = stages.find((s) => s.key === 'round-of-32')
+      if (r32Stage) {
+        const r32Result = await rankR32Teams(false) // baseline, no SDK calls — instant
+        await seedR32Teams(db, r32Result, r32Stage.id)
+        r32Seeded = {
+          elite: r32Result.elite.length,
+          crisis: r32Result.crisis.length,
+          buzzSource: r32Result.buzzSource,
+        }
+      }
+    } catch (err) {
+      console.error('R32 seed failed (continuing with group stage only):', err)
     }
 
     return NextResponse.json({
@@ -411,6 +436,7 @@ export async function POST(request: Request) {
       matches: matchesCreated,
       matchdayInfo: 'Group Stage completed Jun 27 · Round of 32 LIVE (10/16 played, 6 upcoming Jul 3) · 24 group-stage matches + 16 R32 matches seeded',
       pulse: pulseResult,
+      r32: r32Seeded,
     })
   } catch (error) {
     console.error('Seed failed:', error)

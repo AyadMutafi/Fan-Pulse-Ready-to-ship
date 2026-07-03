@@ -47,6 +47,10 @@ export async function GET(request: NextRequest) {
           isLive: p.isLive,
           matchInfo: p.matchInfo,
           order: p.order,
+          // R32 ticker fields:
+          previousPulseScore: p.previousPulseScore,
+          scoreDelta: Math.round((p.pulseScore - p.previousPulseScore) * 10) / 10,
+          lastBuzzRefreshAt: p.lastBuzzRefreshAt ? p.lastBuzzRefreshAt.toISOString() : null,
         })),
       }
     }
@@ -54,11 +58,30 @@ export async function GET(request: NextRequest) {
     const elite = mapSelection(selections.find(s => s.type === 'elite'))
     const crisis = mapSelection(selections.find(s => s.type === 'crisis'))
 
+    // Stage-level buzz metadata for the R32 ticker UI.
+    // buzzSource is 'live' if ANY player on the stage has a lastBuzzRefreshAt
+    // within the last 10 minutes; otherwise 'baseline'.
+    const allPlayers = [...(elite?.players ?? []), ...(crisis?.players ?? [])]
+    const tenMinAgo = Date.now() - 10 * 60 * 1000
+    const hasLive = allPlayers.some(
+      (p) => p.lastBuzzRefreshAt && new Date(p.lastBuzzRefreshAt).getTime() > tenMinAgo
+    )
+    const buzzSource: 'baseline' | 'live' = hasLive ? 'live' : 'baseline'
+    // Estimate seconds until the next cron batch refresh (60s cadence).
+    const latestRefresh = allPlayers
+      .map((p) => (p.lastBuzzRefreshAt ? new Date(p.lastBuzzRefreshAt).getTime() : 0))
+      .reduce((a, b) => Math.max(a, b), 0)
+    const nextRefreshInSec = latestRefresh > 0
+      ? Math.max(0, 60 - Math.floor((Date.now() - latestRefresh) / 1000))
+      : 60
+
     return NextResponse.json({
       elite,
       crisis,
       stageStatus,
       lastUpdated: new Date().toISOString(),
+      buzzSource,
+      nextRefreshInSec,
     })
   } catch (error) {
     console.error('Failed to fetch elite-crisis:', error)

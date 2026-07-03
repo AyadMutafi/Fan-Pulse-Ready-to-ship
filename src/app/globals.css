@@ -212,6 +212,25 @@
   }
 }
 
+/* R32 LIVE TICKER — horizontal scroll, pauses on hover */
+@keyframes ticker {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-scroll {
+  display: inline-block;
+  animation: ticker 18s linear infinite;
+}
+
+.ticker-scroll:hover {
+  animation-play-state: paused;
+}
+
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
 }

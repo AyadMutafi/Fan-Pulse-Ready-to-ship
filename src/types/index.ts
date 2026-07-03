@@ -92,6 +92,10 @@ export interface Player {
   isLive: boolean
   matchInfo: string | null
   order: number
+  // R32 ticker fields (optional — only populated for the live R32 stage):
+  previousPulseScore?: number
+  scoreDelta?: number
+  lastBuzzRefreshAt?: string | null
 }
 
 // ── Elite/Crisis Selection ────────────────────────────────
