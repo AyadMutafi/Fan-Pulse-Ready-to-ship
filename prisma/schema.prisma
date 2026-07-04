@@ -188,11 +188,13 @@ model FanRating {
 /// A single user's rating submission for a player.
 model UserRating {
   id        String   @id @default(cuid())
-  sessionId String   @default("anonymous")
+  sessionId String
   playerId  String
   rating    Int      // 1-10
   comment   String?
   createdAt DateTime @default(now())
+
+  @@unique([sessionId, playerId])
 }
 
 // ── Admin-Seeded Fan Sentiment Pipeline ───────────────────────────────────────

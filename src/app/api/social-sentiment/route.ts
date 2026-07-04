@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { db, getDb } from '@/lib/db'
+import { safeErrorResponse } from '@/lib/safe-error'
 
 // ── Cache ─────────────────────────────────────────────────────────────────────
 const CACHE_DURATION = 30 * 60 * 1000 // 30 minutes
@@ -549,9 +550,8 @@ export async function GET(request: NextRequest) {
       fetchedAt: cacheValid ? cachedResponse!.fetchedAt : new Date().toISOString(),
     })
   } catch (error) {
-    console.error('GET /api/social-sentiment error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch social sentiment data', details: String(error) },
+      safeErrorResponse(error, 'social-sentiment GET'),
       { status: 500 },
     )
   }
@@ -915,9 +915,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response)
   } catch (error) {
-    console.error('POST /api/social-sentiment error:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch social sentiment data', details: String(error) },
+      safeErrorResponse(error, 'social-sentiment POST'),
       { status: 500 },
     )
   }

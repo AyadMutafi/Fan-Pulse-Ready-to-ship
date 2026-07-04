@@ -6,8 +6,14 @@ import { Lock, Plus, RefreshCw, Play, Pause, Square, Trash2, ExternalLink, Eye, 
 
 // ── Admin Feed Monitor Page ──────────────────────────────────────────────────
 // Password-protected UI for creating and managing FeedMonitors.
-// The admin enters the same password as ADMIN_PASSWORD env var.
-// Once authed, the session is held in localStorage for convenience.
+//
+// H4 SECURITY FIX: Auth is now cookie-based, NOT localStorage-based.
+// The admin enters the password on the login form; the client POSTs it to
+// /api/admin/login, which validates it and sets an HttpOnly + Secure +
+// SameSite=Strict cookie. The browser sends the cookie automatically on
+// every subsequent request — JS cannot read it, so XSS cannot exfiltrate it
+// (unlike the old localStorage approach). Logout clears the cookie via
+// /api/admin/logout.
 
 interface Monitor {
   id: string
@@ -42,34 +48,52 @@ interface Post {
 }
 
 export default function FeedMonitorAdminPage() {
-  // Persist auth in localStorage so refresh doesn't lose session.
-  // Use lazy initial state to avoid the setState-in-effect anti-pattern.
-  const [password, setPassword] = useState(() => {
-    if (typeof window === 'undefined') return ''
-    return localStorage.getItem('fp_admin_pw') || ''
-  })
-  const [authed, setAuthed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return !!localStorage.getItem('fp_admin_pw')
-  })
+  // H4: No more localStorage. The password is never stored client-side.
+  // `authed` starts false; on mount we probe the API (cookie sent automatically)
+  // to see if a valid admin session already exists.
+  const [password, setPassword] = useState('')
+  const [authed, setAuthed] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
   const [authError, setAuthError] = useState('')
+
+  // On mount, check if a valid cookie session already exists.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/admin/feed-monitor')
+      .then((res) => {
+        if (cancelled) return
+        if (res.ok) {
+          setAuthed(true)
+        } else {
+          setAuthed(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setAuthed(false)
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingAuth(false)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   const handleAuth = () => {
     if (!password.trim()) {
       setAuthError('Password is required')
       return
     }
-    // Test the password by hitting the GET endpoint
-    fetch('/api/admin/feed-monitor', {
-      headers: { 'x-admin-password': password },
+    // POST the password to /api/admin/login — the server sets an HttpOnly
+    // cookie. The client never persists the password.
+    fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
     })
       .then((res) => {
         if (res.ok) {
           setAuthed(true)
           setAuthError('')
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('fp_admin_pw', password)
-          }
+          setPassword('') // clear from memory — no longer needed
         } else {
           setAuthError('Invalid password')
           setAuthed(false)
@@ -81,11 +105,20 @@ export default function FeedMonitorAdminPage() {
   }
 
   const handleLogout = () => {
-    setAuthed(false)
-    setPassword('')
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('fp_admin_pw')
-    }
+    fetch('/api/admin/logout', { method: 'POST' })
+      .catch(() => {})
+      .finally(() => {
+        setAuthed(false)
+        setPassword('')
+      })
+  }
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0A0A0A]">
+        <div className="animate-spin w-8 h-8 rounded-full border-2 border-white/10 border-t-[#6C2BD9]" />
+      </div>
+    )
   }
 
   if (!authed) {
@@ -136,12 +169,12 @@ export default function FeedMonitorAdminPage() {
     )
   }
 
-  return <MonitorDashboard password={password} onLogout={handleLogout} />
+  return <MonitorDashboard onLogout={handleLogout} />
 }
 
 // ── Monitor Dashboard (shown when authed) ────────────────────────────────────
 
-function MonitorDashboard({ password, onLogout }: { password: string; onLogout: () => void }) {
+function MonitorDashboard({ onLogout }: { onLogout: () => void }) {
   const [monitors, setMonitors] = useState<Monitor[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -151,9 +184,8 @@ function MonitorDashboard({ password, onLogout }: { password: string; onLogout: 
 
   const fetchMonitors = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/feed-monitor', {
-        headers: { 'x-admin-password': password },
-      })
+      // H4: cookie sent automatically — no manual auth header needed.
+      const res = await fetch('/api/admin/feed-monitor')
       if (res.ok) {
         const data = await res.json()
         setMonitors(data.monitors || [])
@@ -163,7 +195,7 @@ function MonitorDashboard({ password, onLogout }: { password: string; onLogout: 
     } finally {
       setLoading(false)
     }
-  }, [password])
+  }, [])
 
   useEffect(() => {
     fetchMonitors()
@@ -177,7 +209,6 @@ function MonitorDashboard({ password, onLogout }: { password: string; onLogout: 
     try {
       const res = await fetch(`/api/admin/feed-monitor/${id}/refresh`, {
         method: 'POST',
-        headers: { 'x-admin-password': password },
       })
       const data = await res.json()
       if (res.ok) {
@@ -203,7 +234,6 @@ function MonitorDashboard({ password, onLogout }: { password: string; onLogout: 
       const res = await fetch(`/api/admin/feed-monitor/${id}`, {
         method: 'PATCH',
         headers: {
-          'x-admin-password': password,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ status }),
@@ -225,7 +255,6 @@ function MonitorDashboard({ password, onLogout }: { password: string; onLogout: 
     try {
       const res = await fetch(`/api/admin/feed-monitor/${id}`, {
         method: 'DELETE',
-        headers: { 'x-admin-password': password },
       })
       if (res.ok) {
         fetchMonitors()
@@ -302,7 +331,6 @@ function MonitorDashboard({ password, onLogout }: { password: string; onLogout: 
               <MonitorCard
                 key={m.id}
                 monitor={m}
-                password={password}
                 expanded={expandedMonitorId === m.id}
                 onToggle={() => setExpandedMonitorId(expandedMonitorId === m.id ? null : m.id)}
                 onRefresh={() => handleRefresh(m.id)}
@@ -319,7 +347,6 @@ function MonitorDashboard({ password, onLogout }: { password: string; onLogout: 
       <AnimatePresence>
         {showCreateForm && (
           <CreateMonitorModal
-            password={password}
             onClose={() => setShowCreateForm(false)}
             onCreated={() => {
               setShowCreateForm(false)
@@ -369,7 +396,6 @@ function StatCard({ label, value, icon }: { label: string; value: number; icon: 
 
 function MonitorCard({
   monitor,
-  password,
   expanded,
   onToggle,
   onRefresh,
@@ -378,7 +404,6 @@ function MonitorCard({
   refreshing,
 }: {
   monitor: Monitor
-  password: string
   expanded: boolean
   onToggle: () => void
   onRefresh: () => void
@@ -481,7 +506,7 @@ function MonitorCard({
             exit={{ height: 0, opacity: 0 }}
             className="border-t border-white/10"
           >
-            <MonitorDetail monitor={monitor} password={password} />
+            <MonitorDetail monitor={monitor} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -489,19 +514,15 @@ function MonitorCard({
   )
 }
 
-function MonitorDetail({ monitor, password }: { monitor: Monitor; password: string }) {
+function MonitorDetail({ monitor }: { monitor: Monitor }) {
   const [posts, setPosts] = useState<Post[]>([])
   const [loadingPosts, setLoadingPosts] = useState(true)
   const [postsOffset, setPostsOffset] = useState(0)
 
   useEffect(() => {
     let cancelled = false
-    // Use a ref-free cancelled flag instead of setState-in-effect.
-    // The loading state is set when the fetch starts (in .then() below),
-    // not synchronously at the top of the effect body.
-    fetch(`/api/admin/feed-monitor/${monitor.id}/posts?limit=20&offset=${postsOffset}`, {
-      headers: { 'x-admin-password': password },
-    })
+    // H4: cookie sent automatically — no manual auth header needed.
+    fetch(`/api/admin/feed-monitor/${monitor.id}/posts?limit=20&offset=${postsOffset}`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return
@@ -512,7 +533,7 @@ function MonitorDetail({ monitor, password }: { monitor: Monitor; password: stri
         if (!cancelled) setLoadingPosts(false)
       })
     return () => { cancelled = true }
-  }, [monitor.id, password, postsOffset])
+  }, [monitor.id, postsOffset])
 
   return (
     <div className="p-4 space-y-4 bg-[#0F0F0F]">
@@ -654,11 +675,9 @@ function PostRow({ post }: { post: Post }) {
 // ── Create Monitor Modal ─────────────────────────────────────────────────────
 
 function CreateMonitorModal({
-  password,
   onClose,
   onCreated,
 }: {
-  password: string
   onClose: () => void
   onCreated: () => void
 }) {
@@ -711,7 +730,6 @@ function CreateMonitorModal({
       const res = await fetch('/api/admin/feed-monitor', {
         method: 'POST',
         headers: {
-          'x-admin-password': password,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

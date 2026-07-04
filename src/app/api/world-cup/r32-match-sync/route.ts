@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdminAuthorized, unauthorizedResponse } from '@/lib/admin-auth'
+import { safeErrorResponse } from '@/lib/safe-error'
 
 /**
  * R32 match-status sync.
@@ -149,9 +150,8 @@ export async function GET(request: NextRequest) {
       transitions,
     })
   } catch (error) {
-    console.error('[r32-match-sync] failed:', error)
     return NextResponse.json(
-      { error: 'R32 match sync failed', details: String(error) },
+      safeErrorResponse(error, 'r32-match-sync'),
       { status: 500 }
     )
   }

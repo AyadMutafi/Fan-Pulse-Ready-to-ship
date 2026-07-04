@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
 import { NATIONAL_TEAMS } from '@/lib/national-teams'
+import { safeErrorResponse } from '@/lib/safe-error'
 
 // Cache duration: 30 minutes
 const CACHE_DURATION = 30 * 60 * 1000
@@ -341,9 +342,8 @@ export async function GET() {
 
     return NextResponse.json(result)
   } catch (error) {
-    console.error('Failed to fetch live matches:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch live matches', details: String(error) },
+      safeErrorResponse(error, 'fetch-live-matches'),
       { status: 500 }
     )
   }

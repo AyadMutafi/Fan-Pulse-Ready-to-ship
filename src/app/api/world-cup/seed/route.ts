@@ -3,6 +3,7 @@ import { db, getDb } from '@/lib/db'
 import { computeAllPulseScores } from '@/lib/pulse-engine'
 import { isAdminAuthorized, unauthorizedResponse } from '@/lib/admin-auth'
 import { rankR32Teams, seedR32Teams } from '@/lib/r32-buzz-ranker'
+import { safeErrorResponse } from '@/lib/safe-error'
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ANTI-HALLUCINATION NOTICE
@@ -439,7 +440,6 @@ export async function POST(request: Request) {
       r32: r32Seeded,
     })
   } catch (error) {
-    console.error('Seed failed:', error)
-    return NextResponse.json({ error: 'Seed failed', details: String(error) }, { status: 500 })
+    return NextResponse.json(safeErrorResponse(error, 'world-cup/seed'), { status: 500 })
   }
 }

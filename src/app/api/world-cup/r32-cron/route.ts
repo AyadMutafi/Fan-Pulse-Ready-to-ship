@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isAdminAuthorized, unauthorizedResponse } from '@/lib/admin-auth'
+import { safeErrorResponse } from '@/lib/safe-error'
 import {
   rankR32Teams,
   seedR32Teams,
@@ -81,9 +82,8 @@ export async function GET(request: NextRequest) {
       generatedAt: result.generatedAt,
     })
   } catch (error) {
-    console.error('[r32-cron] failed:', error)
     return NextResponse.json(
-      { error: 'R32 cron refresh failed', details: String(error) },
+      safeErrorResponse(error, 'r32-cron'),
       { status: 500 }
     )
   }

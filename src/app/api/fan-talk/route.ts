@@ -4,6 +4,8 @@ import {
   isFakeAuthor,
   fetchLiveFanTalk,
 } from '@/lib/live-fan-talk'
+import { NATIONAL_TEAMS } from '@/lib/national-teams'
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
 /**
  * GET /api/fan-talk?teamCodes=ESP,KSA
@@ -48,6 +50,22 @@ const MIN_REAL_POSTS_BEFORE_FETCH = 3
 
 export async function GET(request: NextRequest) {
   try {
+    // ── H1: Rate limit FIRST (20/min/IP) ──────────────────────────────────
+    // fan-talk triggers a z-ai-web-dev-sdk web_search + LLM scoring call when
+    // real posts are scarce. Without a rate limit, an attacker can exhaust the
+    // SDK quota (observed 429s on /api/fetch-live-matches) and amplify costs.
+    // 20/min is generous for browsing (one user clicking through matches) but
+    // blocks scripted abuse.
+    const ip = getClientIp(request)
+    const rl = rateLimit(`fan-talk:${ip}`, 20, 60_000)
+    if (!rl.ok) {
+      const retryAfter = Math.ceil((rl.resetAt - Date.now()) / 1000)
+      return NextResponse.json(
+        { error: 'Too many requests', retryAfter },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const teamCodesParam = searchParams.get('teamCodes') || ''
     const tab = (searchParams.get('tab') || 'popular') as 'popular' | 'latest'
@@ -56,8 +74,36 @@ export async function GET(request: NextRequest) {
       .map((c) => c.trim().toUpperCase())
       .filter(Boolean)
 
+    // ── H1: Validate teamCodes BEFORE any SDK call ────────────────────────
+    // Previously, arbitrary teamCodes (5000-char strings, nonexistent teams)
+    // were passed straight to fetchLiveFanTalk → 5-6s SDK call per request.
+    // Now: max 2 codes, each exactly 3 letters, must exist in NATIONAL_TEAMS.
+    // Invalid input returns 400 instantly with zero SDK cost.
     if (teamCodes.length === 0) {
-      return NextResponse.json(emptyResponse())
+      return NextResponse.json(
+        { error: 'teamCodes must contain 1-2 codes' },
+        { status: 400 },
+      )
+    }
+    if (teamCodes.length > 2) {
+      return NextResponse.json(
+        { error: 'teamCodes must contain 1-2 codes' },
+        { status: 400 },
+      )
+    }
+    for (const code of teamCodes) {
+      if (!/^[A-Z]{3}$/.test(code)) {
+        return NextResponse.json(
+          { error: `Invalid teamCode format: ${code.slice(0, 20)}` },
+          { status: 400 },
+        )
+      }
+      if (!NATIONAL_TEAMS.find((t) => t.code === code)) {
+        return NextResponse.json(
+          { error: `Unknown team code: ${code}` },
+          { status: 400 },
+        )
+      }
     }
 
     const database = getDb()
@@ -130,8 +176,11 @@ export async function GET(request: NextRequest) {
           `[fan-talk] Live fetch: +${result.newPosts} new posts (${result.durationMs}ms)`,
         )
       } catch (err) {
-        liveFetchError = `Live fetch failed: ${String(err)}`
         console.error(`[fan-talk] fetchLiveFanTalk threw:`, err)
+        // H3: don't leak SDK/internal error details to the client.
+        liveFetchError = process.env.NODE_ENV === 'production'
+          ? 'Live fetch failed'
+          : `Live fetch failed: ${String(err)}`
       }
     }
 
@@ -247,7 +296,7 @@ export async function GET(request: NextRequest) {
         ...emptyResponse(),
         error: 'Failed to fetch fan talk',
         liveFetchAttempted: false,
-        liveFetchError: String(error),
+        liveFetchError: null,
       },
       { status: 500 },
     )

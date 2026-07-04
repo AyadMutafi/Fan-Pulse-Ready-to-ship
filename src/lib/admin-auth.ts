@@ -46,10 +46,31 @@ export function isAdminAuthorized(request: NextRequest | Request): boolean {
     return false
   }
 
-  // Header check (preferred).
+  // Header check (preferred for curl / programmatic clients).
   const header = request.headers.get('x-admin-password')
   if (header) {
     return timingSafeEqualStr(header, ADMIN_PASSWORD)
+  }
+
+  // Cookie check (for browser admin UI — H4 fix).
+  // The /api/admin/login endpoint sets an HttpOnly + Secure + SameSite=Strict
+  // cookie named 'fp_admin' containing the password. Browsers send it
+  // automatically on every same-site request, so the admin dashboard's fetch
+  // calls don't need to manually attach a header. HttpOnly means JS cannot
+  // read it (XSS-proof), unlike the old localStorage approach.
+  const cookieHeader = request.headers.get('cookie') || ''
+  if (cookieHeader) {
+    const match = cookieHeader.match(/(?:^|;\s*)fp_admin=([^;]+)/)
+    if (match && match[1]) {
+      try {
+        const cookieValue = decodeURIComponent(match[1])
+        if (timingSafeEqualStr(cookieValue, ADMIN_PASSWORD)) {
+          return true
+        }
+      } catch {
+        // malformed cookie value — fall through to other checks
+      }
+    }
   }
 
   // Query param fallback (for manual curl/admin workflows).

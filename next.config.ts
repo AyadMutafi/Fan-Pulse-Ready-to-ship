@@ -5,24 +5,35 @@ import type { NextConfig } from "next";
 // z-cdn.chatglm.cn (logo icon), inline styles + scripts (Next.js runtime
 // requires these for hydration), data: URIs (for unoptimized images).
 //
-// IMPORTANT — frame-ancestors: The Z.ai preview panel embeds this app in an
-// iframe. The parent origin varies (chat UI may be served from *.space-z.ai,
-// *.z.ai, or other infra domains depending on deployment). To guarantee the
-// preview ALWAYS loads, we allow ANY https origin to frame us. This is a dev
-// preview — embeddability is the priority. tighten for production.
+// H2 SECURITY FIX — frame-ancestors is now environment-aware:
+//  - PRODUCTION: `frame-ancestors 'self'` — blocks clickjacking. Only same-
+//    origin framing is allowed. The production Fly.io deployment is a
+//    standalone site (NOT embedded in an iframe), so 'self' is correct.
+//  - DEV: `frame-ancestors 'self' https: http:` — the Z.ai preview panel
+//    embeds the dev server in a cross-origin iframe (parent origin varies:
+//    *.space-z.ai, *.z.ai, etc.). Allowing any https/http origin in dev
+//    guarantees the preview ALWAYS loads. This is dev-only and never ships.
 //
-// X-Frame-Options is deliberately OMITTED. When both X-Frame-Options and CSP
-// frame-ancestors are present, some browsers honor the stricter of the two,
-// which can cause "refused to connect" errors. CSP frame-ancestors is the
-// modern standard; relying on it alone avoids conflicts.
+// H2 SECURITY FIX — 'unsafe-eval' removed in production. Grep of src/ for
+// `eval(` and `new Function(` returns ZERO matches, so production builds do
+// not need 'unsafe-eval'. It is kept in DEV only because Turbopack HMR /
+// source-map tooling may use it.
+//
+// X-Frame-Options is deliberately OMITTED. CSP frame-ancestors is the modern
+// standard; relying on it alone avoids browser conflicts.
+const isProd = process.env.NODE_ENV === 'production'
+
 const cspHeader = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cloud.umami.is",
+  // 'unsafe-eval' kept in dev for Turbopack HMR; removed in prod (no eval usage).
+  "script-src 'self' 'unsafe-inline'" + (isProd ? '' : " 'unsafe-eval'") + " https://cloud.umami.is",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' https://flagcdn.com https://z-cdn.chatglm.cn data:",
   "font-src 'self' data:",
   "connect-src 'self' https://cloud.umami.is",
-  "frame-ancestors 'self' https: http:",
+  // Production: 'self' only (clickjacking protection).
+  // Dev: allow any origin (Z.ai preview panel embeds the dev server).
+  "frame-ancestors 'self'" + (isProd ? '' : " https: http:"),
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",

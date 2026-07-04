@@ -21,6 +21,7 @@ import { useFlagMode } from '@/lib/flag-mode'
 import FlagImage from '@/components/common/FlagImage'
 import { FanTalkPanel } from '@/components/FanTalkPanel'
 import { getPulseScoreColor, getPulseScoreColorClass } from '@/types'
+import { toast } from 'sonner'
 
 // ── World Cup stage label helper ─────────────────────────────
 // Renders an accurate label for a WC match based on its `group` value.
@@ -80,19 +81,6 @@ interface WCStage {
 // ── Mock Data ────────────────────────────────────────────────
 // Note: MOCK_MATCHES and MOCK_SENTIMENTS were removed — match data comes from
 // /api/matches and sentiment data comes from /api/sentiments (both real).
-
-const MOCK_RATINGS = [
-  { id: 1, name: 'Kylian Mbappé', nationCode: 'FRA', position: 'LW', avgRating: 9.6 },
-  { id: 2, name: 'Vinícius Jr', nationCode: 'BRA', position: 'LW', avgRating: 7.2 },
-  { id: 3, name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', avgRating: 9.2 },
-  { id: 4, name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', avgRating: 9.1 },
-  { id: 5, name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', avgRating: 8.5 },
-  { id: 6, name: 'Rodri', nationCode: 'ESP', position: 'CDM', avgRating: 8.8 },
-  { id: 7, name: 'Richarlison', nationCode: 'BRA', position: 'ST', avgRating: 2.1 },
-  { id: 8, name: 'Harry Maguire', nationCode: 'ENG', position: 'CB', avgRating: 2.4 },
-  { id: 9, name: 'Alisson', nationCode: 'BRA', position: 'GK', avgRating: 8.2 },
-  { id: 10, name: 'Hakimi', nationCode: 'MAR', position: 'RB', avgRating: 8.4 },
-]
 
 const MOCK_GOALS = [
   // ── Friendly Goals ──
@@ -1115,10 +1103,107 @@ function SentimentsTab() {
 
 function RateTab() {
   const { t } = useLanguage()
-  const [ratings, setRatings] = useState<Record<number, number>>({})
+  const [players, setPlayers] = useState<Array<{
+    id: string
+    playerName: string
+    nationCode: string
+    position: string
+    avgRating: number
+    totalRatings: number
+  }>>([])
+  const [myRatings, setMyRatings] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [submittingId, setSubmittingId] = useState<string | null>(null)
 
-  const handleRate = (playerId: number, rating: number) => {
-    setRatings(prev => ({ ...prev, [playerId]: rating }))
+  // ── Load real players from the DB + this session's ratings ──
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      try {
+        const res = await fetch('/api/ratings')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        const list = Array.isArray(data.ratings) ? data.ratings : []
+        setPlayers(list)
+      } catch {
+        /* ignore — toast shown on submit failure */
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  // ── Per-browser session ID (crypto.randomUUID, persisted in localStorage) ──
+  // Required by the API — the old 'anonymous' default is rejected. A real
+  // session ID makes the (sessionId, playerId) unique constraint meaningful,
+  // enforcing one rating per session per player.
+  const [sessionId, setSessionId] = useState<string>('')
+  useEffect(() => {
+    try {
+      const existing = window.localStorage.getItem('fp_session_id')
+      if (existing && existing.length >= 8) {
+        setSessionId(existing)
+        return
+      }
+      const newId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : `fp-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+      window.localStorage.setItem('fp_session_id', newId)
+      setSessionId(newId)
+    } catch {
+      setSessionId(`fp-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`)
+    }
+  }, [])
+
+  const handleRate = async (playerId: string, rating: number) => {
+    if (!sessionId || submittingId === playerId) return
+    setSubmittingId(playerId)
+    // Optimistically update local state so the stars fill instantly.
+    setMyRatings(prev => ({ ...prev, [playerId]: rating }))
+    try {
+      const res = await fetch('/api/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId, rating, sessionId }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        // Revert on failure.
+        setMyRatings(prev => {
+          const next = { ...prev }
+          delete next[playerId]
+          return next
+        })
+        if (res.status === 429) {
+          toast.error('Too many ratings — please slow down.')
+        } else {
+          toast.error(data?.error || 'Failed to submit rating')
+        }
+        return
+      }
+      toast.success(data?.updated ? 'Rating updated!' : 'Rating submitted!', {
+        description: `${rating}/10`,
+      })
+      // Refresh aggregates so the avg display updates.
+      const fresh = await fetch('/api/ratings')
+      if (fresh.ok) {
+        const fd = await fresh.json().catch(() => null)
+        if (Array.isArray(fd?.ratings)) setPlayers(fd.ratings)
+      }
+    } catch {
+      setMyRatings(prev => {
+        const next = { ...prev }
+        delete next[playerId]
+        return next
+      })
+      toast.error('Network error — please try again')
+    } finally {
+      setSubmittingId(null)
+    }
   }
 
   return (
@@ -1135,73 +1220,89 @@ function RateTab() {
       </motion.div>
 
       <div className="space-y-3">
-        {MOCK_RATINGS.map((player, i) => (
-          <motion.div
-            key={player.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: i * 0.05 }}
-          >
-            <Card className="card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">{getFlag(player.nationCode)}</span>
-                    <div>
-                      <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">{player.name}</p>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
-                          {player.position}
-                        </Badge>
-                        <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
-                          {t('ratings.avg')}: {player.avgRating.toFixed(1)}
-                        </span>
+        {loading ? (
+          <Card className="border-[#E0E0E0]/50 dark:border-white/5">
+            <CardContent className="p-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
+              Loading players…
+            </CardContent>
+          </Card>
+        ) : players.length === 0 ? (
+          <Card className="border-[#E0E0E0]/50 dark:border-white/5">
+            <CardContent className="p-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
+              No rateable players found.
+            </CardContent>
+          </Card>
+        ) : (
+          players.map((player, i) => (
+            <motion.div
+              key={player.id}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: i * 0.05 }}
+            >
+              <Card className="card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-xl shrink-0">{getFlag(player.nationCode)}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-[#1A1A1A] dark:text-white truncate">{player.playerName}</p>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                            {player.position}
+                          </Badge>
+                          <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                            {t('ratings.avg')}: {player.avgRating.toFixed(1)} ({player.totalRatings})
+                          </span>
+                        </div>
                       </div>
+                    </div>
+
+                    {/* Star Rating 1-10 */}
+                    <div className="flex items-center gap-0.5 flex-wrap justify-end max-w-[55%]">
+                      {Array.from({ length: 10 }, (_, idx) => idx + 1).map((star) => {
+                        const isSelected = (myRatings[player.id] ?? 0) >= star
+                        return (
+                          <button
+                            key={star}
+                            onClick={() => handleRate(player.id, star)}
+                            disabled={submittingId === player.id}
+                            aria-label={`Rate ${star} out of 10`}
+                            className="transition-transform duration-150 hover:scale-125 disabled:opacity-50"
+                          >
+                            <Star
+                              className={`size-3.5 ${
+                                isSelected
+                                  ? 'fill-[#6C2BD9] text-[#6C2BD9]'
+                                  : 'text-[#E0E0E0] dark:text-gray-600'
+                              }`}
+                            />
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
-                  {/* Star Rating */}
-                  <div className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((star) => {
-                      const isSelected = (ratings[player.id] ?? 0) >= star
-                      return (
-                        <button
-                          key={star}
-                          onClick={() => handleRate(player.id, star)}
-                          className="transition-transform duration-150 hover:scale-125"
-                        >
-                          <Star
-                            className={`size-5 ${
-                              isSelected
-                                ? 'fill-[#6C2BD9] text-[#6C2BD9]'
-                                : 'text-[#E0E0E0] dark:text-gray-600'
-                            }`}
-                          />
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {ratings[player.id] && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="mt-2 flex items-center justify-between"
-                  >
-                    <span className="text-xs text-[#6C2BD9] dark:text-[#8B5CF6] font-medium">
-                      {t('ratings.your_rating')}: {ratings[player.id]}/5
-                    </span>
-                    <Progress
-                      value={(ratings[player.id] / 5) * 100}
-                      className="h-1 w-20 progress-purple"
-                    />
-                  </motion.div>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
+                  {myRatings[player.id] && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="mt-2 flex items-center justify-between"
+                    >
+                      <span className="text-xs text-[#6C2BD9] dark:text-[#8B5CF6] font-medium">
+                        {t('ratings.your_rating')}: {myRatings[player.id]}/10
+                      </span>
+                      <Progress
+                        value={(myRatings[player.id] / 10) * 100}
+                        className="h-1 w-20 progress-purple"
+                      />
+                    </motion.div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))
+        )}
       </div>
     </div>
   )

@@ -206,10 +206,12 @@ export async function PATCH(request: NextRequest) {
           errors: result.errors.slice(0, 3),
         })
       } catch (err) {
+        console.error(`[feed-monitor cron] monitor ${m.id} failed:`, err)
         results.push({
           monitorId: m.id,
           matchLabel: m.matchLabel,
-          error: String(err),
+          // H3: don't leak internal error details to the client (even admin).
+          error: process.env.NODE_ENV === 'production' ? 'Refresh failed' : String(err),
         })
       }
     }

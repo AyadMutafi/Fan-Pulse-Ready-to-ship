@@ -129,7 +129,7 @@
    129→            <Lock className="size-4" /> Unlock Admin
    130→          </button>
    131→          <p className="mt-4 text-xs text-white/40 text-center">
-   132→            Tip: the dev password is <code className="text-white/60 bg-white/5 px-1.5 py-0.5 rounded">Ayad1241987</code>
+   132→            Admin password required. Set ADMIN_PASSWORD in your environment.
    133→          </p>
    134→        </motion.div>
    135→      </div>
