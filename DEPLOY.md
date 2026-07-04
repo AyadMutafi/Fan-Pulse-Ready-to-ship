@@ -12,7 +12,7 @@ cheap for the soft launch (~$3–5/mo).
 - A Fly.io account (free to create at https://fly.io)
 - The `flyctl` CLI installed on your machine
 - Your `ZAI_API_KEY` (for the z-ai-web-dev-sdk LLM calls)
-- Your admin password (`Ayad1241987` — already hardcoded, but you can override via secret)
+- A strong admin password (generate one with `openssl rand -base64 32`) — MUST be set via the `ADMIN_PASSWORD` env var; there is no hardcoded default
 
 ---
 
@@ -141,13 +141,12 @@ in the container, never baked into the image):
 fly secrets set ZAI_API_KEY="your-actual-api-key-here"
 ```
 
-> **Note:** Your admin password (`Ayad1241987`) is currently hardcoded in
-> `src/lib/admin-auth.ts`. For better security, you could make it an env var too:
-> ```bash
-> fly secrets set ADMIN_PASSWORD="Ayad1241987"
-> ```
-> Then update `admin-auth.ts` to read `process.env.ADMIN_PASSWORD` instead of the
-> hardcoded constant. (Optional — the app works either way.)
+Set the admin password as a Fly secret (REQUIRED — the app fails closed if unset):
+```bash
+NEW_PW=$(openssl rand -base64 32)
+fly secrets set ADMIN_PASSWORD="$NEW_PW"
+```
+Save the generated password somewhere secure (password manager) — it will not be shown again.
 
 ---
 
@@ -186,7 +185,7 @@ Check these things:
 - [ ] Team flags render (from flagcdn.com)
 - [ ] Fan Mood voting carousel works (click a team → modal opens → vote → checkmark appears)
 - [ ] World Cup tab shows stages and player cards
-- [ ] Admin panel at `/admin` — log in with `Ayad1241987` and verify tweet curation + AI rating works
+- [ ] Admin panel at `/admin/feed-monitor` — log in with your `ADMIN_PASSWORD` env var and verify tweet curation + AI rating works
 
 Test the health endpoint:
 ```bash
@@ -330,7 +329,7 @@ Should return `200 OK`.
 | SQLite database | Fly.io persistent volume (`/app/db/custom.db`) |
 | Flag images | flagcdn.com CDN (external) |
 | AI LLM calls | z-ai-web-dev-sdk (calls ZAI API from the container) |
-| Admin auth | HMAC-signed cookies (7-day TTL), no external auth service |
+| Admin auth | `ADMIN_PASSWORD` env var (timing-safe compared); REQUIRED, no hardcoded default |
 | Secrets (`ZAI_API_KEY`) | Fly secrets (encrypted at rest) |
 
 ---

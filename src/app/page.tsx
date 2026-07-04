@@ -1625,21 +1625,13 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
     return () => clearInterval(interval)
   }, [lastUpdated])
 
-  // Client-side cron fallback: hit /api/world-cup/r32-cron every 60s when the
-  // R32 stage is live + selected. This drives the rotating-batch live web_search
-  // refresh (the prompt permits this since the endpoint is idempotent + cheap
-  // when the cache is fresh). The endpoint is admin-gated; we pass the admin
-  // password via the ?admin= query (read-only refresh, not destructive).
-  useEffect(() => {
-    if (!isR32Live) return
-    const ADMIN_PW = 'Ayad1241987' // dev default; prod uses CRON_SECRET header
-    const interval = setInterval(() => {
-      fetch(`/api/world-cup/r32-cron?admin=${ADMIN_PW}`, { method: 'GET' })
-        .then(() => { /* silent — the 30s elite-crisis poll picks up changes */ })
-        .catch((e) => console.warn('r32-cron client trigger failed:', e))
-    }, 60000)
-    return () => clearInterval(interval)
-  }, [isR32Live])
+  // NOTE: The client-side cron trigger that previously lived here was removed
+  // for security — it hardcoded the admin password in the JS bundle, leaking
+  // it to anyone viewing page source. The live-buzz refresh (r16-cron /
+  // r32-cron) MUST now be triggered by an external server-side scheduler
+  // (fly cron, systemd timer, cron-job.org, etc.) hitting the cron endpoint
+  // with the X-Cron-Secret header. The 30s elite-crisis polling below still
+  // picks up any refreshes the external scheduler performs.
 
   // Fetch pulse breakdown whenever a player is selected
   useEffect(() => {

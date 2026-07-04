@@ -3,7 +3,11 @@
 # This is a dev-environment solution. In production, use Fly.io cron or similar.
 
 INTERVAL_SECONDS=300  # 5 minutes
-ADMIN_PW="${ADMIN_PASSWORD:-Ayad1241987}"
+ADMIN_PW="${ADMIN_PASSWORD}"
+if [ -z "$ADMIN_PW" ]; then
+  echo "[cron-loop] ERROR: ADMIN_PASSWORD env var is not set — aborting" >&2
+  exit 1
+fi
 SITE_URL="${SITE_URL:-http://localhost:3000}"
 ENDPOINT="${SITE_URL}/api/admin/feed-monitor"
 

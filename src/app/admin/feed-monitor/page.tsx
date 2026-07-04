@@ -129,7 +129,7 @@ export default function FeedMonitorAdminPage() {
             <Lock className="size-4" /> Unlock Admin
           </button>
           <p className="mt-4 text-xs text-white/40 text-center">
-            Tip: the dev password is <code className="text-white/60 bg-white/5 px-1.5 py-0.5 rounded">Ayad1241987</code>
+            Admin password required. Set ADMIN_PASSWORD in your environment.
           </p>
         </motion.div>
       </div>

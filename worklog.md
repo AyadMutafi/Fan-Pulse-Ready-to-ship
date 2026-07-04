@@ -1438,3 +1438,79 @@ Stage Summary:
 - Anti-hallucination safeguards: (1) VERIFIED_POOL contains only web-verified players (30 players, each with cited source); (2) buzz scores come from EITHER embedded baseline (labeled "VERIFIED BUZZ · captured 2026-07-02") OR real web_search (labeled "LIVE BUZZ"); (3) on SDK failure, falls back to baseline honestly; (4) match-sync only updates matches with explicitly-found web scores (never guesses); (5) excluded players (Morata, Depay, Rodrygo) absent from pool; (6) previousPulseScore = pulseScore on first seed (no false movement arrows).
 - Premise correction: the prompt's claim that r32-buzz-ranker.ts + r32-refresh route already existed was FALSE. All infrastructure was built from scratch.
 - Dev-server limitation documented: the 8GB sandbox cannot sustain repeated z-ai-web-dev-sdk calls (cron) + Turbopack compilation + Chromium simultaneously. First cron call per restart succeeds; subsequent calls may OOM the dev server. Production (Fly.io) would be stable. All code + API data verified correct.
+
+---
+Task ID: security-c1-admin-password
+Agent: Main Agent
+Task: FIX C1 — Remove hardcoded admin password (Ayad1241987) from all locations, fail-closed when env var unset, timing-safe comparison, rotate password. Launch-blocker security vulnerability found in live penetration test.
+
+Work Log:
+
+## Vulnerability assessment (4 source locations + 2 doc locations found)
+- src/lib/admin-auth.ts:13 → `const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Ayad1241987'` (hardcoded fallback)
+- src/app/admin/feed-monitor/page.tsx:132 → on-screen hint: "Tip: the dev password is Ayad1241987"
+- scripts/cron-loop.sh:6 → `ADMIN_PW="${ADMIN_PASSWORD:-Ayad1241987}"`
+- src/app/page.tsx:1635 → `const ADMIN_PW = 'Ayad1241987'` (CLIENT-SIDE hardcoded password in JS bundle — additional vulnerability not in original report: the admin password was embedded in client-side code, visible to anyone via View Source, and sent as ?admin= query param in network requests)
+- scripts/refresh-monitors.sh:15 → `ADMIN_PW="${ADMIN_PASSWORD:-Ayad1241987}"` (additional occurrence found during grep)
+- DEPLOY.md:15,144,147,189 → 4 references to Ayad1241987 in deploy docs
+
+## Fix 1: src/lib/admin-auth.ts (complete rewrite)
+- Removed hardcoded `'Ayad1241987'` fallback entirely.
+- `const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD` (no default — undefined if unset).
+- Fail-closed: if `!ADMIN_PASSWORD`, logs `[admin-auth] ADMIN_PASSWORD env var is not set — denying all admin requests` and returns false for ALL requests.
+- Added `timingSafeEqualStr(a, b)` helper using `crypto.timingSafeEqual` from `node:crypto`. Converts strings to Buffers, short-circuits on length mismatch (returns false), wraps equal-length comparison in try/catch for defensive safety. Prevents timing attacks on password comparison.
+- Header check returns `timingSafeEqualStr(header, ADMIN_PASSWORD)` (no raw `===` comparison).
+- Query param check returns `timingSafeEqualStr(qp, ADMIN_PASSWORD)` (no raw `===` comparison).
+- No secrets logged (only logs that the env var is missing, never the password value).
+
+## Fix 2: src/app/admin/feed-monitor/page.tsx (line 131-133)
+- Removed: "Tip: the dev password is Ayad1241987"
+- Replaced with: "Admin password required. Set ADMIN_PASSWORD in your environment."
+- No password is ever displayed on-screen.
+
+## Fix 3: src/app/page.tsx (lines 1628-1642 — client-side cron)
+- Removed the entire `useEffect` that hardcoded `ADMIN_PW = 'Ayad1241987'` and hit `/api/world-cup/r32-cron?admin=${ADMIN_PW}` every 60s.
+- This was a CRITICAL additional vulnerability: the admin password was in the client-side JS bundle (visible to anyone via View Source) and sent as a query param (visible in network logs, browser history, server logs).
+- Replaced with a comment explaining the cron must now be triggered by an external server-side scheduler (fly cron, systemd timer, cron-job.org, etc.) with the X-Cron-Secret header. The 30s elite-crisis polling (public read endpoint) still picks up any refreshes.
+
+## Fix 4: scripts/cron-loop.sh (line 6)
+- Removed `:-Ayad1241987` fallback.
+- Added: `if [ -z "$ADMIN_PW" ]; then echo "[cron-loop] ERROR: ADMIN_PASSWORD env var is not set — aborting" >&2; exit 1; fi`
+
+## Fix 5: scripts/refresh-monitors.sh (line 15)
+- Same fix as cron-loop.sh: removed `:-Ayad1241987` fallback, added fail-closed check + error message + exit 1.
+
+## Fix 6: DEPLOY.md (4 references updated)
+- Prerequisites: "Your admin password (Ayad1241987 — already hardcoded)" → "A strong admin password (generate one with openssl rand -base64 32) — MUST be set via the ADMIN_PASSWORD env var; there is no hardcoded default"
+- Step 7: Replaced the "optional" note with REQUIRED instructions: "Set the admin password as a Fly secret (REQUIRED — the app fails closed if unset): NEW_PW=$(openssl rand -base64 32); fly secrets set ADMIN_PASSWORD=\"$NEW_PW\""
+- Step 9 checklist: "log in with Ayad1241987" → "log in with your ADMIN_PASSWORD env var"
+- Architecture table: "HMAC-signed cookies" → "ADMIN_PASSWORD env var (timing-safe compared); REQUIRED, no hardcoded default"
+
+## Password rotation
+- Generated new strong password: `openssl rand -base64 32` → 44-char base64 string (saved to /tmp/new_admin_pw.txt for this session; NOT committed anywhere).
+- Set in local .env as `ADMIN_PASSWORD=<new-password>` for local dev server.
+- NOTE on fly secrets: The `fly` CLI was installed (`curl -L https://fly.io/install.sh | sh` → v0.4.66) but is NOT authenticated (`fly auth whoami` → "no access token available"). `fly auth login` requires an interactive browser OAuth flow that cannot be completed in this environment. The password rotation via `fly secrets set ADMIN_PASSWORD="$NEW_PW" --app fan-pulse` MUST be performed by the user with an authenticated fly CLI. The new password is in /tmp/new_admin_pw.txt on this machine — the user should retrieve it, save it to a password manager, then run `fly secrets set` from an authenticated terminal.
+
+## Verification (local — ALL PASS)
+- `bun run lint`: 0 errors, 0 warnings.
+- Old password (Ayad1241987) via header → HTTP 401 (REJECTED) ✅
+- New password via header → HTTP 200 (ACCEPTED) ✅
+- No auth header → HTTP 401 (REJECTED, fail-closed) ✅
+- Old password (Ayad1241987) in /admin/feed-monitor HTML → 0 occurrences ✅
+- New hint text ("Admin password required. Set ADMIN_PASSWORD") in HTML → 1 occurrence ✅
+- Grep for Ayad1241987 across src/ + scripts/ + DEPLOY.md → 0 occurrences (CLEAN) ✅
+
+## Verification (live site — BLOCKED)
+- The live URL `https://e1v0s5v6hje1-d.space-z.ai` is a SEPARATE production deployment (NOT the local dev server tunneled through Caddy). Confirmed by simultaneous comparison:
+  * LOCAL: old password → 401, new password → 200 (new code + new env)
+  * LIVE:  old password → 200, new password → 401 (old code + old env still running)
+- The local dev server (port 3000) is proxied by the Caddy gateway (port 81) for local preview, but the live URL routes to a different backend (likely Fly.io production).
+- Cannot deploy to production from this environment: fly CLI not authenticated, no FLY_API_TOKEN env var, no git remote/CI-CD, Docker not available.
+- DEPLOYMENT REQUIRED BY USER: The user must run `fly deploy` from an authenticated terminal to push these code changes to production, then `fly secrets set ADMIN_PASSWORD="<new-password>"` to rotate the password. Until then, the live site remains vulnerable.
+
+Stage Summary:
+- CODE FIX COMPLETE: All 6 locations of the hardcoded password removed (4 source files + 2 scripts/docs). Fail-closed behavior implemented. Timing-safe comparison added. Client-side password leak (page.tsx) removed entirely. Lint clean (0 errors).
+- LOCAL VERIFICATION: ALL 5 checks PASS (old pw → 401, new pw → 200, no auth → 401, old pw absent from HTML, new hint present).
+- LIVE VERIFICATION: BLOCKED — production deployment requires fly CLI authentication not available in this environment. User must deploy + rotate secret.
+- NEW PASSWORD: Generated via openssl rand -base64 32, stored in /tmp/new_admin_pw.txt and local .env. NOT committed to git. User must retrieve and set via `fly secrets set` on an authenticated terminal.
+- REMAINING ACTION FOR USER: (1) Retrieve new password from /tmp/new_admin_pw.txt on this machine. (2) Save to password manager. (3) From an authenticated fly CLI terminal: `fly deploy --app fan-pulse` then `fly secrets set ADMIN_PASSWORD="<new-password>" --app fan-pulse`. (4) Verify: `curl -X POST -H "x-admin-password: Ayad1241987" https://e1v0s5v6hje1-d.space-z.ai/api/world-cup/seed` → must return 401. (5) Verify: `curl -H "x-admin-password: <new-password>" https://e1v0s5v6hje1-d.space-z.ai/api/admin/feed-monitor` → must return 200. (6) Verify: `curl -s https://e1v0s5v6hje1-d.space-z.ai/admin/feed-monitor | grep -c Ayad1241987` → must return 0.
