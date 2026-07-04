@@ -1,4 +1,26 @@
+# ─────────────────────────────────────────────────────────────────
+# Fan Pulse — Caddy Gateway Configuration
+#
+# SECURITY (CORS): This gateway enforces a strict origin allowlist.
+# Only requests from the production deployment origin (and localhost
+# in dev) receive Access-Control-Allow-* headers. All other origins
+# get NO CORS headers, causing browsers to block cross-origin reads.
+#
+# The allowlist is enforced via Caddy expression matchers. If an
+# upstream proxy (e.g., a cloud edge) also injects CORS headers, it
+# MUST be configured with the same allowlist — application-level
+# headers alone are insufficient if the edge overwrites them.
+# ─────────────────────────────────────────────────────────────────
+
 :81 {
+	# ── Allowed CORS origins ──────────────────────────────────────
+	# Only these origins receive Access-Control-Allow-* headers.
+	# Add new origins here (must be exact match including scheme).
+	@cors_allowed {
+		expression {http.request.header.origin}.matches("^(https://e1v0s5v6hje1-d\\.space-z\\.ai|https://fan-pulse\\.fly\\.dev|http://localhost:3000|http://127\\.0\\.0\\.1:3000)$")
+	}
+
+	# ── XTransformPort routing (sandbox multi-port support) ───────
 	@transform_port_query {
 		query XTransformPort=*
 	}
@@ -12,12 +34,41 @@
 		}
 	}
 
+	# ── Default: proxy to Next.js (port 3000) ────────────────────
 	handle {
 		reverse_proxy localhost:3000 {
 			header_up Host {host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}
 			header_up X-Real-IP {remote_host}
+
+			# SECURITY: Strip any CORS headers from the upstream response
+			# so we have full control over what the client receives.
+			# This prevents reflective CORS from leaking through.
+			header_down -Access-Control-Allow-Origin
+			header_down -Access-Control-Allow-Credentials
+			header_down -Access-Control-Allow-Methods
+			header_down -Access-Control-Allow-Headers
+			header_down -Access-Control-Max-Age
+			header_down -Access-Control-Expose-Headers
+		}
+
+		# Apply strict CORS: only allowed origins get headers.
+		handle @cors_allowed {
+			header {
+				Access-Control-Allow-Origin "{http.request.header.origin}"
+				Access-Control-Allow-Credentials "true"
+				Access-Control-Allow-Methods "GET, POST, OPTIONS"
+				Access-Control-Allow-Headers "Content-Type, x-admin-password"
+				Access-Control-Max-Age "3600"
+				Vary "Origin"
+			}
+		}
+
+		# For non-allowed origins: explicitly set Vary: Origin (no ACAO).
+		# Browsers will block cross-origin responses without ACAO.
+		handle {
+			header Vary "Origin"
 		}
 	}
 }
