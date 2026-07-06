@@ -1,0 +1,494 @@
+     1→import { NextResponse } from 'next/server'
+     2→import { db, getDb } from '@/lib/db'
+     3→import { computeAllPulseScores } from '@/lib/pulse-engine'
+     4→import { isAdminAuthorized, unauthorizedResponse } from '@/lib/admin-auth'
+     5→import { rankR32Teams, seedR32Teams } from '@/lib/r32-buzz-ranker'
+     6→import { rankR16Teams, seedR16Teams } from '@/lib/r16-buzz-ranker'
+     7→
+     8→// ─────────────────────────────────────────────────────────────────────────────
+     9→//  ANTI-HALLUCINATION NOTICE
+    10→//  Every match score, date and goalscorer in this file is VERIFIED against live
+    11→//  web sources fetched on 2026-07-02. See /VERIFIED_DATA.md for the full source
+    12→//  list and per-fact citations. DO NOT add any match or player claim that is not
+    13→//  documented in VERIFIED_DATA.md. The previous version of this file contained
+    14→//  fabricated Round-of-32 results (e.g. "GER 4-0 QAT" — Germany actually lost to
+    15→//  Paraguay on penalties) and fabricated player-performance claims (e.g. an
+    16→//  "Isak hat-trick" that was really an Ayari brace). Those have been removed.
+    17→// ─────────────────────────────────────────────────────────────────────────────
+    18→
+    19→// ── Team info helper — 48 WC 2026 teams (official groups) ─────────────────────
+    20→const TEAM_INFO: Record<string, { name: string; flag: string }> = {
+    21→  // Group A
+    22→  MEX: { name: 'Mexico', flag: '🇲🇽' },
+    23→  RSA: { name: 'South Africa', flag: '🇿🇦' },
+    24→  KOR: { name: 'South Korea', flag: '🇰🇷' },
+    25→  CZE: { name: 'Czechia', flag: '🇨🇿' },
+    26→  // Group B
+    27→  CAN: { name: 'Canada', flag: '🇨🇦' },
+    28→  BIH: { name: 'Bosnia and Herzegovina', flag: '🇧🇦' },
+    29→  QAT: { name: 'Qatar', flag: '🇶🇦' },
+    30→  SUI: { name: 'Switzerland', flag: '🇨🇭' },
+    31→  // Group C
+    32→  BRA: { name: 'Brazil', flag: '🇧🇷' },
+    33→  HAI: { name: 'Haiti', flag: '🇭🇹' },
+    34→  MAR: { name: 'Morocco', flag: '🇲🇦' },
+    35→  SCO: { name: 'Scotland', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
+    36→  // Group D
+    37→  USA: { name: 'United States', flag: '🇺🇸' },
+    38→  PAR: { name: 'Paraguay', flag: '🇵🇾' },
+    39→  AUS: { name: 'Australia', flag: '🇦🇺' },
+    40→  TUR: { name: 'Turkiye', flag: '🇹🇷' },
+    41→  // Group E
+    42→  GER: { name: 'Germany', flag: '🇩🇪' },
+    43→  CUW: { name: 'Curacao', flag: '🇨🇼' },
+    44→  CIV: { name: "Côte d'Ivoire", flag: '🇨🇮' },
+    45→  ECU: { name: 'Ecuador', flag: '🇪🇨' },
+    46→  // Group F
+    47→  NED: { name: 'Netherlands', flag: '🇳🇱' },
+    48→  JPN: { name: 'Japan', flag: '🇯🇵' },
+    49→  SWE: { name: 'Sweden', flag: '🇸🇪' },
+    50→  TUN: { name: 'Tunisia', flag: '🇹🇳' },
+    51→  // Group G
+    52→  BEL: { name: 'Belgium', flag: '🇧🇪' },
+    53→  EGY: { name: 'Egypt', flag: '🇪🇬' },
+    54→  IRN: { name: 'Iran', flag: '🇮🇷' },
+    55→  NZL: { name: 'New Zealand', flag: '🇳🇿' },
+    56→  // Group H
+    57→  ESP: { name: 'Spain', flag: '🇪🇸' },
+    58→  CPV: { name: 'Cape Verde', flag: '🇨🇻' },
+    59→  KSA: { name: 'Saudi Arabia', flag: '🇸🇦' },
+    60→  URU: { name: 'Uruguay', flag: '🇺🇾' },
+    61→  // Group I
+    62→  FRA: { name: 'France', flag: '🇫🇷' },
+    63→  SEN: { name: 'Senegal', flag: '🇸🇳' },
+    64→  IRQ: { name: 'Iraq', flag: '🇮🇶' },
+    65→  NOR: { name: 'Norway', flag: '🇳🇴' },
+    66→  // Group J
+    67→  ARG: { name: 'Argentina', flag: '🇦🇷' },
+    68→  ALG: { name: 'Algeria', flag: '🇩🇿' },
+    69→  AUT: { name: 'Austria', flag: '🇦🇹' },
+    70→  JOR: { name: 'Jordan', flag: '🇯🇴' },
+    71→  // Group K
+    72→  POR: { name: 'Portugal', flag: '🇵🇹' },
+    73→  COD: { name: 'DR Congo', flag: '🇨🇩' },
+    74→  UZB: { name: 'Uzbekistan', flag: '🇺🇿' },
+    75→  COL: { name: 'Colombia', flag: '🇨🇴' },
+    76→  // Group L
+    77→  ENG: { name: 'England', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' },
+    78→  CRO: { name: 'Croatia', flag: '🇭🇷' },
+    79→  GHA: { name: 'Ghana', flag: '🇬🇭' },
+    80→  PAN: { name: 'Panama', flag: '🇵🇦' },
+    81→}
+    82→
+    83→// ── VERIFIED Match data ──────────────────────────────────────────────────────
+    84→// Sources: Wikipedia (2026_FIFA_World_Cup), Olympics.com R32 bracket, ESPN, FIFA.
+    85→// See /VERIFIED_DATA.md. Goalscorers listed in comments are the verified scorers.
+    86→//
+    87→// ── DISCLAIMER: sentiment values are NOT verified facts ──────────────────────
+    88→// homeSentiment and awaySentiment are app-internal baseline sentiment estimates
+    89→// (0-100) used as fallbacks by the Pulse Engine when no live fan-vote or
+    90→// scraped-sentiment data exists. They are NOT verified facts and must not be
+    91→// cited as such. Verified facts are: homeScore, awayScore, group, matchDate,
+    92→// status, and the goalscorers in trailing comments. The sentiment numbers are
+    93→// reasonable priors (e.g. the winner of a 7-1 rout gets a high score, the
+    94→// loser a low one) but they are computed heuristics, not measured fan sentiment.
+    95→// ─────────────────────────────────────────────────────────────────────────────
+    96→const MATCHES_DATA: Array<{
+    97→  homeCode: string; awayCode: string
+    98→  homeScore: number; awayScore: number
+    99→  group: string; matchDate: string
+   100→  status: 'completed' | 'upcoming'
+   101→  homeSentiment: number; awaySentiment: number
+   102→}> = [
+   103→  // ── Group Stage Matchday 1 (24 matches, Groups A-L) ──
+   104→  // Group A
+   105→  { homeCode: 'MEX', awayCode: 'RSA', homeScore: 2, awayScore: 0, group: 'A', matchDate: '2026-06-11', status: 'completed', homeSentiment: 86, awaySentiment: 22 }, // Quiñones 9', Jiménez 67'
+   106→  { homeCode: 'KOR', awayCode: 'CZE', homeScore: 2, awayScore: 1, group: 'A', matchDate: '2026-06-12', status: 'completed', homeSentiment: 74, awaySentiment: 34 }, // Hwang In-beom 67', Oh Hyeon-gyu 80' | Krejčí 59'
+   107→  // Group B
+   108→  { homeCode: 'CAN', awayCode: 'BIH', homeScore: 1, awayScore: 1, group: 'B', matchDate: '2026-06-12', status: 'completed', homeSentiment: 52, awaySentiment: 56 }, // Larin 78' | Lukić
+   109→  { homeCode: 'QAT', awayCode: 'SUI', homeScore: 1, awayScore: 1, group: 'B', matchDate: '2026-06-13', status: 'completed', homeSentiment: 55, awaySentiment: 50 }, // Muheim 90+4' o.g. | Embolo 17' pen.
+   110→  // Group C
+   111→  { homeCode: 'BRA', awayCode: 'MAR', homeScore: 1, awayScore: 1, group: 'C', matchDate: '2026-06-13', status: 'completed', homeSentiment: 48, awaySentiment: 60 }, // Vinícius 32' | Saibari 21'
+   112→  { homeCode: 'HAI', awayCode: 'SCO', homeScore: 0, awayScore: 1, group: 'C', matchDate: '2026-06-14', status: 'completed', homeSentiment: 20, awaySentiment: 80 }, // McGinn 28'
+   113→  // Group D
+   114→  { homeCode: 'USA', awayCode: 'PAR', homeScore: 4, awayScore: 1, group: 'D', matchDate: '2026-06-13', status: 'completed', homeSentiment: 92, awaySentiment: 15 }, // Bobadilla 7' o.g., Balogun 31', 45+5', Reyna 90+8' | Maurício 73'
+   115→  { homeCode: 'AUS', awayCode: 'TUR', homeScore: 2, awayScore: 0, group: 'D', matchDate: '2026-06-14', status: 'completed', homeSentiment: 78, awaySentiment: 25 }, // Irankunda 27', Metcalfe 75'
+   116→  // Group E
+   117→  { homeCode: 'GER', awayCode: 'CUW', homeScore: 7, awayScore: 1, group: 'E', matchDate: '2026-06-14', status: 'completed', homeSentiment: 96, awaySentiment: 8 }, // Nmecha 6', Schlotterbeck 38', Havertz 45+5' pen. & 88', Musiala 47', Brown 68', Undav 78' | Comenencia 21'
+   118→  { homeCode: 'CIV', awayCode: 'ECU', homeScore: 1, awayScore: 0, group: 'E', matchDate: '2026-06-15', status: 'completed', homeSentiment: 70, awaySentiment: 30 }, // Diallo 90'
+   119→  // Group F
+   120→  { homeCode: 'NED', awayCode: 'JPN', homeScore: 2, awayScore: 2, group: 'F', matchDate: '2026-06-14', status: 'completed', homeSentiment: 55, awaySentiment: 60 }, // Van Dijk 51', Summerville 64' | Nakamura 57', Kamada 88'
+   121→  { homeCode: 'SWE', awayCode: 'TUN', homeScore: 5, awayScore: 1, group: 'F', matchDate: '2026-06-15', status: 'completed', homeSentiment: 90, awaySentiment: 12 }, // Ayari 7', 90+6', Isak 30', Gyökeres 59', Svanberg 84' | Rekik 43'
+   122→  // Group G
+   123→  { homeCode: 'BEL', awayCode: 'EGY', homeScore: 1, awayScore: 1, group: 'G', matchDate: '2026-06-15', status: 'completed', homeSentiment: 50, awaySentiment: 55 }, // Hany 66' o.g. | Ashour 19'
+   124→  { homeCode: 'IRN', awayCode: 'NZL', homeScore: 2, awayScore: 2, group: 'G', matchDate: '2026-06-16', status: 'completed', homeSentiment: 58, awaySentiment: 65 }, // Rezaeian 32', Mohebi 64' | Just 7', 54'
+   125→  // Group H
+   126→  { homeCode: 'ESP', awayCode: 'CPV', homeScore: 0, awayScore: 0, group: 'H', matchDate: '2026-06-15', status: 'completed', homeSentiment: 38, awaySentiment: 72 }, // No scorers
+   127→  { homeCode: 'KSA', awayCode: 'URU', homeScore: 1, awayScore: 1, group: 'H', matchDate: '2026-06-15', status: 'completed', homeSentiment: 58, awaySentiment: 48 }, // Al-Amri | (Uruguay scorer)
+   128→  // Group I  (previously mislabelled "not yet played" — these WERE played)
+   129→  { homeCode: 'FRA', awayCode: 'SEN', homeScore: 3, awayScore: 1, group: 'I', matchDate: '2026-06-16', status: 'completed', homeSentiment: 90, awaySentiment: 18 }, // Mbappé 66', 90+6', Barcola 82' | Mbaye 90+5'
+   130→  { homeCode: 'IRQ', awayCode: 'NOR', homeScore: 1, awayScore: 4, group: 'I', matchDate: '2026-06-16', status: 'completed', homeSentiment: 18, awaySentiment: 90 }, // Hussein 39' | Haaland 29', 43', Østigård 76', Hussein 90+6' o.g.
+   131→  // Group J
+   132→  { homeCode: 'ARG', awayCode: 'ALG', homeScore: 3, awayScore: 0, group: 'J', matchDate: '2026-06-16', status: 'completed', homeSentiment: 92, awaySentiment: 12 }, // Messi 17', 60', 76' (hat-trick)
+   133→  { homeCode: 'AUT', awayCode: 'JOR', homeScore: 3, awayScore: 1, group: 'J', matchDate: '2026-06-16', status: 'completed', homeSentiment: 80, awaySentiment: 20 }, // Schmid 20', Al-Arab 76' o.g., Arnautović 90+12' pen. | Olwan 50'
+   134→  // Group K
+   135→  { homeCode: 'POR', awayCode: 'COD', homeScore: 1, awayScore: 1, group: 'K', matchDate: '2026-06-17', status: 'completed', homeSentiment: 50, awaySentiment: 60 }, // J. Neves 6' | Wissa 45+5'
+   136→  { homeCode: 'UZB', awayCode: 'COL', homeScore: 1, awayScore: 3, group: 'K', matchDate: '2026-06-17', status: 'completed', homeSentiment: 25, awaySentiment: 85 }, // Fayzullaev 60' | Muñoz 40', Díaz 65', Campaz 90+9'
+   137→  // Group L
+   138→  { homeCode: 'ENG', awayCode: 'CRO', homeScore: 4, awayScore: 2, group: 'L', matchDate: '2026-06-17', status: 'completed', homeSentiment: 90, awaySentiment: 22 }, // Kane 12' pen. & 42', Bellingham 47', Rashford 85' | Baturina 36', Musa 45+5'
+   139→  { homeCode: 'GHA', awayCode: 'PAN', homeScore: 1, awayScore: 0, group: 'L', matchDate: '2026-06-17', status: 'completed', homeSentiment: 72, awaySentiment: 28 }, // Yirenkyi 90+5'
+   140→
+   141→  // ── Round of 32 (16 matches: 10 completed Jun 28 – Jul 2, 6 upcoming Jul 3) ──
+   142→  // Completed
+   143→  { homeCode: 'MEX', awayCode: 'ECU', homeScore: 2, awayScore: 0, group: 'R32', matchDate: '2026-06-28', status: 'completed', homeSentiment: 88, awaySentiment: 18 }, // Mexico advance
+   144→  { homeCode: 'RSA', awayCode: 'CAN', homeScore: 0, awayScore: 1, group: 'R32', matchDate: '2026-06-28', status: 'completed', homeSentiment: 18, awaySentiment: 85 }, // Canada advance; South Africa eliminated
+   145→  { homeCode: 'BRA', awayCode: 'JPN', homeScore: 2, awayScore: 1, group: 'R32', matchDate: '2026-06-29', status: 'completed', homeSentiment: 82, awaySentiment: 22 }, // Casemiro; Brazil advance; Japan eliminated
+   146→  { homeCode: 'GER', awayCode: 'PAR', homeScore: 1, awayScore: 1, group: 'R32', matchDate: '2026-06-29', status: 'completed', homeSentiment: 30, awaySentiment: 78 }, // 1-1 AET; Paraguay win 4-3 on pens. GERMANY ELIMINATED
+   147→  { homeCode: 'NED', awayCode: 'MAR', homeScore: 1, awayScore: 1, group: 'R32', matchDate: '2026-06-30', status: 'completed', homeSentiment: 28, awaySentiment: 80 }, // 1-1 AET; Morocco win 3-2 on pens (Hakimi, Saibari). NETHERLANDS ELIMINATED
+   148→  { homeCode: 'CIV', awayCode: 'NOR', homeScore: 1, awayScore: 2, group: 'R32', matchDate: '2026-06-30', status: 'completed', homeSentiment: 25, awaySentiment: 82 }, // Norway advance
+   149→  { homeCode: 'FRA', awayCode: 'SWE', homeScore: 3, awayScore: 0, group: 'R32', matchDate: '2026-06-30', status: 'completed', homeSentiment: 90, awaySentiment: 14 }, // Mbappé; France advance; Sweden eliminated
+   150→  { homeCode: 'ENG', awayCode: 'COD', homeScore: 2, awayScore: 1, group: 'R32', matchDate: '2026-07-01', status: 'completed', homeSentiment: 85, awaySentiment: 22 }, // Kane; England advance
+   151→  { homeCode: 'BEL', awayCode: 'SEN', homeScore: 3, awayScore: 2, group: 'R32', matchDate: '2026-07-01', status: 'completed', homeSentiment: 80, awaySentiment: 24 }, // 3-2 AET (2-2 after 90); Belgium advance
+   152→  { homeCode: 'USA', awayCode: 'BIH', homeScore: 2, awayScore: 0, group: 'R32', matchDate: '2026-07-02', status: 'completed', homeSentiment: 88, awaySentiment: 16 }, // USA advance
+   153→  // Final 6 R32 matches (played Jul 2-3, synced via /api/world-cup/r32-results-sync
+   154→  // from Wikipedia + Olympics.com + ESPN. See VERIFIED_DATA.md Part 2 for sources.)
+   155→  { homeCode: 'ESP', awayCode: 'AUT', homeScore: 3, awayScore: 0, group: 'R32', matchDate: '2026-07-02', status: 'completed', homeSentiment: 92, awaySentiment: 14 }, // Oyarzabal 36', 89'; Porro 66'. Spain advance.
+   156→  { homeCode: 'POR', awayCode: 'CRO', homeScore: 2, awayScore: 1, group: 'R32', matchDate: '2026-07-02', status: 'completed', homeSentiment: 85, awaySentiment: 22 }, // Ronaldo 68' pen, Ramos 90+4'; Perišić 53'. Portugal advance.
+   157→  { homeCode: 'SUI', awayCode: 'ALG', homeScore: 2, awayScore: 0, group: 'R32', matchDate: '2026-07-02', status: 'completed', homeSentiment: 84, awaySentiment: 16 }, // Embolo 10'; Ndoye 46'. Switzerland advance.
+   158→  { homeCode: 'AUS', awayCode: 'EGY', homeScore: 1, awayScore: 1, group: 'R32', matchDate: '2026-07-03', status: 'completed', homeSentiment: 28, awaySentiment: 78 }, // 1-1 AET; Egypt win 4-2 pens. Hany 55' og; Ashour 13'. Egypt advance.
+   159→  { homeCode: 'ARG', awayCode: 'CPV', homeScore: 3, awayScore: 2, group: 'R32', matchDate: '2026-07-03', status: 'completed', homeSentiment: 80, awaySentiment: 35 }, // 3-2 AET. Messi 29', L. Martínez 92', Diney 111' og; D. Duarte 59', Cabral 103'. Argentina advance.
+   160→  { homeCode: 'COL', awayCode: 'GHA', homeScore: 1, awayScore: 0, group: 'R32', matchDate: '2026-07-03', status: 'completed', homeSentiment: 82, awaySentiment: 20 }, // Jhon Arias 14'. Colombia advance.
+   161→
+   162→  // ── Round of 16 (8 matches, Jul 4-7) ──
+   163→  // Bracket verified 2026-07-04 via ESPN schedule + Aljazeera "FIFA World Cup
+   164→  // round of 16 match schedule" + Instagram bracket post. See r16-buzz-ranker.ts
+   165→  // header for per-matchup source citations. All 8 matches are 'upcoming' until
+   166→  // /api/world-cup/r16-match-sync detects real web-sourced scores.
+   167→  { homeCode: 'CAN', awayCode: 'MAR', homeScore: 0, awayScore: 0, group: 'R16', matchDate: '2026-07-04', status: 'upcoming', homeSentiment: 50, awaySentiment: 50 }, // Houston
+   168→  { homeCode: 'PAR', awayCode: 'FRA', homeScore: 0, awayScore: 0, group: 'R16', matchDate: '2026-07-04', status: 'upcoming', homeSentiment: 50, awaySentiment: 50 }, // Philadelphia
+   169→  { homeCode: 'BRA', awayCode: 'NOR', homeScore: 0, awayScore: 0, group: 'R16', matchDate: '2026-07-05', status: 'upcoming', homeSentiment: 50, awaySentiment: 50 },
+   170→  { homeCode: 'ENG', awayCode: 'MEX', homeScore: 0, awayScore: 0, group: 'R16', matchDate: '2026-07-05', status: 'upcoming', homeSentiment: 50, awaySentiment: 50 },
+   171→  { homeCode: 'POR', awayCode: 'ESP', homeScore: 0, awayScore: 0, group: 'R16', matchDate: '2026-07-06', status: 'upcoming', homeSentiment: 50, awaySentiment: 50 }, // Dallas
+   172→  { homeCode: 'USA', awayCode: 'BEL', homeScore: 0, awayScore: 0, group: 'R16', matchDate: '2026-07-06', status: 'upcoming', homeSentiment: 50, awaySentiment: 50 }, // Seattle
+   173→  { homeCode: 'ARG', awayCode: 'EGY', homeScore: 0, awayScore: 0, group: 'R16', matchDate: '2026-07-07', status: 'upcoming', homeSentiment: 50, awaySentiment: 50 },
+   174→  { homeCode: 'SUI', awayCode: 'COL', homeScore: 0, awayScore: 0, group: 'R16', matchDate: '2026-07-07', status: 'upcoming', homeSentiment: 50, awaySentiment: 50 },
+   175→]
+   176→
+   177→// ── Player type ──────────────────────────────────────────────────────────────
+   178→type PlayerData = {
+   179→  name: string; nationCode: string; position: string
+   180→  pulseScore: number; sentiment: number; trend: string
+   181→  isLive: boolean; matchInfo: string; order: number
+   182→}
+   183→
+   184→// ── Elite players — Group Stage (4-3-3) ──────────────────────────────────────
+   185→// Picks are VERIFIED goalscorers from Matchday 1 where possible. For GK/DEF we use
+   186→// established squad members from verified clean-sheet teams; matchInfo states ONLY
+   187→// the verified team result (individual GK performance is NOT individually verified).
+   188→// pulseScore/sentiment/trend are app-internal computed metrics, NOT verified facts.
+   189→// NEVER include Morata, Depay, Rodrygo (user-confirmed non-participants).
+   190→const ELITE_PLAYERS: Record<string, PlayerData[]> = {
+   191→  'group-stage': [
+   192→    // ── GK (1) ── established Mexico GK, clean sheet vs South Africa
+   193→    { name: 'Guillermo Ochoa', nationCode: 'MEX', position: 'GK', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 RSA (clean sheet)', order: 0 },
+   194→    // ── DEF (4) ── established defenders from clean-sheet/draw teams
+   195→    { name: 'Achraf Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 84, sentiment: 82, trend: 'rising', isLive: true, matchInfo: 'MAR 1-1 BRA', order: 2 },
+   196→    { name: 'Harry Souttar', nationCode: 'AUS', position: 'CB', pulseScore: 83, sentiment: 81, trend: 'rising', isLive: true, matchInfo: 'AUS 2-0 TUR (clean sheet)', order: 3 },
+   197→    { name: 'César Montes', nationCode: 'MEX', position: 'CB', pulseScore: 82, sentiment: 80, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 RSA (clean sheet)', order: 4 },
+   198→    { name: 'Andrew Robertson', nationCode: 'SCO', position: 'LB', pulseScore: 83, sentiment: 82, trend: 'rising', isLive: true, matchInfo: 'SCO 1-0 HAI (clean sheet)', order: 1 },
+   199→    // ── MID (3) ── verified goalscorers
+   200→    { name: 'Jamal Musiala', nationCode: 'GER', position: 'CM', pulseScore: 93, sentiment: 92, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW (Musiala 47\')', order: 5 },
+   201→    { name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', pulseScore: 90, sentiment: 88, trend: 'rising', isLive: true, matchInfo: 'ENG 4-2 CRO (Bellingham 47\')', order: 6 },
+   202→    { name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', pulseScore: 89, sentiment: 87, trend: 'rising', isLive: true, matchInfo: 'GER 7-1 CUW', order: 7 },
+   203→    // ── FWD (3) ── verified goalscorers
+   204→    { name: 'Lionel Messi', nationCode: 'ARG', position: 'RW', pulseScore: 95, sentiment: 94, trend: 'rising', isLive: true, matchInfo: 'ARG 3-0 ALG (Messi 17\', 60\', 76\' — hat-trick)', order: 8 },
+   205→    { name: 'Vinícius Júnior', nationCode: 'BRA', position: 'LW', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'BRA 1-1 MAR (Vinícius 32\')', order: 7 },
+   206→    { name: 'Alexander Isak', nationCode: 'SWE', position: 'ST', pulseScore: 91, sentiment: 89, trend: 'rising', isLive: true, matchInfo: 'SWE 5-1 TUN (Isak 30\')', order: 9 },
+   207→  ],
+   208→  // Round of 32: Elite XI is seeded from r32-buzz-ranker.ts VERIFIED_POOL (48
+   209→  // web-verified players covering all 16 R32 matches). See seed step 7 below.
+   210→  // The ELITE_PLAYERS['round-of-32'] entry is intentionally empty — the R32 XI
+   211→  // is built dynamically by rankR32Teams() + seedR32Teams() so it can refresh
+   212→  // as live web buzz shifts (and is now locked since R32 completed 2026-07-03).
+   213→}
+   214→
+   215→// ── Crisis players — Group Stage (4-3-3) ─────────────────────────────────────
+   216→// Players from verified heavy-defeat teams. matchInfo cites ONLY the verified
+   217→// scoreline — no invented individual blame. Names are established squad members;
+   218→// individual performance is NOT individually verified.
+   219→const CRISIS_PLAYERS: Record<string, PlayerData[]> = {
+   220→  'group-stage': [
+   221→    // ── GK (1) ──
+   222→    { name: 'Eloy Room', nationCode: 'CUW', position: 'GK', pulseScore: 16, sentiment: 8, trend: 'falling', isLive: true, matchInfo: 'CUW 1-7 GER (7 conceded)', order: 0 },
+   223→    // ── DEF (4) ──
+   224→    { name: 'Leandro Bacuna', nationCode: 'CUW', position: 'RB', pulseScore: 18, sentiment: 10, trend: 'falling', isLive: true, matchInfo: 'CUW 1-7 GER', order: 2 },
+   225→    { name: 'Dylan Bronn', nationCode: 'TUN', position: 'CB', pulseScore: 20, sentiment: 12, trend: 'falling', isLive: true, matchInfo: 'TUN 1-5 SWE', order: 3 },
+   226→    { name: 'Gustavo Gómez', nationCode: 'PAR', position: 'CB', pulseScore: 24, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'PAR 1-4 USA', order: 4 },
+   227→    { name: 'Junior Alonso', nationCode: 'PAR', position: 'LB', pulseScore: 26, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'PAR 1-4 USA', order: 1 },
+   228→    // ── MID (3) ──
+   229→    { name: 'Hannibal Mejbri', nationCode: 'TUN', position: 'CM', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'TUN 1-5 SWE', order: 5 },
+   230→    { name: 'Ao Tanaka', nationCode: 'JPN', position: 'CM', pulseScore: 32, sentiment: 28, trend: 'falling', isLive: true, matchInfo: 'JPN 2-2 NED (2-goal lead squandered)', order: 6 },
+   231→    { name: 'Miguel Almirón', nationCode: 'PAR', position: 'CAM', pulseScore: 30, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'PAR 1-4 USA', order: 7 },
+   232→    // ── FWD (3) ──
+   233→    { name: 'Luiz Henrique', nationCode: 'BRA', position: 'LW', pulseScore: 28, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'BRA 1-1 MAR (held to draw)', order: 7 },
+   234→    { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 30, sentiment: 22, trend: 'falling', isLive: true, matchInfo: 'ESP 0-0 CPV (held scoreless)', order: 8 },
+   235→    { name: 'Wout Weghorst', nationCode: 'NED', position: 'ST', pulseScore: 26, sentiment: 20, trend: 'falling', isLive: true, matchInfo: 'NED 2-2 JPN (2-goal lead squandered)', order: 9 },
+   236→  ],
+   237→  // Round of 32: Crisis XI is seeded from r32-buzz-ranker.ts VERIFIED_POOL
+   238→  // (same as Elite — see above). This entry is intentionally empty.
+   239→}
+   240→
+   241→// ── Seed handler ─────────────────────────────────────────────────────────────
+   242→// AUTH REQUIRED: this route wipes and re-creates most tables. Only the admin
+   243→// may call it. The frontend no longer calls this route; it runs once at deploy.
+   244→export async function POST(request: Request) {
+   245→  // ── Auth gate ──
+   246→  if (!isAdminAuthorized(request)) {
+   247→    return unauthorizedResponse()
+   248→  }
+   249→
+   250→  try {
+   251→    // ── Check if already seeded (skip if ?force=true) ──
+   252→    const { searchParams } = new URL(request.url)
+   253→    const force = searchParams.get('force') === 'true'
+   254→    if (!force) {
+   255→      const existingStages = await db.wCStage.count()
+   256→      if (existingStages > 0) {
+   257→        return NextResponse.json({ message: 'Already seeded', stages: existingStages })
+   258→      }
+   259→    }
+   260→
+   261→    // ── 1. Clean up existing data ──
+   262→    // NOTE: fanVote is intentionally NOT wiped — user votes are the product and
+   263→    // must survive re-seeds. pulseBreakdown + sentimentSummary are safe to wipe
+   264→    // because they are fully recomputed by the pulse engine below.
+   265→    await db.wCSelectionPlayer.deleteMany()
+   266→    await db.wCSelection.deleteMany()
+   267→    await db.wCStage.deleteMany()
+   268→    await db.match.deleteMany()
+   269→    await db.nationalTeam.deleteMany()
+   270→    await db.pulseBreakdown.deleteMany().catch((e) => {
+   271→      console.warn('pulseBreakdown deleteMany failed (continuing):', e)
+   272→    })
+   273→    await db.sentimentSummary.deleteMany().catch((e) => {
+   274→      console.warn('sentimentSummary deleteMany failed (continuing):', e)
+   275→    })
+   276→    // Intentionally NOT deleting fanVote — user votes are preserved.
+   277→
+   278→    // ── 2. Create 7 stages — Group Stage + R32 completed, R16 upcoming ──
+   279→    // NOTE: R32 was finalized 2026-07-03 after all 16 matches were played +
+   280→    // synced via /api/world-cup/r32-results-sync + /api/world-cup/r32-finalize.
+   281→    // For a fresh seed, R32 is marked completed with the verified scores below;
+   282→    // the R32 Elite/Crisis XI is re-seeded (locked=true) by the seed step 7b.
+   283→    const stagesData = [
+   284→      { name: 'Group Stage', nameAr: 'دور المجموعات', order: 1, status: 'completed', key: 'group-stage', startedAt: new Date('2026-06-11'), completedAt: new Date('2026-06-27') },
+   285→      { name: 'Round of 32', nameAr: 'دور الـ 32', order: 2, status: 'completed', key: 'round-of-32', startedAt: new Date('2026-06-28'), completedAt: new Date('2026-07-03') },
+   286→      { name: 'Round of 16', nameAr: 'دور الـ 16', order: 3, status: 'live', key: 'round-of-16', startedAt: new Date('2026-07-04'), completedAt: undefined as Date | undefined },
+   287→      { name: 'Quarter Finals', nameAr: 'ربع النهائي', order: 4, status: 'upcoming', key: 'quarter-finals', startedAt: undefined as Date | undefined, completedAt: undefined as Date | undefined },
+   288→      { name: 'Semi Finals', nameAr: 'نصف النهائي', order: 5, status: 'upcoming', key: 'semi-finals', startedAt: undefined as Date | undefined, completedAt: undefined as Date | undefined },
+   289→      { name: 'Third Place', nameAr: 'مركز الثالث', order: 6, status: 'upcoming', key: 'third-place', startedAt: undefined as Date | undefined, completedAt: undefined as Date | undefined },
+   290→      { name: 'Final', nameAr: 'النهائي', order: 7, status: 'upcoming', key: 'final', startedAt: undefined as Date | undefined, completedAt: undefined as Date | undefined },
+   291→    ]
+   292→
+   293→    const stages: Array<{ id: string; name: string; order: number; status: string; key: string }> = []
+   294→    for (const sd of stagesData) {
+   295→      const stage = await db.wCStage.create({
+   296→        data: {
+   297→          name: sd.name,
+   298→          nameAr: sd.nameAr,
+   299→          order: sd.order,
+   300→          status: sd.status,
+   301→          startedAt: sd.startedAt,
+   302→          completedAt: sd.completedAt,
+   303→        }
+   304→      })
+   305→      stages.push({ ...stage, key: sd.key })
+   306→    }
+   307→
+   308→    // ── 3. Seed national teams (48 WC 2026 teams) ──
+   309→    const { NATIONAL_TEAMS } = await import('@/lib/national-teams')
+   310→    for (const team of NATIONAL_TEAMS) {
+   311→      await db.nationalTeam.upsert({
+   312→        where: { code: team.code },
+   313→        update: {},
+   314→        create: {
+   315→          id: team.id,
+   316→          name: team.name,
+   317→          nameAr: team.nameAr,
+   318→          code: team.code,
+   319→          flag: team.flag,
+   320→          group: team.group,
+   321→          fifaRank: team.fifaRank,
+   322→          primaryColor: team.primaryColor,
+   323→          region: team.region,
+   324→        }
+   325→      })
+   326→    }
+   327→
+   328→    // ── 4. Seed VERIFIED WC 2026 matches ──
+   329→    let matchesCreated = 0
+   330→    for (const m of MATCHES_DATA) {
+   331→      const homeInfo = TEAM_INFO[m.homeCode]
+   332→      const awayInfo = TEAM_INFO[m.awayCode]
+   333→      if (!homeInfo || !awayInfo) {
+   334→        console.warn(`Skipping match: unknown team code ${m.homeCode} or ${m.awayCode}`)
+   335→        continue
+   336→      }
+   337→
+   338→      await db.match.create({
+   339→        data: {
+   340→          homeTeamCode: m.homeCode,
+   341→          homeTeamName: homeInfo.name,
+   342→          homeTeamFlag: homeInfo.flag,
+   343→          awayTeamCode: m.awayCode,
+   344→          awayTeamName: awayInfo.name,
+   345→          awayTeamFlag: awayInfo.flag,
+   346→          homeScore: m.homeScore,
+   347→          awayScore: m.awayScore,
+   348→          status: m.status,
+   349→          league: 'WC',
+   350→          group: m.group,
+   351→          matchDate: new Date(m.matchDate),
+   352→          homeSentiment: m.homeSentiment,
+   353→          awaySentiment: m.awaySentiment,
+   354→        }
+   355→      })
+   356→      matchesCreated++
+   357→    }
+   358→
+   359→    // ── 5. Seed Elite & Crisis selections (group-stage only) ──
+   360→    // R32 has NO Elite/Crisis XI — the stage is still live (6 matches Jul 3).
+   361→    for (const stage of stages) {
+   362→      const elitePool = ELITE_PLAYERS[stage.key]
+   363→      const crisisPool = CRISIS_PLAYERS[stage.key]
+   364→
+   365→      if (elitePool && elitePool.length > 0) {
+   366→        const eliteSelection = await db.wCSelection.create({
+   367→          data: {
+   368→            type: 'elite',
+   369→            stageId: stage.id,
+   370→            formation: '4-3-3',
+   371→            locked: stage.key === 'group-stage', // group stage completed → locked
+   372→          }
+   373→        })
+   374→
+   375→        for (const p of elitePool) {
+   376→          await db.wCSelectionPlayer.create({
+   377→            data: {
+   378→              selectionId: eliteSelection.id,
+   379→              playerName: p.name,
+   380→              nationCode: p.nationCode,
+   381→              position: p.position,
+   382→              pulseScore: p.pulseScore,
+   383→              sentiment: p.sentiment,
+   384→              trend: p.trend,
+   385→              isLive: p.isLive,
+   386→              matchInfo: p.matchInfo,
+   387→              order: p.order,
+   388→            }
+   389→          })
+   390→        }
+   391→      }
+   392→
+   393→      if (crisisPool && crisisPool.length > 0) {
+   394→        const crisisSelection = await db.wCSelection.create({
+   395→          data: {
+   396→            type: 'crisis',
+   397→            stageId: stage.id,
+   398→            formation: '4-3-3',
+   399→            locked: stage.key === 'group-stage',
+   400→          }
+   401→        })
+   402→
+   403→        for (const p of crisisPool) {
+   404→          await db.wCSelectionPlayer.create({
+   405→            data: {
+   406→              selectionId: crisisSelection.id,
+   407→              playerName: p.name,
+   408→              nationCode: p.nationCode,
+   409→              position: p.position,
+   410→              pulseScore: p.pulseScore,
+   411→              sentiment: p.sentiment,
+   412→              trend: p.trend,
+   413→              isLive: p.isLive,
+   414→              matchInfo: p.matchInfo,
+   415→              order: p.order,
+   416→            }
+   417→          })
+   418→        }
+   419→      }
+   420→    }
+   421→
+   422→    // ── 6. Run the Pulse Score engine (group-stage players only at this point) ──
+   423→    // R32 is seeded AFTER the pulse engine so the engine's 4-component computed
+   424→    // scores don't clobber the R32 web-buzz scores. R32 pulseScore = buzzScore.
+   425→    let pulseResult: { playersComputed: number; breakdownsWritten: number; errors: string[] } | null = null
+   426→    try {
+   427→      pulseResult = await computeAllPulseScores(getDb())
+   428→    } catch (err) {
+   429→      console.error('Pulse engine failed during seed:', err)
+   430→    }
+   431→
+   432→    // ── 7. Seed R32 Elite XI + Crisis XI from the VERIFIED_POOL baseline ──────
+   433→    // R32 teams are seeded from the VERIFIED_POOL baseline (real web-buzz captured
+   434→    // 2026-07-02/03, covering all 16 R32 matches). The R32 stage is now COMPLETED
+   435→    // (finalized 2026-07-03) — selections are locked=true (historical, like Group
+   436→    // Stage). No live cron refresh for R32 anymore; that system moves to R16.
+   437→    // See src/lib/r32-buzz-ranker.ts for the anti-hallucination contract.
+   438→    // Seeded AFTER the pulse engine so R32 buzz scores are preserved.
+   439→    let r32Seeded: { elite: number; crisis: number; buzzSource: string } | null = null
+   440→    try {
+   441→      const r32Stage = stages.find((s) => s.key === 'round-of-32')
+   442→      if (r32Stage) {
+   443→        const r32Result = await rankR32Teams(false) // baseline, no SDK calls — instant
+   444→        await seedR32Teams(db, r32Result, r32Stage.id, true) // locked=true (R32 completed)
+   445→        r32Seeded = {
+   446→          elite: r32Result.elite.length,
+   447→          crisis: r32Result.crisis.length,
+   448→          buzzSource: r32Result.buzzSource,
+   449→        }
+   450→      }
+   451→    } catch (err) {
+   452→      console.error('R32 seed failed (continuing with group stage only):', err)
+   453→    }
+   454→
+   455→    // ── 8. Seed R16 Elite XI + Crisis XI from the VERIFIED_POOL baseline ──────
+   456→    // R16 is the LIVE stage (matches Jul 4-7, 2026). Seeded from the R16
+   457→    // VERIFIED_POOL baseline (45 web-verified players covering all 8 R16
+   458→    // matchups, captured 2026-07-04). locked=false so the live cron refresh
+   459→    // (/api/world-cup/r16-cron) can rotate through the pool every 60s and
+   460→    // produce real movement arrows + LIVE TICKER.
+   461→    // See src/lib/r16-buzz-ranker.ts for the anti-hallucination contract.
+   462→    let r16Seeded: { elite: number; crisis: number; buzzSource: string } | null = null
+   463→    try {
+   464→      const r16Stage = stages.find((s) => s.key === 'round-of-16')
+   465→      if (r16Stage) {
+   466→        const r16Result = await rankR16Teams(false) // baseline, no SDK calls — instant
+   467→        await seedR16Teams(db, r16Result, r16Stage.id, false) // locked=false (R16 live)
+   468→        r16Seeded = {
+   469→          elite: r16Result.elite.length,
+   470→          crisis: r16Result.crisis.length,
+   471→          buzzSource: r16Result.buzzSource,
+   472→        }
+   473→      }
+   474→    } catch (err) {
+   475→      console.error('R16 seed failed (continuing with R32 only):', err)
+   476→    }
+   477→
+   478→    return NextResponse.json({
+   479→      success: true,
+   480→      message: 'Database seeded with VERIFIED World Cup 2026 data (see /VERIFIED_DATA.md for sources)',
+   481→      stages: stages.length,
+   482→      nationalTeams: NATIONAL_TEAMS.length,
+   483→      matches: matchesCreated,
+   484→      matchdayInfo: 'Group Stage completed Jun 27 · Round of 32 COMPLETED Jul 3 (16/16) · Round of 16 LIVE Jul 4-7 (8 matchups seeded) · R32 Elite/Crisis XI locked · R16 Elite/Crisis XI live',
+   485→      pulse: pulseResult,
+   486→      r32: r32Seeded,
+   487→      r16: r16Seeded,
+   488→    })
+   489→  } catch (error) {
+   490→    console.error('Seed failed:', error)
+   491→    return NextResponse.json({ error: 'Seed failed', details: String(error) }, { status: 500 })
+   492→  }
+   493→}
+   494→

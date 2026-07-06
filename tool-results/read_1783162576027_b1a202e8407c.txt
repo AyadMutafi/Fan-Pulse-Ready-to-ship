@@ -1,0 +1,753 @@
+     1→/**
+     2→ * R32 Buzz Ranker — Round of 32 Elite XI & Crisis XI engine.
+     3→ *
+     4→ * ANTI-HALLUCINATION CONTRACT (non-negotiable):
+     5→ *   1. The ONLY players eligible for R32 Elite/Crisis XI are those in VERIFIED_POOL
+     6→ *      below. Every entry's WC 2026 squad participation AND R32 match outcome was
+     7→ *      verified against a real web source (Wikipedia, ESPN, FIFA, Olympics.com,
+     8→ *      BBC Sport, USA Today, OneFootball, Standard.co.uk, tempo.co, Bolavip) on
+     9→ *      2026-07-02/03. DO NOT add a player without first verifying them via a real
+    10→ *      web_search — if you can't verify, don't add.
+    11→ *   2. All buzz scores come from EITHER the embedded baseline (labeled
+    12→ *      "VERIFIED BUZZ · captured 2026-07-02") OR a fresh real web_search call
+    13→ *      (labeled "LIVE BUZZ · updated Xs ago"). Never invent a score.
+    14→ *   3. If a live web_search fails (429 / error), fall back to the embedded
+    15→ *      baseline score and label it honestly. Never fabricate.
+    16→ *   4. Match results may ONLY transition upcoming → live → completed when verified
+    17→ *      against a real web source (handled by /api/world-cup/r32-match-sync).
+    18→ *   5. Excluded players (user-confirmed non-participants): Morata, Depay, Rodrygo.
+    19→ *
+    20→ * VERIFICATION SOURCES per player:
+    21→ *   - Group-stage-verified players (Part 1 / Part 4 of VERIFIED_DATA.md): their WC
+    22→ *     2026 squad participation was web-verified 2026-07-02; their R32 team outcome
+    23→ *     is in Part 2. Eligibility is therefore web-verified via the aggregated
+    24→ *     VERIFIED_DATA.md source list.
+    25→ *   - Freshly web-verified 2026-07-02 via z-ai-web-dev-sdk web_search:
+    26→ *       Ødegaard (BBC Sport), De Bruyne (Standard.co.uk, OneFootball),
+    27→ *       Neuer (Bolavip), Rüdiger (tempo.co), De Jong (Yahoo, USA Today),
+    28→ *       Van Dijk (USA Today R32 lineup).
+    29→ *   - R32 verified scorers from VERIFIED_DATA.md Part 2: Casemiro, Mbappé, Kane.
+    30→ *   - Freshly web-verified 2026-07-03 via z-ai-web-dev-sdk web_search + page_reader
+    31→ *     (final 6 R32 matches synced via /api/world-cup/r32-results-sync):
+    32→ *       Oyarzabal & Porro (ESPN/FIFA/Aljazeera — ESP 3-0 AUT),
+    33→ *       Ronaldo & Ramos (Sky Sports/ESPN — POR 2-1 CRO),
+    34→ *       Embolo & Ndoye (FIFA/YouTube — SUI 2-0 ALG),
+    35→ *       Ashour (NYT Athletic/Guardian — EGY beat AUS on pens),
+    36→ *       Messi & Lisandro Martínez (ESPN/Aljazeera/Guardian — ARG 3-2 CPV AET),
+    37→ *       Jhon Arias (ESPN/FIFA — COL 1-0 GHA).
+    38→ *   - Eliminated-team notables web-verified 2026-07-03:
+    39→ *       Sabitzer & Arnautović (Standard.co.uk — AUT), Modrić & Perišić
+    40→ *       (Sky Sports/ESPN — CRO), Mahrez (en.as.com roster — ALG),
+    41→ *       Souttar (Guardian player ratings — AUS), Duarte (Wikipedia — CPV),
+    42→ *       Partey (ESPN roster headline — GHA; NOTE: Kudus is INJURED/out, excluded).
+    43→ *
+    44→ * The baselineBuzz values are app-internal estimates derived from the verified R32
+    45→ * outcomes (a verified R32 goalscorer gets a high score; an eliminated team's GK
+    46→ * gets a low score). They are NOT real-time measurements — they are priors captured
+    47→ * 2026-07-02 that the live cron refresh overwrites with real web_search signals.
+    48→ */
+    49→
+    50→import type { PrismaClient } from '@prisma/client'
+    51→
+    52→// ── Types ────────────────────────────────────────────────────────────────────
+    53→
+    54→export type R32TeamStatus = 'advanced' | 'eliminated' | 'upcoming'
+    55→
+    56→export interface R32Player {
+    57→  /** Display name. */
+    58→  name: string
+    59→  /** FIFA 3-letter nation code (must exist in NATIONAL_TEAMS). */
+    60→  nationCode: string
+    61→  /** Formation position: GK | CB | LB | RB | CM | CAM | LW | RW | ST */
+    62→  position: 'GK' | 'CB' | 'LB' | 'RB' | 'CM' | 'CAM' | 'LW' | 'RW' | 'ST'
+    63→  /** R32 outcome for this player's team. */
+    64→  teamStatus: R32TeamStatus
+    65→  /** Verified fact string — cites ONLY the verified R32 score/outcome. */
+    66→  r32Fact: string
+    67→  /** App-internal baseline buzz estimate (0-100), captured 2026-07-02. */
+    68→  baselineBuzz: number
+    69→  /** ISO timestamp the baseline was captured. */
+    70→  baselineCapturedAt: string
+    71→}
+    72→
+    73→export interface RankedPlayer extends R32Player {
+    74→  /** Current buzz score — baselineBuzz unless a live refresh updated it. */
+    75→  buzzScore: number
+    76→  /** Where the current buzzScore came from. */
+    77→  buzzSource: 'baseline' | 'live'
+    78→  /** Previous buzz score (for movement arrows). 0 on first seed. */
+    79→  previousBuzzScore: number
+    80→  /** ISO timestamp of the last live refresh, or null if never refreshed. */
+    81→  lastBuzzRefreshAt: string | null
+    82→  /** Stable sort key within the formation (assigned by ranker). */
+    83→  order: number
+    84→  /** App-internal sentiment estimate (0-100), derived from buzzScore. */
+    85→  sentiment: number
+    86→  /** App-internal trend, derived from scoreDelta. */
+    87→  trend: 'rising' | 'stable' | 'falling'
+    88→}
+    89→
+    90→export interface R32SelectionResult {
+    91→  elite: RankedPlayer[]
+    92→  crisis: RankedPlayer[]
+    93→  buzzSource: 'baseline' | 'live'
+    94→  generatedAt: string
+    95→  /** Players refreshed in the most recent live batch (empty for baseline). */
+    96→  refreshedPlayers: string[]
+    97→}
+    98→
+    99→// ── VERIFIED_POOL ────────────────────────────────────────────────────────────
+   100→// 48 players, ALL web-verified (see header). Covers ALL 16 R32 matches:
+   101→//   - 17 Elite candidates from the first 10 advancing teams + 10 Elite candidates
+   102→//     from the final 6 advancing teams = 27 Elite candidates
+   103→//   - 13 Crisis candidates from the first 10 eliminated teams + 8 Crisis candidates
+   104→//     from the final 6 eliminated teams = 21 Crisis candidates
+   105→// Sufficient for 11+11 picks with movement room as live buzz shifts the rankings.
+   106→
+   107→const BASELINE_CAPTURED_AT = '2026-07-02T00:00:00.000Z'
+   108→
+   109→export const VERIFIED_POOL: readonly R32Player[] = [
+   110→  // ── Elite candidates (advancing teams — R32 heroes) ────────────────────────
+   111→  {
+   112→    name: 'Kylian Mbappé', nationCode: 'FRA', position: 'ST',
+   113→    teamStatus: 'advanced',
+   114→    r32Fact: 'FRA 3-0 SWE — Mbappé scored (R32, Jun 30). France advanced.',
+   115→    baselineBuzz: 96, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   116→  },
+   117→  {
+   118→    name: 'Harry Kane', nationCode: 'ENG', position: 'ST',
+   119→    teamStatus: 'advanced',
+   120→    r32Fact: 'ENG 2-1 COD — Kane scored (R32, Jul 1). England advanced.',
+   121→    baselineBuzz: 93, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   122→  },
+   123→  {
+   124→    name: 'Casemiro', nationCode: 'BRA', position: 'CM',
+   125→    teamStatus: 'advanced',
+   126→    r32Fact: 'BRA 2-1 JPN — Casemiro scored (R32, Jun 29). Brazil advanced.',
+   127→    baselineBuzz: 90, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   128→  },
+   129→  {
+   130→    name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM',
+   131→    teamStatus: 'advanced',
+   132→    r32Fact: 'ENG 2-1 COD (R32, Jul 1). England advanced.',
+   133→    baselineBuzz: 91, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   134→  },
+   135→  {
+   136→    name: 'Vinícius Júnior', nationCode: 'BRA', position: 'LW',
+   137→    teamStatus: 'advanced',
+   138→    r32Fact: 'BRA 2-1 JPN (R32, Jun 29). Brazil advanced.',
+   139→    baselineBuzz: 89, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   140→  },
+   141→  {
+   142→    name: 'Erling Haaland', nationCode: 'NOR', position: 'ST',
+   143→    teamStatus: 'advanced',
+   144→    r32Fact: 'CIV 1-2 NOR (R32, Jun 30). Norway advanced.',
+   145→    baselineBuzz: 92, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   146→  },
+   147→  {
+   148→    name: 'Martin Ødegaard', nationCode: 'NOR', position: 'CAM',
+   149→    teamStatus: 'advanced',
+   150→    r32Fact: 'CIV 1-2 NOR (R32, Jun 30). Norway advanced. Ødegaard captains NOR.',
+   151→    baselineBuzz: 88, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   152→  },
+   153→  {
+   154→    name: 'Achraf Hakimi', nationCode: 'MAR', position: 'RB',
+   155→    teamStatus: 'advanced',
+   156→    r32Fact: 'NED 1-1 MAR (R32, Jun 30; Morocco win 3-2 pens, Hakimi scored). Morocco advanced.',
+   157→    baselineBuzz: 90, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   158→  },
+   159→  {
+   160→    name: 'Abdessamad Saibari', nationCode: 'MAR', position: 'CM',
+   161→    teamStatus: 'advanced',
+   162→    r32Fact: 'NED 1-1 MAR (R32, Jun 30; Morocco win 3-2 pens, Saibari scored). Morocco advanced.',
+   163→    baselineBuzz: 85, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   164→  },
+   165→  {
+   166→    name: 'Kevin De Bruyne', nationCode: 'BEL', position: 'CAM',
+   167→    teamStatus: 'advanced',
+   168→    r32Fact: 'BEL 3-2 SEN AET (R32, Jul 1). Belgium advanced. De Bruyne started.',
+   169→    baselineBuzz: 87, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   170→  },
+   171→  {
+   172→    name: 'Guillermo Ochoa', nationCode: 'MEX', position: 'GK',
+   173→    teamStatus: 'advanced',
+   174→    r32Fact: 'MEX 2-0 ECU (R32, Jun 28). Mexico advanced (clean sheet).',
+   175→    baselineBuzz: 86, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   176→  },
+   177→  {
+   178→    name: 'César Montes', nationCode: 'MEX', position: 'CB',
+   179→    teamStatus: 'advanced',
+   180→    r32Fact: 'MEX 2-0 ECU (R32, Jun 28). Mexico advanced (clean sheet).',
+   181→    baselineBuzz: 84, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   182→  },
+   183→  {
+   184→    name: 'Gustavo Gómez', nationCode: 'PAR', position: 'CB',
+   185→    teamStatus: 'advanced',
+   186→    r32Fact: 'GER 1-1 PAR AET (R32, Jun 29; Paraguay win 4-3 pens). Paraguay advanced.',
+   187→    baselineBuzz: 83, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   188→  },
+   189→  {
+   190→    name: 'Junior Alonso', nationCode: 'PAR', position: 'LB',
+   191→    teamStatus: 'advanced',
+   192→    r32Fact: 'GER 1-1 PAR AET (R32, Jun 29; Paraguay win 4-3 pens). Paraguay advanced.',
+   193→    baselineBuzz: 81, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   194→  },
+   195→  {
+   196→    name: 'Miguel Almirón', nationCode: 'PAR', position: 'CAM',
+   197→    teamStatus: 'advanced',
+   198→    r32Fact: 'GER 1-1 PAR AET (R32, Jun 29; Paraguay win 4-3 pens). Paraguay advanced.',
+   199→    baselineBuzz: 82, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   200→  },
+   201→  {
+   202→    name: 'Giovanni Reyna', nationCode: 'USA', position: 'CM',
+   203→    teamStatus: 'advanced',
+   204→    r32Fact: 'USA 2-0 BIH (R32, Jul 2). USA advanced.',
+   205→    baselineBuzz: 84, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   206→  },
+   207→  {
+   208→    name: 'Folarin Balogun', nationCode: 'USA', position: 'ST',
+   209→    teamStatus: 'advanced',
+   210→    r32Fact: 'USA 2-0 BIH (R32, Jul 2). USA advanced.',
+   211→    baselineBuzz: 85, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   212→  },
+   213→
+   214→  // ── Crisis candidates (eliminated teams — R32 villains) ─────────────────────
+   215→  {
+   216→    name: 'Manuel Neuer', nationCode: 'GER', position: 'GK',
+   217→    teamStatus: 'eliminated',
+   218→    r32Fact: 'GER 1-1 PAR AET (R32, Jun 29; lost 3-4 pens). GERMANY ELIMINATED.',
+   219→    baselineBuzz: 22, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   220→  },
+   221→  {
+   222→    name: 'Antonio Rüdiger', nationCode: 'GER', position: 'CB',
+   223→    teamStatus: 'eliminated',
+   224→    r32Fact: 'GER 1-1 PAR AET (R32, Jun 29; lost 3-4 pens). GERMANY ELIMINATED.',
+   225→    baselineBuzz: 28, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   226→  },
+   227→  {
+   228→    name: 'Jamal Musiala', nationCode: 'GER', position: 'CM',
+   229→    teamStatus: 'eliminated',
+   230→    r32Fact: 'GER 1-1 PAR AET (R32, Jun 29; lost 3-4 pens, Musiala scored). GERMANY ELIMINATED.',
+   231→    baselineBuzz: 34, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   232→  },
+   233→  {
+   234→    name: 'Kai Havertz', nationCode: 'GER', position: 'ST',
+   235→    teamStatus: 'eliminated',
+   236→    r32Fact: 'GER 1-1 PAR AET (R32, Jun 29; lost 3-4 pens, Havertz scored). GERMANY ELIMINATED.',
+   237→    baselineBuzz: 30, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   238→  },
+   239→  {
+   240→    name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM',
+   241→    teamStatus: 'eliminated',
+   242→    r32Fact: 'GER 1-1 PAR AET (R32, Jun 29; lost 3-4 pens). GERMANY ELIMINATED.',
+   243→    baselineBuzz: 32, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   244→  },
+   245→  {
+   246→    name: 'Virgil van Dijk', nationCode: 'NED', position: 'CB',
+   247→    teamStatus: 'eliminated',
+   248→    r32Fact: 'NED 1-1 MAR AET (R32, Jun 30; lost 2-3 pens). NETHERLANDS ELIMINATED.',
+   249→    baselineBuzz: 26, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   250→  },
+   251→  {
+   252→    name: 'Frenkie de Jong', nationCode: 'NED', position: 'CM',
+   253→    teamStatus: 'eliminated',
+   254→    r32Fact: 'NED 1-1 MAR AET (R32, Jun 30; lost 2-3 pens). NETHERLANDS ELIMINATED.',
+   255→    baselineBuzz: 30, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   256→  },
+   257→  {
+   258→    name: 'Wout Weghorst', nationCode: 'NED', position: 'ST',
+   259→    teamStatus: 'eliminated',
+   260→    r32Fact: 'NED 1-1 MAR AET (R32, Jun 30; lost 2-3 pens). NETHERLANDS ELIMINATED.',
+   261→    baselineBuzz: 24, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   262→  },
+   263→  {
+   264→    name: 'Alexander Isak', nationCode: 'SWE', position: 'ST',
+   265→    teamStatus: 'eliminated',
+   266→    r32Fact: 'FRA 3-0 SWE (R32, Jun 30). SWEDEN ELIMINATED.',
+   267→    baselineBuzz: 28, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   268→  },
+   269→  {
+   270→    name: 'Ao Tanaka', nationCode: 'JPN', position: 'CM',
+   271→    teamStatus: 'eliminated',
+   272→    r32Fact: 'BRA 2-1 JPN (R32, Jun 29). JAPAN ELIMINATED.',
+   273→    baselineBuzz: 26, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   274→  },
+   275→  {
+   276→    name: 'Yoane Wissa', nationCode: 'COD', position: 'ST',
+   277→    teamStatus: 'eliminated',
+   278→    r32Fact: 'ENG 2-1 COD (R32, Jul 1). CONGO DR ELIMINATED.',
+   279→    baselineBuzz: 30, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   280→  },
+   281→  {
+   282→    name: 'Cédric Diallo', nationCode: 'CIV', position: 'CB',
+   283→    teamStatus: 'eliminated',
+   284→    r32Fact: 'CIV 1-2 NOR (R32, Jun 30). IVORY COAST ELIMINATED.',
+   285→    baselineBuzz: 28, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   286→  },
+   287→  {
+   288→    name: 'Edin Džeko', nationCode: 'BIH', position: 'ST',
+   289→    teamStatus: 'eliminated',
+   290→    r32Fact: 'USA 2-0 BIH (R32, Jul 2). BOSNIA ELIMINATED.',
+   291→    baselineBuzz: 24, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   292→  },
+   293→
+   294→  // ── Elite candidates from the FINAL 6 R32 matches (advancing teams, web-verified 2026-07-03) ──
+   295→  {
+   296→    name: 'Mikel Oyarzabal', nationCode: 'ESP', position: 'ST',
+   297→    teamStatus: 'advanced',
+   298→    r32Fact: 'ESP 3-0 AUT (R32, Jul 2) — Oyarzabal brace (36\', 89\'). Spain advanced. Source: ESPN/FIFA/Aljazeera.',
+   299→    baselineBuzz: 95, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   300→  },
+   301→  {
+   302→    name: 'Pedro Porro', nationCode: 'ESP', position: 'RB',
+   303→    teamStatus: 'advanced',
+   304→    r32Fact: 'ESP 3-0 AUT (R32, Jul 2) — Porro scored 66\'. Spain advanced. Source: FIFA/Facebook.',
+   305→    baselineBuzz: 88, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   306→  },
+   307→  {
+   308→    name: 'Cristiano Ronaldo', nationCode: 'POR', position: 'ST',
+   309→    teamStatus: 'advanced',
+   310→    r32Fact: 'POR 2-1 CRO (R32, Jul 2) — Ronaldo scored 68\' pen (first WC KO goal). Portugal advanced. Source: Sky Sports/ESPN.',
+   311→    baselineBuzz: 94, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   312→  },
+   313→  {
+   314→    name: 'Gonçalo Ramos', nationCode: 'POR', position: 'ST',
+   315→    teamStatus: 'advanced',
+   316→    r32Fact: 'POR 2-1 CRO (R32, Jul 2) — Ramos scored 90+4\' late winner. Portugal advanced. Source: ESPN/The Hindu.',
+   317→    baselineBuzz: 90, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   318→  },
+   319→  {
+   320→    name: 'Breel Embolo', nationCode: 'SUI', position: 'ST',
+   321→    teamStatus: 'advanced',
+   322→    r32Fact: 'SUI 2-0 ALG (R32, Jul 2) — Embolo scored 10\'. Switzerland advanced. Source: FIFA/YouTube.',
+   323→    baselineBuzz: 87, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   324→  },
+   325→  {
+   326→    name: 'Dan Ndoye', nationCode: 'SUI', position: 'RW',
+   327→    teamStatus: 'advanced',
+   328→    r32Fact: 'SUI 2-0 ALG (R32, Jul 2) — Ndoye scored 46\'. Switzerland advanced. Source: FIFA/YouTube.',
+   329→    baselineBuzz: 85, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   330→  },
+   331→  {
+   332→    name: 'Emam Ashour', nationCode: 'EGY', position: 'CM',
+   333→    teamStatus: 'advanced',
+   334→    r32Fact: 'AUS 1-1 EGY AET (R32, Jul 3; Egypt win 4-2 pens) — Ashour scored 13\'. Egypt advanced. Source: NYT Athletic/Guardian.',
+   335→    baselineBuzz: 86, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   336→  },
+   337→  {
+   338→    name: 'Lionel Messi', nationCode: 'ARG', position: 'RW',
+   339→    teamStatus: 'advanced',
+   340→    r32Fact: 'ARG 3-2 CPV AET (R32, Jul 3) — Messi scored 29\'. Argentina advanced. Source: ESPN/Aljazeera/Guardian.',
+   341→    baselineBuzz: 96, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   342→  },
+   343→  {
+   344→    name: 'Lisandro Martínez', nationCode: 'ARG', position: 'CB',
+   345→    teamStatus: 'advanced',
+   346→    r32Fact: 'ARG 3-2 CPV AET (R32, Jul 3) — L. Martínez scored 92\'. Argentina advanced. Source: Wikipedia.',
+   347→    baselineBuzz: 84, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   348→  },
+   349→  {
+   350→    name: 'Jhon Arias', nationCode: 'COL', position: 'RW',
+   351→    teamStatus: 'advanced',
+   352→    r32Fact: 'COL 1-0 GHA (R32, Jul 3) — Arias scored 14\'. Colombia advanced. Source: ESPN/FIFA.',
+   353→    baselineBuzz: 87, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   354→  },
+   355→
+   356→  // ── Crisis candidates from the FINAL 6 R32 matches (eliminated teams, web-verified 2026-07-03) ──
+   357→  {
+   358→    name: 'Marcel Sabitzer', nationCode: 'AUT', position: 'CM',
+   359→    teamStatus: 'eliminated',
+   360→    r32Fact: 'ESP 3-0 AUT (R32, Jul 2). AUSTRIA ELIMINATED. Source: Standard.co.uk (AUT squad).',
+   361→    baselineBuzz: 26, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   362→  },
+   363→  {
+   364→    name: 'Marko Arnautović', nationCode: 'AUT', position: 'ST',
+   365→    teamStatus: 'eliminated',
+   366→    r32Fact: 'ESP 3-0 AUT (R32, Jul 2). AUSTRIA ELIMINATED. Source: Standard.co.uk/Instagram (AUT squad).',
+   367→    baselineBuzz: 24, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   368→  },
+   369→  {
+   370→    name: 'Luka Modrić', nationCode: 'CRO', position: 'CM',
+   371→    teamStatus: 'eliminated',
+   372→    r32Fact: 'POR 2-1 CRO (R32, Jul 2). CROATIA ELIMINATED (Modrić farewell). Source: Sky Sports.',
+   373→    baselineBuzz: 22, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   374→  },
+   375→  {
+   376→    name: 'Ivan Perišić', nationCode: 'CRO', position: 'LW',
+   377→    teamStatus: 'eliminated',
+   378→    r32Fact: 'POR 2-1 CRO (R32, Jul 2) — Perišić scored 53\'. CROATIA ELIMINATED. Source: Wikipedia/ESPN.',
+   379→    baselineBuzz: 28, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   380→  },
+   381→  {
+   382→    name: 'Riyad Mahrez', nationCode: 'ALG', position: 'RW',
+   383→    teamStatus: 'eliminated',
+   384→    r32Fact: 'SUI 2-0 ALG (R32, Jul 2). ALGERIA ELIMINATED. Source: en.as.com (ALG roster).',
+   385→    baselineBuzz: 26, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   386→  },
+   387→  {
+   388→    name: 'Harry Souttar', nationCode: 'AUS', position: 'CB',
+   389→    teamStatus: 'eliminated',
+   390→    r32Fact: 'AUS 1-1 EGY AET (R32, Jul 3; lost 2-4 pens, Souttar missed). AUSTRALIA ELIMINATED. Source: Guardian player ratings.',
+   391→    baselineBuzz: 30, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   392→  },
+   393→  {
+   394→    name: 'Deroy Duarte', nationCode: 'CPV', position: 'ST',
+   395→    teamStatus: 'eliminated',
+   396→    r32Fact: 'ARG 3-2 CPV AET (R32, Jul 3) — Duarte scored 59\'. CAPE VERDE ELIMINATED. Source: Wikipedia.',
+   397→    baselineBuzz: 32, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   398→  },
+   399→  {
+   400→    name: 'Thomas Partey', nationCode: 'GHA', position: 'CM',
+   401→    teamStatus: 'eliminated',
+   402→    r32Fact: 'COL 1-0 GHA (R32, Jul 3). GHANA ELIMINATED. Source: ESPN (GHA roster headline).',
+   403→    baselineBuzz: 28, baselineCapturedAt: BASELINE_CAPTURED_AT,
+   404→  },
+   405→]
+   406→
+   407→// ── Formation layout (4-3-3) — position-group slots ─────────────────────────
+   408→// Uses broad position GROUPS (GK / DEF / MID / FWD) with best-available
+   409→// fallback so the XI always fills 11 slots even when the verified pool lacks a
+   410→// specific position (e.g. no natural RW among advancing-team heroes). Each
+   411→// player retains their real position label for display.
+   412→type PosGroup = 'GK' | 'DEF' | 'MID' | 'FWD'
+   413→function posGroup(pos: RankedPlayer['position']): PosGroup {
+   414→  if (pos === 'GK') return 'GK'
+   415→  if (pos === 'CB' || pos === 'LB' || pos === 'RB') return 'DEF'
+   416→  if (pos === 'CM' || pos === 'CAM') return 'MID'
+   417→  return 'FWD' // LW, RW, ST
+   418→}
+   419→// 4-3-3 = 1 GK + 4 DEF + 3 MID + 3 FWD
+   420→const FORMATION_SLOTS: { group: PosGroup; count: number; orderStart: number }[] = [
+   421→  { group: 'GK', count: 1, orderStart: 0 },
+   422→  { group: 'DEF', count: 4, orderStart: 1 },
+   423→  { group: 'MID', count: 3, orderStart: 5 },
+   424→  { group: 'FWD', count: 3, orderStart: 8 },
+   425→]
+   426→
+   427→function deriveSentiment(buzz: number): number {
+   428→  return Math.round(buzz)
+   429→}
+   430→
+   431→function deriveTrend(delta: number): 'rising' | 'stable' | 'falling' {
+   432→  if (delta > 2) return 'rising'
+   433→  if (delta < -2) return 'falling'
+   434→  return 'stable'
+   435→}
+   436→
+   437→function pickFormation(
+   438→  pool: readonly R32Player[],
+   439→  status: 'advanced' | 'eliminated',
+   440→  liveOverrides: Map<string, { buzz: number; source: 'live'; at: string }>,
+   441→  previousScores: Map<string, number>,
+   442→): RankedPlayer[] {
+   443→  const candidates = pool.filter((p) => p.teamStatus === status)
+   444→  const ranked: RankedPlayer[] = candidates.map((p) => {
+   445→    const live = liveOverrides.get(p.name)
+   446→    const buzzScore = live ? live.buzz : p.baselineBuzz
+   447→    const previousBuzzScore = previousScores.get(p.name) ?? 0
+   448→    const delta = buzzScore - (previousBuzzScore || p.baselineBuzz)
+   449→    return {
+   450→      ...p,
+   451→      buzzScore,
+   452→      buzzSource: live ? 'live' : 'baseline',
+   453→      previousBuzzScore: previousBuzzScore || p.baselineBuzz,
+   454→      lastBuzzRefreshAt: live ? live.at : null,
+   455→      sentiment: deriveSentiment(buzzScore),
+   456→      trend: deriveTrend(delta),
+   457→      order: 0,
+   458→    }
+   459→  })
+   460→
+   461→  // Sort by buzz: Elite wants highest first; Crisis wants lowest first.
+   462→  const isElite = status === 'advanced'
+   463→  const sorted = [...ranked].sort((a, b) =>
+   464→    isElite ? b.buzzScore - a.buzzScore : a.buzzScore - b.buzzScore
+   465→  )
+   466→
+   467→  const result: RankedPlayer[] = []
+   468→  const used = new Set<string>()
+   469→
+   470→  // Pass 1: fill each position-group slot from players of that group.
+   471→  for (const slot of FORMATION_SLOTS) {
+   472→    let filled = 0
+   473→    for (const p of sorted) {
+   474→      if (filled >= slot.count) break
+   475→      if (used.has(p.name)) continue
+   476→      if (posGroup(p.position) === slot.group) {
+   477→        result.push({ ...p, order: slot.orderStart + filled })
+   478→        used.add(p.name)
+   479→        filled++
+   480→      }
+   481→    }
+   482→  }
+   483→  // Pass 2: if any group was under-filled, top up from the best remaining
+   484→  // unused players (regardless of group) so the XI always has 11.
+   485→  if (result.length < 11) {
+   486→    for (const p of sorted) {
+   487→      if (result.length >= 11) break
+   488→      if (!used.has(p.name)) {
+   489→        result.push({ ...p, order: result.length })
+   490→        used.add(p.name)
+   491→      }
+   492→    }
+   493→  }
+   494→  return result.slice(0, 11).sort((a, b) => a.order - b.order)
+   495→}
+   496→
+   497→// ── Live web_search refresh (rotating batch) ─────────────────────────────────
+   498→// ANTI-HALLUCINATION: real z-ai-web-dev-sdk web_search only. On failure, the
+   499→// caller falls back to baseline (handled by rankR32Teams). Never fabricates.
+   500→
+   501→export const SDK_CALL_DELAY_MS = 1500
+   502→const R32_REFRESH_BATCH_SIZE = 3
+   503→
+   504→/**
+   505→ * Refresh buzz scores for a subset of players via real web_search.
+   506→ * Returns a Map of player name → { buzz, source, at }. Players whose search
+   507→ * fails are omitted from the map (caller keeps their baseline score).
+   508→ */
+   509→export async function refreshR32BuzzBatch(
+   510→  playerSubset: string[],
+   511→): Promise<Map<string, { buzz: number; source: 'live'; at: string }>> {
+   512→  const overrides = new Map<string, { buzz: number; source: 'live'; at: string }>()
+   513→  if (playerSubset.length === 0) return overrides
+   514→
+   515→  // Lazy import so the SDK is never loaded client-side.
+   516→  const ZAI = (await import('z-ai-web-dev-sdk')).default
+   517→  const zai = await ZAI.create()
+   518→  const now = new Date().toISOString()
+   519→
+   520→  for (const name of playerSubset) {
+   521→    const poolEntry = VERIFIED_POOL.find((p) => p.name === name)
+   522→    if (!poolEntry) continue
+   523→    try {
+   524→      const results = await zai.functions.invoke('web_search', {
+   525→        query: `${name} ${poolEntry.nationCode} World Cup 2026 Round of 32 fan reaction`,
+   526→        num: 5,
+   527→      })
+   528→      if (!Array.isArray(results) || results.length === 0) {
+   529→        await new Promise((r) => setTimeout(r, SDK_CALL_DELAY_MS))
+   530→        continue
+   531→      }
+   532→      // Derive a buzz score from result volume + snippet sentiment.
+   533→      // This is a real signal (number of web mentions + their tone), not a
+   534→      // fabricated number. More results + positive snippets → higher buzz.
+   535→      const volume = Math.min(results.length, 5)
+   536→      const snippets = results.map((r: { snippet?: string }) => (r.snippet || '').toLowerCase())
+   537→      const positiveHits = snippets.filter((s: string) =>
+   538→        /win|advance|goal|brace|hat.?trick|class|masterclass|hero|stunning|brilliant/.test(s)
+   539→      ).length
+   540→      const negativeHits = snippets.filter((s: string) =>
+   541→        /eliminat|knock|out|crash|defeat|loss|lost|disappoint|blame|error|own.?goal/.test(s)
+   542→      ).length
+   543→
+   544→      let score: number
+   545→      if (poolEntry.teamStatus === 'advanced') {
+   546→        // Advancing-team hero: base 70 + volume bonus + positive-hit bonus.
+   547→        score = 70 + volume * 3 + positiveHits * 4
+   548→      } else {
+   549→        // Eliminated-team villain: base 35 - volume penalty - negative-hit penalty.
+   550→        score = 40 - volume * 2 - negativeHits * 4
+   551→      }
+   552→      score = Math.max(5, Math.min(99, Math.round(score)))
+   553→      overrides.set(name, { buzz: score, source: 'live', at: now })
+   554→    } catch (err) {
+   555→      // 429 / error — skip this player; caller keeps baseline. Honest fallback.
+   556→      console.warn(`[r32-buzz] web_search failed for ${name}:`, err)
+   557→    }
+   558→    await new Promise((r) => setTimeout(r, SDK_CALL_DELAY_MS))
+   559→  }
+   560→  return overrides
+   561→}
+   562→
+   563→// ── Main ranker ──────────────────────────────────────────────────────────────
+   564→
+   565→/**
+   566→ * Rank the R32 Elite XI + Crisis XI from the VERIFIED_POOL.
+   567→ *
+   568→ * @param useLiveSdk  If true, run a real web_search refresh for the playerSubset.
+   569→ * @param playerSubset  Optional list of player names to live-refresh (rotating
+   570→ *                      batch). Other players keep their last-known score.
+   571→ * @param previousScores  Optional map of player name → previous buzz score, for
+   572→ *                        movement-arrow computation. Read from DB by the caller.
+   573→ */
+   574→export async function rankR32Teams(
+   575→  useLiveSdk: boolean,
+   576→  playerSubset: string[] = [],
+   577→  previousScores: Map<string, number> = new Map(),
+   578→): Promise<R32SelectionResult> {
+   579→  let liveOverrides = new Map<string, { buzz: number; source: 'live'; at: string }>()
+   580→  let refreshedPlayers: string[] = []
+   581→
+   582→  if (useLiveSdk && playerSubset.length > 0) {
+   583→    try {
+   584→      liveOverrides = await refreshR32BuzzBatch(playerSubset)
+   585→      refreshedPlayers = Array.from(liveOverrides.keys())
+   586→    } catch (err) {
+   587→      // Total SDK failure — fall back to baseline honestly.
+   588→      console.warn('[r32-buzz] live refresh failed, using baseline:', err)
+   589→    }
+   590→  }
+   591→
+   592→  const elite = pickFormation(VERIFIED_POOL, 'advanced', liveOverrides, previousScores)
+   593→  const crisis = pickFormation(VERIFIED_POOL, 'eliminated', liveOverrides, previousScores)
+   594→
+   595→  // buzzSource is 'live' only if at least one player in the subset got a real
+   596→  // live score. Otherwise 'baseline'.
+   597→  const buzzSource: 'baseline' | 'live' =
+   598→    refreshedPlayers.length > 0 ? 'live' : 'baseline'
+   599→
+   600→  return {
+   601→    elite,
+   602→    crisis,
+   603→    buzzSource,
+   604→    generatedAt: new Date().toISOString(),
+   605→    refreshedPlayers,
+   606→  }
+   607→}
+   608→
+   609→// ── DB seeding / upsert ──────────────────────────────────────────────────────
+   610→
+   611→/**
+   612→ * Upsert the R32 Elite XI + Crisis XI selections for the given R32 stage.
+   613→ * Copies the current pulseScore → previousPulseScore before overwriting, so the
+   614→ * UI can render movement arrows.
+   615→ *
+   616→ * @param locked  If true, mark the selections as locked (historical/final, like
+   617→ *                Group Stage). Used when finalizing R32 after all 16 matches
+   618→ *                complete. Locked selections disable polling/movement chips.
+   619→ */
+   620→export async function seedR32Teams(
+   621→  db: PrismaClient,
+   622→  result: R32SelectionResult,
+   623→  r32StageId: string,
+   624→  locked: boolean = false,
+   625→): Promise<{ eliteId: string; crisisId: string }> {
+   626→  // Find or create the two selections.
+   627→  const existing = await db.wCSelection.findMany({
+   628→    where: { stageId: r32StageId, type: { in: ['elite', 'crisis'] } },
+   629→  })
+   630→  const eliteSel =
+   631→    existing.find((s) => s.type === 'elite') ??
+   632→    (await db.wCSelection.create({
+   633→      data: { type: 'elite', stageId: r32StageId, formation: '4-3-3', locked },
+   634→    }))
+   635→  const crisisSel =
+   636→    existing.find((s) => s.type === 'crisis') ??
+   637→    (await db.wCSelection.create({
+   638→      data: { type: 'crisis', stageId: r32StageId, formation: '4-3-3', locked },
+   639→    }))
+   640→
+   641→  // If locking an existing selection, update its locked flag.
+   642→  if (locked) {
+   643→    if (!eliteSel.locked) {
+   644→      await db.wCSelection.update({ where: { id: eliteSel.id }, data: { locked: true } })
+   645→    }
+   646→    if (!crisisSel.locked) {
+   647→      await db.wCSelection.update({ where: { id: crisisSel.id }, data: { locked: true } })
+   648→    }
+   649→  }
+   650→
+   651→  // Helper: upsert players, preserving previousPulseScore.
+   652→  const upsertPlayers = async (
+   653→    selectionId: string,
+   654→    players: RankedPlayer[],
+   655→  ) => {
+   656→    // Load current players to copy pulseScore → previousPulseScore.
+   657→    const current = await db.wCSelectionPlayer.findMany({
+   658→      where: { selectionId },
+   659→    })
+   660→    const currentByName = new Map(current.map((p) => [p.playerName, p]))
+   661→
+   662→    // Delete players no longer in the ranking (e.g. a player dropped out).
+   663→    const newNames = new Set(players.map((p) => p.name))
+   664→    for (const p of current) {
+   665→      if (!newNames.has(p.playerName)) {
+   666→        await db.wCSelectionPlayer.delete({ where: { id: p.id } })
+   667→      }
+   668→    }
+   669→
+   670→    for (const p of players) {
+   671→      const prev = currentByName.get(p.name)
+   672→      const previousPulseScore = prev ? prev.pulseScore : 0
+   673→      const lastBuzzRefreshAt = p.lastBuzzRefreshAt
+   674→        ? new Date(p.lastBuzzRefreshAt)
+   675→        : prev?.lastBuzzRefreshAt ?? null
+   676→
+   677→      if (prev) {
+   678→        await db.wCSelectionPlayer.update({
+   679→          where: { id: prev.id },
+   680→          data: {
+   681→            pulseScore: p.buzzScore,
+   682→            previousPulseScore,
+   683→            sentiment: p.sentiment,
+   684→            trend: p.trend,
+   685→            isLive: true,
+   686→            matchInfo: p.r32Fact,
+   687→            order: p.order,
+   688→            position: p.position,
+   689→            nationCode: p.nationCode,
+   690→            lastBuzzRefreshAt,
+   691→          },
+   692→        })
+   693→      } else {
+   694→        await db.wCSelectionPlayer.create({
+   695→          data: {
+   696→            selectionId,
+   697→            playerName: p.name,
+   698→            nationCode: p.nationCode,
+   699→            position: p.position,
+   700→            // On first seed, previousPulseScore = pulseScore so scoreDelta = 0
+   701→            // (no false movement arrow until a live refresh actually changes it).
+   702→            pulseScore: p.buzzScore,
+   703→            previousPulseScore: p.buzzScore,
+   704→            sentiment: p.sentiment,
+   705→            trend: p.trend,
+   706→            isLive: true,
+   707→            matchInfo: p.r32Fact,
+   708→            order: p.order,
+   709→            lastBuzzRefreshAt,
+   710→          },
+   711→        })
+   712→      }
+   713→    }
+   714→  }
+   715→
+   716→  await upsertPlayers(eliteSel.id, result.elite)
+   717→  await upsertPlayers(crisisSel.id, result.crisis)
+   718→
+   719→  return { eliteId: eliteSel.id, crisisId: crisisSel.id }
+   720→}
+   721→
+   722→/**
+   723→ * Read the current per-player buzz scores from the DB, for movement-arrow
+   724→ * computation on the next refresh. Returns a Map of playerName → pulseScore.
+   725→ */
+   726→export async function loadPreviousScores(
+   727→  db: PrismaClient,
+   728→  r32StageId: string,
+   729→): Promise<Map<string, number>> {
+   730→  const players = await db.wCSelectionPlayer.findMany({
+   731→    where: { selection: { stageId: r32StageId } },
+   732→  })
+   733→  return new Map(players.map((p) => [p.playerName, p.pulseScore]))
+   734→}
+   735→
+   736→/**
+   737→ * Get the next rotating-batch subset of players to refresh.
+   738→ * Returns up to R32_REFRESH_BATCH_SIZE names, wrapping around the pool.
+   739→ */
+   740→export function getNextBatch(cursor: number): { names: string[]; nextCursor: number } {
+   741→  const names = VERIFIED_POOL.map((p) => p.name)
+   742→  const batch: string[] = []
+   743→  for (let i = 0; i < R32_REFRESH_BATCH_SIZE; i++) {
+   744→    const idx = (cursor + i) % names.length
+   745→    batch.push(names[idx])
+   746→  }
+   747→  const nextCursor = (cursor + R32_REFRESH_BATCH_SIZE) % names.length
+   748→  return { names: batch, nextCursor }
+   749→}
+   750→
+   751→export const R32_POOL_SIZE = VERIFIED_POOL.length
+   752→export const R32_BATCH_SIZE = R32_REFRESH_BATCH_SIZE
+   753→
