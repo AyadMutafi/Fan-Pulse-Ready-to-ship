@@ -22,6 +22,8 @@
 
 import ZAI from 'z-ai-web-dev-sdk'
 import type { PrismaClient } from '@prisma/client'
+import { searchXPosts } from './grok-x-search'
+import { scorePostBatch } from './groq-sentiment'
 
 // ── Fake author detection ────────────────────────────────────────────────────
 
@@ -128,6 +130,12 @@ const MAX_PAGE_READER_CALLS = 3
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+/** Parse an ISO date string defensively; returns `now` on failure. */
+function safeParseDate(s: string): Date {
+  const d = new Date(s)
+  return isNaN(d.getTime()) ? new Date() : d
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -138,17 +146,21 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  *   2. If the monitor was refreshed less than MIN_REFRESH_INTERVAL_MS ago,
  *      short-circuit and return { newPosts: 0 } — the cached DB posts are
  *      still fresh.
- *   3. Build a small set of search queries from teamCodes + match label.
- *   4. Call z-ai-web-dev-sdk web_search for each query (cap at 2 queries).
- *   5. For each result, take the title + snippet as the post content. For
- *      scrape-friendly news domains, optionally enrich via page_reader
- *      (capped at MAX_PAGE_READER_CALLS for speed).
- *   6. Reject posts whose author matches FAKE_AUTHOR_PATTERNS, whose content
+ *   3. Fetch REAL X (Twitter) posts via the xAI Responses API x_search tool
+ *      (src/lib/grok-x-search.ts). These posts come straight from X's own
+ *      data — no scraping. Each carries a real https://x.com/<h>/status/<id>
+ *      URL, real handle, verbatim content, and a timestamp.
+ *   4. ALSO call z-ai-web-dev-sdk web_search for additional Reddit + news
+ *      coverage (2 queries). For each result, take the title + snippet as
+ *      the post content. For scrape-friendly news domains, optionally enrich
+ *      via page_reader (capped at MAX_PAGE_READER_CALLS for speed).
+ *   5. Reject posts whose author matches FAKE_AUTHOR_PATTERNS, whose content
  *      is a known anti-bot block message, or whose content is too short.
- *   7. De-duplicate against existing FeedPosts by URL.
- *   8. LLM-score the new posts in a single batch (sentiment + quote).
- *   9. Persist each new FeedPost row.
- *  10. Update monitor.lastRefreshedAt.
+ *   6. De-duplicate against existing FeedPosts by URL.
+ *   7. Score the new posts in a single batch via Groq (fast/cheap), with a
+ *      Z.ai SDK fallback (src/lib/groq-sentiment.ts).
+ *   8. Persist each new FeedPost row.
+ *   9. Update monitor.lastRefreshedAt.
  *
  * This function NEVER fabricates posts. On any SDK failure or empty result
  * set, it returns { newPosts: 0, error? } and the caller MUST render an
@@ -215,32 +227,68 @@ export async function fetchLiveFanTalk(
     }
   }
 
-  // ── 3. Initialize SDK ──────────────────────────────────────────────────
+  // ── 3. Fetch REAL X (Twitter) posts via xAI Responses API x_search ─────
+  // This is the primary social-media source. The x_search tool calls X's
+  // own keyword + semantic search and returns real post URLs, handles,
+  // verbatim text, and timestamps. No scraping, no login walls.
+  const scraped: ScrapedPost[] = []
+  let rejected = 0
+  let xSearchError: string | undefined
+
+  try {
+    console.log(`[live-fan-talk] xAI X-Search for ${matchLabel}`)
+    const xResult = await searchXPosts(codes, { matchLabel })
+    console.log(
+      `[live-fan-talk] X-Search: ${xResult.posts.length} posts in ${xResult.durationMs}ms` +
+        (xResult.error ? ` (error: ${xResult.error})` : ''),
+    )
+    if (xResult.error) xSearchError = xResult.error
+    for (const p of xResult.posts) {
+      if (scraped.length >= MAX_POSTS_PER_FETCH) break
+      // X posts are never block messages and never match FAKE_AUTHOR_PATTERNS
+      // (which target seeded templated handles). But we still validate.
+      if (isFakeAuthor(p.handle)) {
+        rejected++
+        continue
+      }
+      const postedAt = p.postedAt ? safeParseDate(p.postedAt) : new Date()
+      scraped.push({
+        url: p.url,
+        platform: 'twitter',
+        author: `@${p.handle}`,
+        content: p.text.slice(0, MAX_CONTENT_LENGTH),
+        postedAt,
+      })
+    }
+  } catch (err) {
+    xSearchError = `X-Search threw: ${String(err).slice(0, 200)}`
+    console.warn(`[live-fan-talk] ${xSearchError}`)
+  }
+
+  // ── 3b. Initialize Z.ai SDK (needed for web_search + sentiment fallback) ─
   let zai: any
   try {
     zai = await ZAI.create()
   } catch (err) {
-    return {
-      monitorId: monitor.id,
-      newPosts: 0,
-      skippedDuplicates: 0,
-      rejected: 0,
-      error: `SDK init failed: ${String(err)}`,
-      durationMs: Date.now() - startedAt,
-    }
+    // If X-Search already gave us posts, we can still proceed — we just
+    // won't have Reddit/news coverage. Sentiment scoring will use Groq.
+    console.warn(`[live-fan-talk] SDK init failed: ${String(err)}`)
+    zai = null
   }
 
-  // ── 4. Build search queries ────────────────────────────────────────────
+  // ── 4. Build search queries for additional Reddit + news coverage ──────
   const queries = buildLiveSearchQueries(codes)
-  const scraped: ScrapedPost[] = []
-  let rejected = 0
 
   console.log(
-    `[live-fan-talk] Fetching for ${matchLabel} — ${queries.length} queries`,
+    `[live-fan-talk] Fetching for ${matchLabel} — ${queries.length} web queries`,
   )
 
   for (const query of queries) {
     if (scraped.length >= MAX_POSTS_PER_FETCH) break
+    if (!zai) {
+      console.log(`[live-fan-talk] SDK unavailable — skipping web_search`)
+      break
+    }
     try {
       await sleep(SDK_CALL_DELAY_MS)
       console.log(`[live-fan-talk] web_search: "${query}"`)
@@ -387,10 +435,16 @@ export async function fetchLiveFanTalk(
   })
   const skippedDuplicates = scraped.length - newPosts.length
 
-  // ── 6. LLM-score the new posts in a single batch ───────────────────────
+  // ── 6. Score the new posts via Groq (fast/cheap) with Z.ai SDK fallback ──
   let savedCount = 0
   if (newPosts.length > 0) {
-    const analyses = await scorePostBatchWithLLM(newPosts, zai)
+    const { analyses, provider, error: scoreErr } = await scorePostBatch(
+      newPosts.map((p) => ({ content: p.content })),
+    )
+    console.log(
+      `[live-fan-talk] Sentiment scoring via ${provider}` +
+        (scoreErr ? ` (${scoreErr})` : ''),
+    )
     for (let i = 0; i < newPosts.length; i++) {
       const post = newPosts[i]
       const analysis = analyses[i]
@@ -433,7 +487,9 @@ export async function fetchLiveFanTalk(
     durationMs: Date.now() - startedAt,
   }
   if (savedCount === 0 && scraped.length === 0) {
-    result.error = 'SDK returned no usable results'
+    result.error = xSearchError
+      ? `No posts found (X-Search: ${xSearchError})`
+      : 'No usable results from any source'
   }
   console.log(
     `[live-fan-talk] Done in ${result.durationMs}ms — saved ${savedCount}, dup ${skippedDuplicates}, rejected ${rejected}`,
@@ -507,10 +563,13 @@ function extractDomain(url: string): string {
   }
 }
 
-function detectPlatform(url: string): 'twitter' | 'reddit' | 'web' {
+function detectPlatform(url: string): 'twitter' | 'reddit' | 'instagram' | 'youtube' | 'facebook' | 'tiktok' | 'web' {
   if (url.includes('reddit.com')) return 'reddit'
   if (url.includes('x.com') || url.includes('twitter.com')) return 'twitter'
-  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'web'
+  if (url.includes('instagram.com')) return 'instagram'
+  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube'
+  if (url.includes('facebook.com') || url.includes('fb.com')) return 'facebook'
+  if (url.includes('tiktok.com')) return 'tiktok'
   return 'web'
 }
 

@@ -8,7 +8,7 @@ import { MessageCircle, ChevronDown, RefreshCw, ExternalLink, Inbox } from 'luci
 
 interface FanTalkPost {
   id: string
-  platform: string
+  platform: string // 'twitter' | 'reddit' | 'instagram' | 'youtube' | 'facebook' | 'tiktok' | 'web'
   author: string
   content: string
   topQuote: string | null
@@ -42,21 +42,49 @@ interface FanTalkPanelProps {
 function PlatformIcon({ platform }: { platform: string }) {
   if (platform === 'reddit') {
     return (
-      <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#FF4500] text-white text-[8px] font-bold shrink-0">
+      <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#FF4500] text-white text-[8px] font-bold shrink-0" title="Reddit">
         r
       </span>
     )
   }
   if (platform === 'twitter') {
     return (
-      <span className="inline-flex items-center justify-center size-4 rounded-full bg-black text-white text-[8px] font-bold shrink-0">
+      <span className="inline-flex items-center justify-center size-4 rounded-full bg-black text-white text-[8px] font-bold shrink-0" title="X (Twitter)">
         𝕏
       </span>
     )
   }
-  // web
+  if (platform === 'instagram') {
+    return (
+      <span className="inline-flex items-center justify-center size-4 rounded-full bg-gradient-to-br from-[#F58529] via-[#DD2A7B] to-[#8134AF] text-white text-[8px] font-bold shrink-0" title="Instagram">
+        IG
+      </span>
+    )
+  }
+  if (platform === 'youtube') {
+    return (
+      <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#FF0000] text-white text-[8px] font-bold shrink-0" title="YouTube">
+        YT
+      </span>
+    )
+  }
+  if (platform === 'facebook') {
+    return (
+      <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#1877F2] text-white text-[8px] font-bold shrink-0" title="Facebook">
+        f
+      </span>
+    )
+  }
+  if (platform === 'tiktok') {
+    return (
+      <span className="inline-flex items-center justify-center size-4 rounded-full bg-black text-white text-[8px] font-bold shrink-0" title="TikTok">
+        TT
+      </span>
+    )
+  }
+  // web (news sites)
   return (
-    <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#6C2BD9] text-white text-[8px] font-bold shrink-0">
+    <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#6C2BD9] text-white text-[8px] font-bold shrink-0" title="News / Web">
       📰
     </span>
   )
