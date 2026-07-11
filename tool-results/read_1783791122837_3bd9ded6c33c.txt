@@ -1,0 +1,754 @@
+     1→/**
+     2→ * Live Fan Talk — on-demand real social post fetcher for the "What Fans Are
+     3→ * Saying" panel.
+     4→ *
+     5→ * This module is the SINGLE SOURCE OF TRUTH for:
+     6→ *   1. The list of fabricated/templated author patterns that must never be
+     7→ *      shown to users (FAKE_AUTHOR_PATTERNS). These originated from
+     8→ *      scripts/seed-fan-talk.ts which seeded boilerplate posts under fake
+     9→ *      handles like @angry_supporter, u/tactical_nerd, "ESPN Match Report".
+    10→ *   2. fetchLiveFanTalk() — an on-demand SDK fetch (web_search + LLM score)
+    11→ *      used by /api/fan-talk when fewer than 3 real posts remain in the DB.
+    12→ *
+    13→ * CRITICAL CONTRACT:
+    14→ *   - fetchLiveFanTalk NEVER fabricates posts. If the SDK is down, rate-
+    15→ *     limited, or returns no results, it returns { newPosts: 0, error? }.
+    16→ *   - The caller (the API route) MUST honor that and render an honest empty
+    17→ *     state — never fall back to fake templated content.
+    18→ *   - Posts saved by fetchLiveFanTalk always carry a REAL source URL with a
+    19→ *     real hostname (espn.com, aljazeera.com, reddit.com, youtube.com, etc.)
+    20→ *     because they come from web_search results.
+    21→ */
+    22→
+    23→import ZAI from 'z-ai-web-dev-sdk'
+    24→import type { PrismaClient } from '@prisma/client'
+    25→
+    26→// ── Fake author detection ────────────────────────────────────────────────────
+    27→
+    28→/**
+    29→ * Patterns that identify fabricated seed/demo posts. Any FeedPost whose
+    30→ * `author` matches ANY of these is considered fake and MUST be:
+    31→ *   - deleted from the DB on every API GET (not just filtered)
+    32→ *   - excluded from any new live fetch
+    33→ *
+    34→ * These patterns are anchored to the exact handles invented in
+    35→ * scripts/seed-fan-talk.ts. The "r/soccer · u/" and "r/worldcup · u/"
+    36→ * patterns catch the generic templated format too — every seeded reddit
+    37→ * post used that exact "· u/<handle>" shape.
+    38→ */
+    39→export const FAKE_AUTHOR_PATTERNS: readonly (string | RegExp)[] = [
+    40→  '@angry_supporter',
+    41→  '@football_daily',
+    42→  '@neutral_watcher',
+    43→  'u/tactical_nerd',
+    44→  'u/happy_gooner',
+    45→  'u/disappointed_fan',
+    46→  'u/stat_lover',
+    47→  'espn match report',
+    48→  // Templated "subreddit · u/handle" format invented by seed-fan-talk.ts.
+    49→  // Catches all the r/soccer · u/... and r/worldcup · u/... variants.
+    50→  /^r\/soccer\s*·\s*u\//i,
+    51→  /^r\/worldcup\s*·\s*u\//i,
+    52→  // Defensive: any author with the exact "· u/" separator pattern that
+    53→  // the seed script used. Real Reddit handles from the live SDK come as
+    54→  // bare "u/username" or "/u/username" without the "r/subreddit · " prefix
+    55→  // glued in by the seed templater.
+    56→  /^r\/[a-z]+\s*·\s*u\//i,
+    57→]
+    58→
+    59→/**
+    60→ * Returns true if the given author string matches any FAKE_AUTHOR_PATTERNS.
+    61→ * Case-insensitive for string patterns; regex patterns use their own flags.
+    62→ */
+    63→export function isFakeAuthor(author: string | null | undefined): boolean {
+    64→  if (!author) return false
+    65→  const lower = author.toLowerCase()
+    66→  return FAKE_AUTHOR_PATTERNS.some((p) => {
+    67→    if (typeof p === 'string') return lower.includes(p.toLowerCase())
+    68→    return p.test(author)
+    69→  })
+    70→}
+    71→
+    72→// ── Types ────────────────────────────────────────────────────────────────────
+    73→
+    74→interface ScrapedPost {
+    75→  url: string
+    76→  platform: 'twitter' | 'reddit' | 'web'
+    77→  author: string
+    78→  content: string
+    79→  postedAt: Date
+    80→}
+    81→
+    82→interface LLMAnalysisResult {
+    83→  sentiment: number // 0-100
+    84→  positiveRatio: number // 0-1
+    85→  topQuote: string | null
+    86→  language: string
+    87→}
+    88→
+    89→export interface FetchLiveFanTalkResult {
+    90→  /** ID of the FeedMonitor that owns the saved posts (created or reused). */
+    91→  monitorId: string
+    92→  /** Number of NEW posts persisted to the DB by this call. */
+    93→  newPosts: number
+    94→  /** Number of posts that were skipped because their URL already existed. */
+    95→  skippedDuplicates: number
+    96→  /** Number of scraped results rejected (block message, fake author, etc). */
+    97→  rejected: number
+    98→  /** Human-readable error if the SDK was unavailable or all calls failed. */
+    99→  error?: string
+   100→  /** How long the fetch took, in milliseconds. */
+   101→  durationMs: number
+   102→}
+   103→
+   104→// ── Constants ────────────────────────────────────────────────────────────────
+   105→
+   106→/**
+   107→ * Minimum interval between live fetches for the SAME set of team codes.
+   108→ * Prevents the SDK from being hammered when many users click the same card
+   109→ * in quick succession. If a monitor was refreshed less than this ago, the
+   110→ * fetch short-circuits and returns { newPosts: 0 } without calling the SDK.
+   111→ */
+   112→const MIN_REFRESH_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+   113→
+   114→/** Hard cap on posts persisted per fetch — controls LLM cost + DB write load. */
+   115→const MAX_POSTS_PER_FETCH = 8
+   116→
+   117→/** Truncate post content to this length before LLM scoring / DB storage. */
+   118→const MAX_CONTENT_LENGTH = 1200
+   119→
+   120→/**
+   121→ * Delay between SDK calls. The z-ai SDK enforces ~10 req/min on the free
+   122→ * tier; we keep this conservative to avoid 429s on the on-demand path.
+   123→ */
+   124→const SDK_CALL_DELAY_MS = 1200
+   125→
+   126→/** Cap enrichment (page_reader) to top N scrape-friendly results for speed. */
+   127→const MAX_PAGE_READER_CALLS = 3
+   128→
+   129→const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+   130→
+   131→// ── Public API ───────────────────────────────────────────────────────────────
+   132→
+   133→/**
+   134→ * Attempt a LIVE fetch of real social/news posts for the given team codes.
+   135→ *
+   136→ * Flow:
+   137→ *   1. Find or create a FeedMonitor for these teamCodes (status=active).
+   138→ *   2. If the monitor was refreshed less than MIN_REFRESH_INTERVAL_MS ago,
+   139→ *      short-circuit and return { newPosts: 0 } — the cached DB posts are
+   140→ *      still fresh.
+   141→ *   3. Build a small set of search queries from teamCodes + match label.
+   142→ *   4. Call z-ai-web-dev-sdk web_search for each query (cap at 2 queries).
+   143→ *   5. For each result, take the title + snippet as the post content. For
+   144→ *      scrape-friendly news domains, optionally enrich via page_reader
+   145→ *      (capped at MAX_PAGE_READER_CALLS for speed).
+   146→ *   6. Reject posts whose author matches FAKE_AUTHOR_PATTERNS, whose content
+   147→ *      is a known anti-bot block message, or whose content is too short.
+   148→ *   7. De-duplicate against existing FeedPosts by URL.
+   149→ *   8. LLM-score the new posts in a single batch (sentiment + quote).
+   150→ *   9. Persist each new FeedPost row.
+   151→ *  10. Update monitor.lastRefreshedAt.
+   152→ *
+   153→ * This function NEVER fabricates posts. On any SDK failure or empty result
+   154→ * set, it returns { newPosts: 0, error? } and the caller MUST render an
+   155→ * honest empty state.
+   156→ *
+   157→ * @param database  PrismaClient (from getDb() in API routes)
+   158→ * @param teamCodes e.g. ["ESP","AUT"]
+   159→ */
+   160→export async function fetchLiveFanTalk(
+   161→  database: PrismaClient,
+   162→  teamCodes: string[],
+   163→): Promise<FetchLiveFanTalkResult> {
+   164→  const startedAt = Date.now()
+   165→  const codes = teamCodes.map((c) => c.toUpperCase()).filter(Boolean)
+   166→  if (codes.length === 0) {
+   167→    return {
+   168→      monitorId: '',
+   169→      newPosts: 0,
+   170→      skippedDuplicates: 0,
+   171→      rejected: 0,
+   172→      error: 'No team codes provided',
+   173→      durationMs: Date.now() - startedAt,
+   174→    }
+   175→  }
+   176→
+   177→  // ── 1. Find or create a FeedMonitor for these team codes ───────────────
+   178→  // We look for an existing monitor whose teamCodes JSON array contains the
+   179→  // same set (order-independent). If none, create one on the fly.
+   180→  const matchLabel = `${codes.join(' vs ')} — WC 2026`
+   181→  const teamCodesJson = JSON.stringify(codes)
+   182→
+   183→  let monitor = await findMonitorForCodes(database, codes)
+   184→  if (!monitor) {
+   185→    monitor = await database.feedMonitor.create({
+   186→      data: {
+   187→        matchLabel,
+   188→        teamCodes: teamCodesJson,
+   189→        playerIds: JSON.stringify([]),
+   190→        hashtags: JSON.stringify(codes.map((c) => `#${c}`).concat(['#WorldCup2026'])),
+   191→        seedUrls: JSON.stringify([]),
+   192→        status: 'active',
+   193→        refreshInterval: 5,
+   194→        lastRefreshedAt: null,
+   195→        endsAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+   196→      },
+   197→    })
+   198→    console.log(`[live-fan-talk] Created monitor ${monitor.id} for ${matchLabel}`)
+   199→  }
+   200→
+   201→  // ── 2. Short-circuit if refreshed too recently ─────────────────────────
+   202→  if (monitor.lastRefreshedAt) {
+   203→    const ageMs = Date.now() - monitor.lastRefreshedAt.getTime()
+   204→    if (ageMs < MIN_REFRESH_INTERVAL_MS) {
+   205→      console.log(
+   206→        `[live-fan-talk] Monitor ${monitor.id} refreshed ${Math.round(ageMs / 1000)}s ago — skipping SDK call`,
+   207→      )
+   208→      return {
+   209→        monitorId: monitor.id,
+   210→        newPosts: 0,
+   211→        skippedDuplicates: 0,
+   212→        rejected: 0,
+   213→        durationMs: Date.now() - startedAt,
+   214→      }
+   215→    }
+   216→  }
+   217→
+   218→  // ── 3. Initialize SDK ──────────────────────────────────────────────────
+   219→  let zai: any
+   220→  try {
+   221→    zai = await ZAI.create()
+   222→  } catch (err) {
+   223→    return {
+   224→      monitorId: monitor.id,
+   225→      newPosts: 0,
+   226→      skippedDuplicates: 0,
+   227→      rejected: 0,
+   228→      error: `SDK init failed: ${String(err)}`,
+   229→      durationMs: Date.now() - startedAt,
+   230→    }
+   231→  }
+   232→
+   233→  // ── 4. Build search queries ────────────────────────────────────────────
+   234→  const queries = buildLiveSearchQueries(codes)
+   235→  const scraped: ScrapedPost[] = []
+   236→  let rejected = 0
+   237→
+   238→  console.log(
+   239→    `[live-fan-talk] Fetching for ${matchLabel} — ${queries.length} queries`,
+   240→  )
+   241→
+   242→  for (const query of queries) {
+   243→    if (scraped.length >= MAX_POSTS_PER_FETCH) break
+   244→    try {
+   245→      await sleep(SDK_CALL_DELAY_MS)
+   246→      console.log(`[live-fan-talk] web_search: "${query}"`)
+   247→      const searchResults = (await zai.functions.invoke('web_search', {
+   248→        query,
+   249→        num: 10,
+   250→      })) as any[]
+   251→
+   252→      if (!Array.isArray(searchResults)) {
+   253→        console.log(`[live-fan-talk] web_search returned non-array, skipping`)
+   254→        continue
+   255→      }
+   256→      console.log(`[live-fan-talk] Got ${searchResults.length} results`)
+   257→
+   258→      let pageReaderCalls = 0
+   259→      for (const result of searchResults) {
+   260→        if (scraped.length >= MAX_POSTS_PER_FETCH) break
+   261→        if (!result?.url) continue
+   262→
+   263→        const url = String(result.url)
+   264→        const domain = extractDomain(url)
+   265→        const platform = detectPlatform(url)
+   266→
+   267→        // ── Baseline content = title + snippet (always available) ───────
+   268→        const snippet = String(result.snippet || result.description || result.summary || '').trim()
+   269→        const title = String(result.name || result.title || '').trim()
+   270→        let content = [title, snippet].filter(Boolean).join(' — ')
+   271→        if (!content || content.length < 40) {
+   272→          rejected++
+   273→          continue
+   274→        }
+   275→
+   276→        // ── Optional enrichment for scrape-friendly news domains ────────
+   277→        // Skip social media (reddit/x) — page_reader returns block pages.
+   278→        if (
+   279→          isScrapeFriendlyDomain(domain) &&
+   280→          pageReaderCalls < MAX_PAGE_READER_CALLS
+   281→        ) {
+   282→          try {
+   283→            await sleep(SDK_CALL_DELAY_MS)
+   284→            pageReaderCalls++
+   285→            const pageData = await zai.functions.invoke('page_reader', { url })
+   286→            const rawContent =
+   287→              pageData?.data?.html ||
+   288→              pageData?.data?.content ||
+   289→              (typeof pageData === 'string' ? pageData : '')
+   290→            if (rawContent && rawContent.length > 200 && !isBlockMessage(rawContent)) {
+   291→              const fullText = stripHtml(rawContent).slice(0, MAX_CONTENT_LENGTH)
+   292→              if (fullText.length > content.length) {
+   293→                content = fullText
+   294→              }
+   295→            }
+   296→          } catch (pageErr) {
+   297→            if (String(pageErr).includes('429')) {
+   298→              console.log(`[live-fan-talk] 429 on page_reader, waiting 4s...`)
+   299→              await sleep(4000)
+   300→            }
+   301→            // snippet is still our fallback
+   302→          }
+   303→        }
+   304→
+   305→        // ── Reddit .json enrichment (free, not blocked) ─────────────────
+   306→        if (platform === 'reddit' && url.includes('reddit.com/r/')) {
+   307→          try {
+   308→            const jsonUrl = url.replace(/\/?$/, '.json')
+   309→            await sleep(SDK_CALL_DELAY_MS)
+   310→            const redditData = await zai.functions.invoke('page_reader', { url: jsonUrl })
+   311→            const redditJson =
+   312→              redditData?.data?.html ||
+   313→              redditData?.data?.content ||
+   314→              (typeof redditData === 'string' ? redditData : '')
+   315→            const extracted = extractRedditContent(redditJson)
+   316→            if (extracted && extracted.length > content.length && !isBlockMessage(extracted)) {
+   317→              content = extracted
+   318→            }
+   319→          } catch {
+   320→            // JSON fetch failed — snippet still our fallback
+   321→          }
+   322→        }
+   323→
+   324→        // ── Final safety: block message check ───────────────────────────
+   325→        if (isBlockMessage(content)) {
+   326→          rejected++
+   327→          continue
+   328→        }
+   329→
+   330→        // ── Author extraction (real, from search result metadata) ───────
+   331→        let author =
+   332→          String(result.author || result.source || result.host_name || domain || '').trim()
+   333→        // If still empty, derive from domain (e.g. "espn.com")
+   334→        if (!author) author = domain
+   335→
+   336→        // ── Reject if the author looks fabricated (defensive) ───────────
+   337→        // Real web_search results won't match FAKE_AUTHOR_PATTERNS, but we
+   338→        // check anyway to guarantee the contract.
+   339→        if (isFakeAuthor(author)) {
+   340→          rejected++
+   341→          continue
+   342→        }
+   343→
+   344→        // ── Parse posted date (best-effort) ─────────────────────────────
+   345→        let postedAt = new Date()
+   346→        if (result.datePublished || result.date) {
+   347→          const d = new Date(result.datePublished || result.date)
+   348→          if (!isNaN(d.getTime())) postedAt = d
+   349→        }
+   350→
+   351→        scraped.push({
+   352→          url,
+   353→          platform,
+   354→          author,
+   355→          content: content.slice(0, MAX_CONTENT_LENGTH),
+   356→          postedAt,
+   357→        })
+   358→      }
+   359→    } catch (searchErr) {
+   360→      const msg = String(searchErr)
+   361→      console.warn(`[live-fan-talk] web_search failed: ${msg}`)
+   362→      if (msg.includes('429')) {
+   363→        console.log(`[live-fan-talk] 429 on web_search, waiting 5s...`)
+   364→        await sleep(5000)
+   365→      }
+   366→      // Continue to next query — don't abort the whole fetch
+   367→    }
+   368→  }
+   369→
+   370→  console.log(
+   371→    `[live-fan-talk] Scraped ${scraped.length} posts, rejected ${rejected}`,
+   372→  )
+   373→
+   374→  // ── 5. De-duplicate against existing FeedPosts (by URL) ────────────────
+   375→  const existingUrls = new Set(
+   376→    (
+   377→      await database.feedPost.findMany({
+   378→        where: { url: { in: scraped.map((p) => p.url) } },
+   379→        select: { url: true },
+   380→      })
+   381→    ).map((p) => p.url),
+   382→  )
+   383→
+   384→  const newPosts = scraped.filter((p) => {
+   385→    if (existingUrls.has(p.url)) return false
+   386→    return true
+   387→  })
+   388→  const skippedDuplicates = scraped.length - newPosts.length
+   389→
+   390→  // ── 6. LLM-score the new posts in a single batch ───────────────────────
+   391→  let savedCount = 0
+   392→  if (newPosts.length > 0) {
+   393→    const analyses = await scorePostBatchWithLLM(newPosts, zai)
+   394→    for (let i = 0; i < newPosts.length; i++) {
+   395→      const post = newPosts[i]
+   396→      const analysis = analyses[i]
+   397→      try {
+   398→        await database.feedPost.create({
+   399→          data: {
+   400→            monitorId: monitor.id,
+   401→            platform: post.platform,
+   402→            url: post.url,
+   403→            author: post.author,
+   404→            content: post.content,
+   405→            language: analysis?.language || 'en',
+   406→            sentimentScore: analysis?.sentiment ?? 50,
+   407→            positiveRatio: analysis?.positiveRatio ?? 0.5,
+   408→            mentionedPlayers: JSON.stringify([]),
+   409→            topQuote: analysis?.topQuote ?? null,
+   410→            postedAt: post.postedAt,
+   411→            analyzedAt: new Date(),
+   412→          },
+   413→        })
+   414→        savedCount++
+   415→      } catch (dbErr) {
+   416→        // Likely a race condition (URL inserted concurrently) — skip
+   417→        console.warn(`[live-fan-talk] feedPost.create failed for ${post.url}: ${String(dbErr)}`)
+   418→      }
+   419→    }
+   420→  }
+   421→
+   422→  // ── 7. Update monitor.lastRefreshedAt ──────────────────────────────────
+   423→  await database.feedMonitor.update({
+   424→    where: { id: monitor.id },
+   425→    data: { lastRefreshedAt: new Date() },
+   426→  })
+   427→
+   428→  const result: FetchLiveFanTalkResult = {
+   429→    monitorId: monitor.id,
+   430→    newPosts: savedCount,
+   431→    skippedDuplicates,
+   432→    rejected,
+   433→    durationMs: Date.now() - startedAt,
+   434→  }
+   435→  if (savedCount === 0 && scraped.length === 0) {
+   436→    result.error = 'SDK returned no usable results'
+   437→  }
+   438→  console.log(
+   439→    `[live-fan-talk] Done in ${result.durationMs}ms — saved ${savedCount}, dup ${skippedDuplicates}, rejected ${rejected}`,
+   440→  )
+   441→  return result
+   442→}
+   443→
+   444→// ── Internal helpers ─────────────────────────────────────────────────────────
+   445→
+   446→/**
+   447→ * Find a FeedMonitor whose teamCodes JSON array contains exactly the same
+   448→ * set of codes (order-independent). Returns null if none found.
+   449→ */
+   450→async function findMonitorForCodes(
+   451→  database: PrismaClient,
+   452→  codes: string[],
+   453→): Promise<{ id: string; lastRefreshedAt: Date | null } | null> {
+   454→  // Look at monitors created in the last 7 days to bound the scan.
+   455→  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+   456→  const candidates = await database.feedMonitor.findMany({
+   457→    where: { createdAt: { gte: cutoff } },
+   458→    select: { id: true, teamCodes: true, lastRefreshedAt: true },
+   459→    take: 50,
+   460→    orderBy: { createdAt: 'desc' },
+   461→  })
+   462→  const targetSet = new Set(codes.map((c) => c.toUpperCase()))
+   463→  for (const m of candidates) {
+   464→    try {
+   465→      const arr = JSON.parse(m.teamCodes) as string[]
+   466→      if (Array.isArray(arr) && arr.length === targetSet.size) {
+   467→        const arrSet = new Set(arr.map((c) => String(c).toUpperCase()))
+   468→        let match = true
+   469→        for (const c of targetSet) {
+   470→          if (!arrSet.has(c)) {
+   471→            match = false
+   472→            break
+   473→          }
+   474→        }
+   475→        if (match) {
+   476→          return { id: m.id, lastRefreshedAt: m.lastRefreshedAt }
+   477→        }
+   478→      }
+   479→    } catch {
+   480→      // malformed JSON — skip
+   481→    }
+   482→  }
+   483→  return null
+   484→}
+   485→
+   486→/**
+   487→ * Build 1-2 search queries from team codes. We keep this minimal for the
+   488→ * on-demand path (vs. the cron path in feed-sentiment.ts which builds 3).
+   489→ */
+   490→function buildLiveSearchQueries(codes: string[]): string[] {
+   491→  const queries: string[] = []
+   492→  const label = `${codes.join(' vs ')} World Cup 2026`
+   493→  // Query 1: Match + "fan reaction" — catches news + reddit threads
+   494→  queries.push(`"${label}" fan reaction`)
+   495→  // Query 2: Reddit-focused tactical discussion
+   496→  if (codes.length >= 2) {
+   497→    queries.push(`"${codes.join(' vs ')}" site:reddit.com soccer`)
+   498→  }
+   499→  return queries.slice(0, 2)
+   500→}
+   501→
+   502→function extractDomain(url: string): string {
+   503→  try {
+   504→    return new URL(url).hostname.replace(/^www\./, '')
+   505→  } catch {
+   506→    return ''
+   507→  }
+   508→}
+   509→
+   510→function detectPlatform(url: string): 'twitter' | 'reddit' | 'web' {
+   511→  if (url.includes('reddit.com')) return 'reddit'
+   512→  if (url.includes('x.com') || url.includes('twitter.com')) return 'twitter'
+   513→  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'web'
+   514→  return 'web'
+   515→}
+   516→
+   517→const SCRAPE_FRIENDLY_DOMAINS: readonly string[] = [
+   518→  'yahoo.com',
+   519→  'espn.com',
+   520→  'espn.co.uk',
+   521→  'bbc.com',
+   522→  'bbc.co.uk',
+   523→  'theguardian.com',
+   524→  'goal.com',
+   525→  'skysports.com',
+   526→  'reuters.com',
+   527→  'apnews.com',
+   528→  'cbssports.com',
+   529→  'sportingnews.com',
+   530→  'fourfourtwo.com',
+   531→  'marca.com',
+   532→  'as.com',
+   533→  'mundodeportivo.com',
+   534→  'sportsmole.com',
+   535→  '90min.com',
+   536→  'football365.com',
+   537→  'talksport.com',
+   538→  'fifa.com',
+   539→  'mlssoccer.com',
+   540→  'worldsoccer.com',
+   541→  'sportskeeda.com',
+   542→  'essentiallysports.com',
+   543→  'aljazeera.com',
+   544→  'bleacherreport.com',
+   545→  'thesun.co.uk',
+   546→  'dailymail.co.uk',
+   547→  'mirror.co.uk',
+   548→  'independent.co.uk',
+   549→  'telegraph.co.uk',
+   550→  'nytimes.com',
+   551→  'washingtonpost.com',
+   552→  'cnn.com',
+   553→]
+   554→
+   555→function isScrapeFriendlyDomain(domain: string): boolean {
+   556→  if (!domain) return false
+   557→  return SCRAPE_FRIENDLY_DOMAINS.some(
+   558→    (d) => domain === d || domain.endsWith('.' + d),
+   559→  )
+   560→}
+   561→
+   562→const BLOCK_MESSAGE_PATTERNS: readonly string[] = [
+   563→  'blocked by network security',
+   564→  'log into instagram',
+   565→  'please enable javascript',
+   566→  'access denied',
+   567→  'attention required',
+   568→  'enable javascript and cookies to continue',
+   569→  'are you a robot',
+   570→  'unusual traffic',
+   571→  'sorry, you have been blocked',
+   572→  'checking your browser',
+   573→  'cf-browser-verification',
+   574→  'cloudflare',
+   575→  'please verify you are a human',
+   576→  'captcha-bypass',
+   577→  'request blocked',
+   578→  'whoops, looks like this page',
+   579→  'this page is not available',
+   580→  'sorry, this content',
+   581→]
+   582→
+   583→function isBlockMessage(content: string): boolean {
+   584→  if (!content) return true
+   585→  const lower = content.toLowerCase()
+   586→  return BLOCK_MESSAGE_PATTERNS.some((p) => lower.includes(p))
+   587→}
+   588→
+   589→function stripHtml(html: string): string {
+   590→  return html
+   591→    .replace(/<script[\s\S]*?<\/script>/gi, '')
+   592→    .replace(/<style[\s\S]*?<\/style>/gi, '')
+   593→    .replace(/<[^>]+>/g, ' ')
+   594→    .replace(/&nbsp;/g, ' ')
+   595→    .replace(/&amp;/g, '&')
+   596→    .replace(/&lt;/g, '<')
+   597→    .replace(/&gt;/g, '>')
+   598→    .replace(/&quot;/g, '"')
+   599→    .replace(/&#39;/g, "'")
+   600→    .replace(/\s+/g, ' ')
+   601→    .trim()
+   602→}
+   603→
+   604→/**
+   605→ * Extract post title + body + top comment from a Reddit .json API response.
+   606→ */
+   607→function extractRedditContent(rawJson: string): string {
+   608→  try {
+   609→    let jsonStr = rawJson
+   610→    if (jsonStr.includes('<')) {
+   611→      jsonStr = stripHtml(jsonStr)
+   612→    }
+   613→    const parsed = JSON.parse(jsonStr)
+   614→    const postListing = Array.isArray(parsed) ? parsed[0] : parsed
+   615→    const postData = postListing?.data?.children?.[0]?.data
+   616→    if (!postData) return ''
+   617→    const title = String(postData.title || '').trim()
+   618→    const body = String(postData.selftext || '').trim()
+   619→    const subreddit = String(
+   620→      postData.subreddit_name_prefixed || postData.subreddit || '',
+   621→    ).trim()
+   622→    let topComment = ''
+   623→    if (Array.isArray(parsed) && parsed[1]?.data?.children) {
+   624→      const comments = parsed[1].data.children
+   625→      for (const c of comments) {
+   626→        const text = String(c?.data?.body || '').trim()
+   627→        if (text && text.length > 20 && !text.includes('[deleted]')) {
+   628→          topComment = text
+   629→          break
+   630→        }
+   631→      }
+   632→    }
+   633→    const parts = [
+   634→      subreddit ? `[${subreddit}]` : '',
+   635→      title,
+   636→      body,
+   637→      topComment ? `Top comment: ${topComment}` : '',
+   638→    ].filter(Boolean)
+   639→    return parts.join(' — ').slice(0, MAX_CONTENT_LENGTH)
+   640→  } catch {
+   641→    return ''
+   642→  }
+   643→}
+   644→
+   645→// ── LLM scoring ──────────────────────────────────────────────────────────────
+   646→
+   647→const LLM_SENTIMENT_SYSTEM_PROMPT = `You are a football fan sentiment analyzer. For each post, output a JSON object with these fields:
+   648→{
+   649→  "s": <number 0-100>,           // sentiment score: 0=furious, 50=neutral, 100=euphoric
+   650→  "p": <number 0-1>,              // positive ratio: fraction of post that is positive
+   651→  "q": <string|null>,             // notable quote: a short, punchy, quotable fan reaction (max 140 chars) or null
+   652→  "l": <string>                   // detected language code: "en", "es", "ar", "fr", etc.
+   653→}
+   654→
+   655→Scoring guidance:
+   656→- 90-100: Euphoric (won dramatically, hat-trick heroics, last-minute winner)
+   657→- 70-89: Happy (won comfortably, good performance)
+   658→- 50-69: Neutral (draw, mixed feelings)
+   659→- 30-49: Worried (lost narrowly, underperformed)
+   660→- 0-29: Furious (humiliated, defensive collapse, historic defeat)
+   661→
+   662→Rules:
+   663→- Score based on the post's tone about the team/player, not the post's existence
+   664→- "q" should be a memorable quote IF one exists in the post, otherwise null
+   665→- Output ONE JSON object per post, separated by newlines
+   666→- Do not output anything else`
+   667→
+   668→/**
+   669→ * LLM-score a batch of scraped posts in a single chat.completions call.
+   670→ * Returns analyses aligned with the input array (null on parse failure).
+   671→ */
+   672→async function scorePostBatchWithLLM(
+   673→  batch: ScrapedPost[],
+   674→  zai: any,
+   675→): Promise<(LLMAnalysisResult | null)[]> {
+   676→  const results: (LLMAnalysisResult | null)[] = new Array(batch.length).fill(null)
+   677→  if (batch.length === 0) return results
+   678→
+   679→  const userPayload = batch.map((p, idx) => ({
+   680→    i: idx,
+   681→    t: (p.content || '').slice(0, 600),
+   682→  }))
+   683→
+   684→  let raw = ''
+   685→  try {
+   686→    const completion = await zai.chat.completions.create({
+   687→      messages: [
+   688→        { role: 'assistant', content: LLM_SENTIMENT_SYSTEM_PROMPT },
+   689→        { role: 'user', content: JSON.stringify(userPayload) },
+   690→      ],
+   691→      thinking: { type: 'disabled' },
+   692→    })
+   693→    raw = completion?.choices?.[0]?.message?.content || ''
+   694→  } catch (err) {
+   695→    console.warn(`[live-fan-talk] LLM call failed: ${String(err)}`)
+   696→    return results
+   697→  }
+   698→
+   699→  if (!raw.trim()) return results
+   700→
+   701→  let parsed: any[] = []
+   702→  try {
+   703→    const cleaned = raw
+   704→      .replace(/^\s*```(?:json)?\s*/i, '')
+   705→      .replace(/\s*```\s*$/i, '')
+   706→      .trim()
+   707→    const arrayParsed = JSON.parse(cleaned)
+   708→    if (Array.isArray(arrayParsed)) {
+   709→      parsed = arrayParsed
+   710→    } else {
+   711→      parsed = [arrayParsed]
+   712→    }
+   713→  } catch {
+   714→    const lines = raw.split('\n').filter((l) => l.trim().startsWith('{'))
+   715→    for (const line of lines) {
+   716→      try {
+   717→        parsed.push(JSON.parse(line.trim()))
+   718→      } catch {
+   719→        // skip malformed line
+   720→      }
+   721→    }
+   722→  }
+   723→
+   724→  for (let responseIdx = 0; responseIdx < parsed.length; responseIdx++) {
+   725→    const item = parsed[responseIdx]
+   726→    if (!item || typeof item !== 'object') continue
+   727→    let idx: number
+   728→    if (typeof item.i === 'number') {
+   729→      idx = item.i
+   730→    } else if (typeof item.i === 'string' && item.i.trim()) {
+   731→      idx = parseInt(item.i, 10)
+   732→    } else {
+   733→      idx = responseIdx
+   734→    }
+   735→    if (!Number.isInteger(idx) || idx < 0 || idx >= batch.length) continue
+   736→
+   737→    const score = typeof item.s === 'number' ? item.s : parseFloat(String(item.s))
+   738→    if (!Number.isFinite(score)) continue
+   739→    const positiveRatio =
+   740→      typeof item.p === 'number' ? item.p : parseFloat(String(item.p)) || 0.5
+   741→    const language = typeof item.l === 'string' ? item.l : 'en'
+   742→    const topQuote =
+   743→      typeof item.q === 'string' && item.q.trim() ? item.q.trim() : null
+   744→
+   745→    results[idx] = {
+   746→      sentiment: Math.max(0, Math.min(100, Math.round(score))),
+   747→      positiveRatio: Math.max(0, Math.min(1, positiveRatio)),
+   748→      topQuote,
+   749→      language,
+   750→    }
+   751→  }
+   752→  return results
+   753→}
+   754→
