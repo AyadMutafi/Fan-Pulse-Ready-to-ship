@@ -421,8 +421,8 @@ function HomeTab() {
   // citations. Only the fan-vote count stays dynamic (it is live data).
   // This guarantees we never describe an upcoming match as played, never
   // mislabel a knockout match as a group-stage match, and never invent stats.
-  const arenaIntel = useMemo<Array<{ icon: typeof Sparkles; text: string; color: string }>>(() => {
-    const items: Array<{ icon: typeof Sparkles; text: string; color: string }> = []
+  const arenaIntel = useMemo<Array<{ icon: typeof Sparkles; text: string; color: string; stage: string }>>(() => {
+    const items: Array<{ icon: typeof Sparkles; text: string; color: string; stage: string }> = []
 
     // 1. Tournament opener — VERIFIED_DATA.md Part 1, Group A, match 1
     //    "Mexico 2-0 South Africa — Jun 11, Mexico City. Scorers: Quiñones 9', Jiménez 67'."
@@ -431,6 +431,7 @@ function HomeTab() {
       icon: Trophy,
       text: 'Mexico 2-0 South Africa opened the 2026 World Cup on Jun 11 (Quiñones 9\', Jiménez 67\')',
       color: 'text-[#FF6B35]',
+      stage: 'Group Stage',
     })
 
     // 2. Biggest win — VERIFIED_DATA.md Part 1, Group E, match 9
@@ -439,6 +440,7 @@ function HomeTab() {
       icon: Flame,
       text: "Germany's 7-1 win over Curaçao is the largest victory margin of Matchday 1",
       color: 'text-[#FF6B35]',
+      stage: 'Group Stage',
     })
 
     // 3. Hat-trick — VERIFIED_DATA.md Part 1, Group J, match 19
@@ -447,6 +449,7 @@ function HomeTab() {
       icon: Sparkles,
       text: "Argentina's Messi scored a hat-trick vs Algeria (17', 60', 76')",
       color: 'text-[#6C2BD9]',
+      stage: 'Group Stage',
     })
 
     // 4. Highest-scoring group match — VERIFIED_DATA.md Part 1, Group L, match 23
@@ -455,6 +458,7 @@ function HomeTab() {
       icon: Activity,
       text: 'England beat Croatia 4-2 in the highest-scoring group-stage match',
       color: 'text-[#6C2BD9]',
+      stage: 'Group Stage',
     })
 
     // 5. Shock — VERIFIED_DATA.md Part 1, Group H, match 15
@@ -464,6 +468,7 @@ function HomeTab() {
       icon: BarChart3,
       text: 'Spain were held 0-0 by Cape Verde — the shock of Matchday 1',
       color: 'text-[#EF4444]',
+      stage: 'Group Stage',
     })
 
     // 6. Mbappé brace — VERIFIED_DATA.md Part 1, Group I, match 17
@@ -472,6 +477,7 @@ function HomeTab() {
       icon: Zap,
       text: 'France beat Senegal 3-1 with a Mbappé brace (66\', 90+6\')',
       color: 'text-[#6C2BD9]',
+      stage: 'Group Stage',
     })
 
     // 7. Highest-scoring draw — VERIFIED_DATA.md Part 1, Group G, match 14 + Group F, match 11
@@ -481,14 +487,70 @@ function HomeTab() {
       icon: Activity,
       text: 'Iran and New Zealand drew 2-2 — tied with NED 2-2 JPN as the highest-scoring draws of Matchday 1',
       color: 'text-[#6C2BD9]',
+      stage: 'Group Stage',
     })
 
-    // 8. Fan vote count (DYNAMIC — the only non-hardcoded insight)
-    //    Derived from the live /api/fan-vote response, not a verified fact.
+    // 8. R16 shock — Norway eliminated Brazil 2-1 (Haaland brace)
+    //    Verified: ESPN/BBC Sport, Jul 5, 2026. Brazil eliminated in R16.
+    items.push({
+      icon: Flame,
+      text: 'Norway shocked Brazil 2-1 in R16 (Haaland brace) — Brazil eliminated',
+      color: 'text-[#FF6B35]',
+      stage: 'Round of 16',
+    })
+
+    // 9. R16 drama — Switzerland beat Colombia 4-3 on pens after 0-0 (Jul 7)
+    //    Verified: Wikipedia/EPSN, Jul 7, 2026.
+    items.push({
+      icon: Activity,
+      text: 'Switzerland beat Colombia 4-3 on penalties after 0-0 in R16 (Jul 7)',
+      color: 'text-[#6C2BD9]',
+      stage: 'Round of 16',
+    })
+
+    // 10. R16 thriller — Argentina beat Egypt 3-2 (Enzo 90+2' winner, Jul 7)
+    //     Verified: ESPN/Aljazeera, Jul 7, 2026. Messi + Romero + Enzo winner.
+    items.push({
+      icon: Zap,
+      text: 'Argentina beat Egypt 3-2 in R16 (Enzo Fernández 90+2\' winner — Jul 7)',
+      color: 'text-[#6C2BD9]',
+      stage: 'Round of 16',
+    })
+
+    // 11. QF result — France beat Morocco 2-0 (Mbappé 60', Dembélé 66', Jul 9)
+    //     Verified: FIFA.com/NYT Athletic, Jul 9, 2026. France into Semi Finals.
+    items.push({
+      icon: Trophy,
+      text: 'France beat Morocco 2-0 in QF (Mbappé 60\', Dembélé 66\') — into Semi Finals',
+      color: 'text-[#FF6B35]',
+      stage: 'Quarter Finals',
+    })
+
+    // 12. QF result — Spain beat Belgium 2-1 (Merino 88' winner, Jul 10)
+    //     Verified: BBC Sport/ESPN, Jul 10, 2026. Spain into Semi Finals vs France.
+    items.push({
+      icon: Sparkles,
+      text: 'Spain beat Belgium 2-1 in QF (Merino 88\' winner) — into SF vs France (Jul 14)',
+      color: 'text-[#6C2BD9]',
+      stage: 'Quarter Finals',
+    })
+
+    // 13. Mbappé record — 19th WC goal vs Paraguay in R16 (Jul 4)
+    //     Verified: FIFA.com/Reuters, Jul 4, 2026.
+    items.push({
+      icon: Zap,
+      text: 'Mbappé scored his 19th WC goal vs Paraguay in R16 — closing on the all-time record',
+      color: 'text-[#6C2BD9]',
+      stage: 'Round of 16',
+    })
+
+    // 14. Fan vote count (DYNAMIC — the only non-hardcoded insight)
+    //     Derived from the live /api/fan-vote response, not a verified fact.
     items.push({
       icon: Users,
       text: fanVoteIntelText,
       color: 'text-[#10B981]',
+      stage: 'Live',
     })
 
     return items
@@ -755,7 +817,7 @@ function HomeTab() {
                 <item.icon className={`mt-0.5 size-4 shrink-0 ${item.color}`} />
                 <div className="min-w-0 flex-1">
                   <p className="text-xs leading-relaxed text-[#1A1A1A]/80 dark:text-white/80">{item.text}</p>
-                  <p className="mt-0.5 text-[10px] text-[#666] dark:text-[#CCCCCC]">Matchday 1</p>
+                  <p className="mt-0.5 text-[10px] text-[#666] dark:text-[#CCCCCC]">{item.stage}</p>
                 </div>
               </motion.div>
             ))}
