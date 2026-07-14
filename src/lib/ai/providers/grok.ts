@@ -11,7 +11,7 @@
  * If XAI_API_KEY is missing, returns null → caller falls through to Z.ai.
  */
 
-import type { ChatMessage, ChatResult } from '../chat'
+import type { ChatMessage, ChatResult } from '../types'
 
 const XAI_BASE = 'https://api.x.ai/v1'
 const DEFAULT_MODEL = process.env.XAI_MODEL || 'grok-4.3'

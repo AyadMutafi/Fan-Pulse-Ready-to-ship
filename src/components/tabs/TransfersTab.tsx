@@ -1,0 +1,222 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { motion } from 'framer-motion'
+import { ArrowLeftRight, RefreshCw, ShieldCheck, Zap, TrendingUp } from 'lucide-react'
+import TransferPulseCard, { type TransferSagaSummary } from '@/components/TransferPulseCard'
+import TransferSagaDetail from '@/components/TransferSagaDetail'
+
+type StatusFilter = 'active' | 'completed' | 'debunked' | 'all'
+type SortKey = 'buzz' | 'likelihood' | 'recent'
+
+const STATUS_PILLS: { id: StatusFilter; label: string }[] = [
+  { id: 'active', label: 'Active' },
+  { id: 'completed', label: 'Completed' },
+  { id: 'debunked', label: 'Debunked' },
+  { id: 'all', label: 'All' },
+]
+
+const SORT_OPTIONS: { id: SortKey; label: string }[] = [
+  { id: 'buzz', label: 'Most Buzz' },
+  { id: 'likelihood', label: 'Fan-Read' },
+  { id: 'recent', label: 'Recent' },
+]
+
+export default function TransfersTab() {
+  const [sagas, setSagas] = useState<TransferSagaSummary[]>([])
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
+  const [sortKey, setSortKey] = useState<SortKey>('buzz')
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<TransferSagaSummary | null>(null)
+
+  const load = useCallback(
+    async (status: StatusFilter, isRefresh = false) => {
+      if (isRefresh) setRefreshing(true)
+      else setLoading(true)
+      setError(null)
+      try {
+        const apiStatus = status === 'all' ? '' : `?status=${status}`
+        const res = await fetch(`/api/transfers${apiStatus}`, {
+          cache: 'no-store',
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        setSagas(json.sagas || [])
+      } catch (e) {
+        setError(String(e).slice(0, 120))
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [],
+  )
+
+  useEffect(() => {
+    load(statusFilter)
+  }, [statusFilter, load])
+
+  // Client-side sort (the API already returns by buzz, but the user can re-sort)
+  const sorted = [...sagas].sort((a, b) => {
+    if (sortKey === 'likelihood') return b.fanReadLikelihood - a.fanReadLikelihood
+    if (sortKey === 'recent')
+      return new Date(b.lastUpdatedAt).getTime() - new Date(a.lastUpdatedAt).getTime()
+    return b.buzzVolume - a.buzzVolume
+  })
+
+  const totalBuzz = sagas.reduce((s, x) => s + x.buzzVolume, 0)
+  const hotCount = sagas.filter((s) => s.buzzTrend === 'rising').length
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center size-8 rounded-lg bg-[#6C2BD9] shadow-md shadow-[#6C2BD9]/20">
+              <ArrowLeftRight className="size-4 text-white" />
+            </div>
+            <h2 className="text-xl font-extrabold text-[#1A1A1A] dark:text-white">
+              Transfer Pulse
+            </h2>
+          </div>
+          <p className="mt-1 text-xs text-[#666] dark:text-gray-400">
+            Fan sentiment around transfer rumors · pre-season bridge to EPL kickoff
+          </p>
+        </div>
+        <button
+          onClick={() => load(statusFilter, true)}
+          disabled={refreshing}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 text-[11px] font-semibold text-[#666] dark:text-gray-300 hover:border-[#6C2BD9]/40 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Anti-hallucination disclaimer banner */}
+      <div className="rounded-xl bg-[#FF6B35]/5 border border-[#FF6B35]/15 p-3 flex items-start gap-2.5">
+        <ShieldCheck className="size-4 shrink-0 text-[#FF6B35] mt-0.5" />
+        <p className="text-[11px] text-[#666] dark:text-gray-400 leading-relaxed">
+          Every rumor here was reported by a <strong className="text-[#1A1A1A] dark:text-gray-200">Tier 1
+          journalist</strong> (Fabrizio Romano, David Ornstein, Florian Plettenberg, and others).
+          &ldquo;Fan-read&rdquo; likelihood reflects what fans <em>think</em> — not a prediction.
+          Debunked rumors are archived, never deleted.
+        </p>
+      </div>
+
+      {/* Quick stats */}
+      {!loading && sagas.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          <MiniStat icon={<ArrowLeftRight className="size-3.5 text-[#6C2BD9] dark:text-[#8B5CF6]" />} label="Rumors" value={String(sagas.length)} />
+          <MiniStat icon={<Zap className="size-3.5 text-[#FF6B35]" />} label="Fan posts" value={String(totalBuzz)} />
+          <MiniStat icon={<TrendingUp className="size-3.5 text-[#10B981]" />} label="Trending up" value={String(hotCount)} />
+        </div>
+      )}
+
+      {/* Filter pills + sort */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1 p-0.5 rounded-lg bg-[#F0F0F0] dark:bg-white/5">
+          {STATUS_PILLS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setStatusFilter(p.id)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                statusFilter === p.id
+                  ? 'bg-white dark:bg-[#2D2D2D] text-[#6C2BD9] dark:text-[#8B5CF6] shadow-sm'
+                  : 'text-[#999] dark:text-gray-500 hover:text-[#666] dark:hover:text-gray-300'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 p-0.5 rounded-lg bg-[#F0F0F0] dark:bg-white/5">
+          {SORT_OPTIONS.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSortKey(s.id)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                sortKey === s.id
+                  ? 'bg-white dark:bg-[#2D2D2D] text-[#6C2BD9] dark:text-[#8B5CF6] shadow-sm'
+                  : 'text-[#999] dark:text-gray-500 hover:text-[#666] dark:hover:text-gray-300'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-56 rounded-2xl bg-[#F0F0F0] dark:bg-white/5 animate-pulse" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/20 p-4 text-sm text-[#EF4444]">
+          Failed to load transfer sagas: {error}
+        </div>
+      ) : sorted.length === 0 ? (
+        <EmptyState statusFilter={statusFilter} />
+      ) : (
+        <motion.div
+          layout
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+        >
+          {sorted.map((saga) => (
+            <TransferPulseCard key={saga.id} saga={saga} onClick={setSelected} />
+          ))}
+        </motion.div>
+      )}
+
+      {/* Detail modal */}
+      <TransferSagaDetail saga={selected} onClose={() => setSelected(null)} />
+    </div>
+  )
+}
+
+function MiniStat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+}) {
+  return (
+    <div className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 p-2.5 flex items-center gap-2">
+      <div className="size-7 rounded-lg bg-[#6C2BD9]/10 dark:bg-[#8B5CF6]/10 flex items-center justify-center">
+        {icon}
+      </div>
+      <div>
+        <div className="text-sm font-extrabold text-[#1A1A1A] dark:text-white leading-none">{value}</div>
+        <div className="text-[9px] uppercase tracking-wider text-[#999] dark:text-gray-500 mt-0.5">{label}</div>
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ statusFilter }: { statusFilter: StatusFilter }) {
+  const isDebunked = statusFilter === 'debunked'
+  return (
+    <div className="rounded-2xl border border-dashed border-[#E0E0E0] dark:border-white/10 p-8 text-center">
+      <div className="mx-auto size-12 rounded-full bg-[#F0F0F0] dark:bg-white/5 flex items-center justify-center mb-3">
+        <ShieldCheck className="size-6 text-[#999]" />
+      </div>
+      <h3 className="text-sm font-bold text-[#1A1A1A] dark:text-white">
+        {isDebunked ? 'No debunked rumors archived yet' : 'No transfer rumors verified yet'}
+      </h3>
+      <p className="mt-1.5 text-xs text-[#666] dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
+        Rumors only appear here when a Tier 1 journalist reports them. The
+        discovery pipeline runs automatically once the live data feed is
+        configured — we never show fabricated or templated rumors.
+      </p>
+    </div>
+  )
+}

@@ -1,9 +1,9 @@
 'use client'
 
 import { useLanguage } from '@/context/LanguageContext'
-import { Home, Activity, Globe, Zap, Radio } from 'lucide-react'
+import { Home, Activity, Globe, Zap, Radio, ArrowLeftRight } from 'lucide-react'
 
-export type TabId = 'home' | 'sentiments' | 'rate' | 'goals' | 'totw' | 'worldcup'
+export type TabId = 'home' | 'sentiments' | 'rate' | 'goals' | 'totw' | 'worldcup' | 'transfers'
 
 interface NavigationProps {
   activeTab: TabId
@@ -13,7 +13,8 @@ interface NavigationProps {
 const tabs: { id: TabId; icon: typeof Home; labelKey: string; isNew?: boolean }[] = [
   { id: 'home', icon: Home, labelKey: 'nav.home' },
   { id: 'sentiments', icon: Activity, labelKey: 'nav.sentiments' },
-  { id: 'worldcup', icon: Globe, labelKey: 'nav.worldcup', isNew: true },
+  { id: 'worldcup', icon: Globe, labelKey: 'nav.worldcup' },
+  { id: 'transfers', icon: ArrowLeftRight, labelKey: 'nav.transfers', isNew: true },
 ]
 
 export default function Navigation({ activeTab, onTabChange }: NavigationProps) {

@@ -107,6 +107,52 @@ export async function searchXPosts(
     opts.matchLabel || `${codes.join(' vs ')} — FIFA World Cup 2026`
   const query = buildSearchQuery(codes, matchLabel)
 
+  return searchXPostsGeneric({
+    query,
+    fromDate: opts.fromDate,
+    toDate: opts.toDate,
+    startedAt,
+  })
+}
+
+/**
+ * Generic X-search — accepts an ARBITRARY query string. Used by the Transfer
+ * Pulse discovery loop (and any future feature that needs real X posts about
+ * a topic that isn't a WC match).
+ *
+ * Same anti-hallucination contract as searchXPosts: only returns posts whose
+ * URL matches the real X post pattern. Never fabricates.
+ *
+ * @param opts.query       the natural-language search brief for the model
+ * @param opts.fromDate    optional YYYY-MM-DD lower bound on post date
+ * @param opts.toDate      optional YYYY-MM-DD upper bound on post date
+ * @param opts.startedAt   optional high-res timestamp for duration tracking
+ */
+export async function searchXPostsGeneric(opts: {
+  query: string
+  fromDate?: string
+  toDate?: string
+  startedAt?: number
+}): Promise<XSearchResult> {
+  const startedAt = opts.startedAt ?? Date.now()
+  const key = process.env.XAI_API_KEY
+  if (!key) {
+    return {
+      posts: [],
+      rawCount: 0,
+      durationMs: Date.now() - startedAt,
+      error: 'XAI_API_KEY not configured',
+    }
+  }
+  if (!opts.query || !opts.query.trim()) {
+    return {
+      posts: [],
+      rawCount: 0,
+      durationMs: Date.now() - startedAt,
+      error: 'No query provided',
+    }
+  }
+
   const toolConfig: Record<string, unknown> = { type: 'x_search' }
   if (opts.fromDate) toolConfig.from_date = opts.fromDate
   if (opts.toDate) toolConfig.to_date = opts.toDate
@@ -120,7 +166,7 @@ export async function searchXPosts(
       key,
       model,
       systemPrompt,
-      query,
+      opts.query,
       toolConfig,
     )
     if (result.error) {

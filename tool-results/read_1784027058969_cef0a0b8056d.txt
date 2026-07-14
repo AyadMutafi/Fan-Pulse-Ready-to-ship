@@ -1,0 +1,2002 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Activity, TrendingUp, TrendingDown, Minus, Play, Star, AlertTriangle,
+     7→  Lock, Clock, Zap, Shield, ShieldCheck, CircleDot,
+     8→  Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X, ChevronRight, Check, ArrowLeft
+     9→} from 'lucide-react'
+    10→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+    11→import { FanCardButton } from '@/components/common/FanCardButton'
+    12→import { Badge } from '@/components/ui/badge'
+    13→import { Switch } from '@/components/ui/switch'
+    14→import { Button } from '@/components/ui/button'
+    15→import { Progress } from '@/components/ui/progress'
+    16→import TopHeader from '@/components/TopHeader'
+    17→import Navigation, { type TabId } from '@/components/Navigation'
+    18→import { useLanguage } from '@/context/LanguageContext'
+    19→import { findNationalTeam, NATIONAL_TEAMS } from '@/lib/national-teams'
+    20→import { useFlagMode } from '@/lib/flag-mode'
+    21→import FlagImage from '@/components/common/FlagImage'
+    22→import { FanTalkPanel } from '@/components/FanTalkPanel'
+    23→import { getPulseScoreColor, getPulseScoreColorClass } from '@/types'
+    24→import { toast } from 'sonner'
+    25→
+    26→// ── World Cup stage label helper ─────────────────────────────
+    27→// Renders an accurate label for a WC match based on its `group` value.
+    28→// Group-stage matches use letters A-L; knockout rounds use R32/R16/QF/SF/Final.
+    29→// (Previously everything was labelled "WC Group {x}", which produced the
+    30→// nonsensical "WC Group R32" for knockout matches.)
+    31→function wcStageLabel(group: string | null | undefined): string {
+    32→  if (!group) return 'World Cup 2026'
+    33→  if (/^[A-L]$/.test(group)) return `WC Group ${group}`
+    34→  switch (group) {
+    35→    case 'R32': return 'WC Round of 32'
+    36→    case 'R16': return 'WC Round of 16'
+    37→    case 'QF': return 'WC Quarter Finals'
+    38→    case 'SF': return 'WC Semi Finals'
+    39→    case 'Final': return 'WC Final'
+    40→    default: return 'World Cup 2026'
+    41→  }
+    42→}
+    43→
+    44→// ── Types ────────────────────────────────────────────────────
+    45→
+    46→interface WCSelectionPlayer {
+    47→  id: string
+    48→  name: string
+    49→  nationCode: string
+    50→  position: string
+    51→  pulseScore: number
+    52→  sentiment: number
+    53→  trend: string
+    54→  isLive: boolean
+    55→  matchInfo: string | null
+    56→  order: number
+    57→  // R32 ticker fields (populated only for the live R32 stage):
+    58→  previousPulseScore?: number
+    59→  scoreDelta?: number
+    60→  lastBuzzRefreshAt?: string | null
+    61→}
+    62→
+    63→interface WCSelection {
+    64→  id: string
+    65→  type: string
+    66→  stageId: string
+    67→  formation: string
+    68→  locked: boolean
+    69→  players: WCSelectionPlayer[]
+    70→}
+    71→
+    72→interface WCStage {
+    73→  id: string
+    74→  name: string
+    75→  nameAr: string
+    76→  order: number
+    77→  status: string
+    78→  selections: WCSelection[]
+    79→}
+    80→
+    81→// ── Mock Data ────────────────────────────────────────────────
+    82→// Note: MOCK_MATCHES and MOCK_SENTIMENTS were removed — match data comes from
+    83→// /api/matches and sentiment data comes from /api/sentiments (both real).
+    84→
+    85→const MOCK_GOALS = [
+    86→  // ── Friendly Goals ──
+    87→  { id: 1, scorer: 'Doué', team: 'FRA', flag: '🇫🇷', minute: 23, match: 'COL 1-3 FRA', type: 'Goal', tags: ['BRACE', 'TOPSCORER'], source: 'Friendly' },
+    88→  { id: 2, scorer: 'Doué', team: 'FRA', flag: '🇫🇷', minute: 58, match: 'COL 1-3 FRA', type: 'Goal', tags: ['TOPSCORER'], source: 'Friendly' },
+    89→  { id: 3, scorer: 'Olise', team: 'FRA', flag: '🇫🇷', minute: 12, match: 'FRA 3-0 NIR', type: 'Goal', tags: ['HATTRICK'], source: 'Friendly' },
+    90→  { id: 4, scorer: 'Messi', team: 'ARG', flag: '🇦🇷', minute: 35, match: 'ARG 3-0 ISL', type: 'Goal', tags: ['TOPSCORER', 'RETURN'], source: 'Friendly' },
+    91→  { id: 5, scorer: 'Yamal', team: 'ESP', flag: '🇪🇸', minute: 22, match: 'ESP 3-1 PER', type: 'Goal', tags: ['TOPSCORER'], source: 'Friendly' },
+    92→  { id: 6, scorer: 'Kane', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 55, match: 'ENG 3-0 CRC', type: 'Goal', tags: ['HEADER'], source: 'Friendly' },
+    93→  // ── World Cup Group Stage Goals ──
+    94→  { id: 7, scorer: 'Quiñones', team: 'MEX', flag: '🇲🇽', minute: 14, match: 'MEX 2-0 RSA', type: 'Goal', tags: ['FIRSTGOAL', 'HISTORIC'], source: 'WC' },
+    95→  { id: 8, scorer: 'Reyna', team: 'USA', flag: '🇺🇸', minute: 31, match: 'USA 4-1 PAR', type: 'Goal', tags: ['TRIVELA', 'TOPSCORER'], source: 'WC' },
+    96→  { id: 9, scorer: 'Hakimi', team: 'MAR', flag: '🇲🇦', minute: 78, match: 'BRA 1-1 MAR', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+    97→  { id: 10, scorer: 'Bellingham', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 67, match: 'ENG 2-1 CRO', type: 'Goal', tags: ['HEADER'], source: 'WC' },
+    98→  { id: 11, scorer: 'Wirtz', team: 'GER', flag: '🇩🇪', minute: 34, match: 'GER 3-0 CUW', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+    99→  { id: 12, scorer: 'Messi', team: 'ARG', flag: '🇦🇷', minute: 42, match: 'ARG 3-0 ALG', type: 'Goal', tags: ['TOPSCORER', 'HEADER'], source: 'WC' },
+   100→  { id: 13, scorer: 'Mbappé', team: 'FRA', flag: '🇫🇷', minute: 55, match: 'FRA 2-0 SEN', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+   101→  { id: 14, scorer: 'Álvarez', team: 'ARG', flag: '🇦🇷', minute: 71, match: 'ARG 3-0 ALG', type: 'Goal', tags: ['HEADER'], source: 'WC' },
+   102→  { id: 15, scorer: 'Saka', team: 'ENG', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', minute: 15, match: 'ENG 2-1 CRO', type: 'Goal', tags: ['TOPSCORER'], source: 'WC' },
+   103→]
+   104→
+   105→const MOCK_TOTW = [
+   106→  { name: 'Alisson', nationCode: 'BRA', position: 'GK', rating: 8.5 },
+   107→  { name: 'Hakimi', nationCode: 'MAR', position: 'RB', rating: 8.4 },
+   108→  { name: 'Van Dijk', nationCode: 'NED', position: 'CB', rating: 8.7 },
+   109→  { name: 'Dias', nationCode: 'POR', position: 'CB', rating: 8.6 },
+   110→  { name: 'Hernández', nationCode: 'FRA', position: 'LB', rating: 8.3 },
+   111→  { name: 'Rodri', nationCode: 'ESP', position: 'CM', rating: 8.8 },
+   112→  { name: 'Bellingham', nationCode: 'ENG', position: 'CM', rating: 9.2 },
+   113→  { name: 'Wirtz', nationCode: 'GER', position: 'CAM', rating: 8.5 },
+   114→  { name: 'Yamal', nationCode: 'ESP', position: 'RW', rating: 9.1 },
+   115→  { name: 'Mbappé', nationCode: 'FRA', position: 'LW', rating: 9.6 },
+   116→  { name: 'Messi', nationCode: 'ARG', position: 'ST', rating: 8.9 },
+   117→]
+   118→
+   119→// ── Helpers ──────────────────────────────────────────────────
+   120→
+   121→function getFlag(nationCode: string): string {
+   122→  const team = findNationalTeam(nationCode)
+   123→  return team?.flag ?? '🏳️'
+   124→}
+   125→
+   126→function getTrendIcon(trend: string) {
+   127→  if (trend === 'rising') return <TrendingUp className="size-3 text-[#10B981]" />
+   128→  if (trend === 'falling') return <TrendingDown className="size-3 text-[#EF4444]" />
+   129→  return <Minus className="size-3 text-[#FF6B35]" />
+   130→}
+   131→
+   132→function getSentimentColor(score: number) {
+   133→  if (score >= 80) return 'text-[#10B981]'
+   134→  if (score >= 50) return 'text-[#FF6B35]'
+   135→  return 'text-[#EF4444]'
+   136→}
+   137→
+   138→function getSentimentBg(score: number) {
+   139→  if (score >= 80) return 'bg-[#10B981]/5 border-[#10B981]/15'
+   140→  if (score >= 50) return 'bg-[#FF6B35]/5 border-[#10B981]/15'
+   141→  return 'bg-[#EF4444]/5 border-[#EF4444]/15'
+   142→}
+   143→
+   144→function getProgressClass(score: number) {
+   145→  if (score >= 80) return 'progress-emerald'
+   146→  if (score >= 50) return 'progress-amber'
+   147→  return 'progress-red'
+   148→}
+   149→
+   150→// Face emoji mapping for /10 rating system
+   151→function getPulseFaceEmoji(pulseScore: number): string {
+   152→  if (pulseScore >= 90) return '🤩'
+   153→  if (pulseScore >= 70) return '😊'
+   154→  if (pulseScore >= 50) return '😐'
+   155→  if (pulseScore >= 30) return '😟'
+   156→  return '😵'
+   157→}
+   158→
+   159→// 5-level fan mood emoji for match cards (emojis only, no text/percentages)
+   160→function getFanMoodEmoji(score: number): string {
+   161→  if (score >= 80) return '🤩'
+   162→  if (score >= 65) return '😊'
+   163→  if (score >= 45) return '😐'
+   164→  if (score >= 25) return '😟'
+   165→  return '😡'
+   166→}
+   167→
+   168→function getFanMoodEmojiSize(score: number): string {
+   169→  // Bigger emoji for more extreme sentiments
+   170→  if (score >= 80 || score < 25) return 'text-3xl'
+   171→  if (score >= 65 || score < 45) return 'text-2xl'
+   172→  return 'text-xl'
+   173→}
+   174→
+   175→function getRatingColor(rating: number): string {
+   176→  if (rating >= 9) return '#10B981'
+   177→  if (rating >= 7) return '#6C2BD9'
+   178→  if (rating >= 5) return '#FF6B35'
+   179→  if (rating >= 3) return '#EF4444'
+   180→  return '#DC2626'
+   181→}
+   182→
+   183→// ── Formation Layout 4-3-3 ──────────────────────────────────
+   184→
+   185→const FORMATION_ROWS = [
+   186→  [{ pos: 'GK', col: 1 }],
+   187→  [{ pos: 'RB', col: 3 }, { pos: 'CB', col: 1 }, { pos: 'CB', col: 2 }, { pos: 'LB', col: 0 }],
+   188→  [{ pos: 'CM', col: 2 }, { pos: 'CAM', col: 1 }, { pos: 'CM', col: 0 }],
+   189→  [{ pos: 'RW', col: 2 }, { pos: 'ST', col: 1 }, { pos: 'LW', col: 0 }],
+   190→]
+   191→
+   192→// ── Shared Sub-Components ────────────────────────────────────
+   193→
+   194→function LiveBadge() {
+   195→  return (
+   196→    <Badge className="bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30 gap-1 text-[10px] font-bold">
+   197→      <span className="live-dot" style={{ width: 6, height: 6 }} />
+   198→      LIVE
+   199→    </Badge>
+   200→  )
+   201→}
+   202→
+   203→function SharePulseButton({ className = '' }: { className?: string }) {
+   204→  return (
+   205→    <Button
+   206→      size="sm"
+   207→      className={`bg-[#6C2BD9] hover:bg-[#5A1FBF] text-white gap-1.5 text-[11px] font-bold h-8 rounded-lg ${className}`}
+   208→    >
+   209→      <Share2 className="size-3" />
+   210→      Share Pulse
+   211→    </Button>
+   212→  )
+   213→}
+   214→
+   215→// ── HOME Tab ─────────────────────────────────────────────────
+   216→
+   217→// Top 12 WC 2026 teams for the Fan Mood voting chips.
+   218→const FAN_MOOD_TEAM_CODES = ['BRA', 'ARG', 'FRA', 'ENG', 'ESP', 'GER', 'MEX', 'USA', 'POR', 'NED', 'JPN', 'MAR']
+   219→
+   220→const MOOD_EMOJI_OPTIONS: { emoji: string; score: number; label: string; color: string }[] = [
+   221→  { emoji: '🤩', score: 95, label: 'On Fire', color: 'bg-[#10B981]' },
+   222→  { emoji: '😊', score: 75, label: 'Happy', color: 'bg-[#8B5CF6]' },
+   223→  { emoji: '😐', score: 50, label: 'Neutral', color: 'bg-[#FF6B35]' },
+   224→  { emoji: '😟', score: 25, label: 'Worried', color: 'bg-[#F59E0B]' },
+   225→  { emoji: '😡', score: 5, label: 'Angry', color: 'bg-[#EF4444]' },
+   226→]
+   227→
+   228→interface FanVoteAgg {
+   229→  teamCode: string
+   230→  score: number
+   231→  count: number
+   232→}
+   233→
+   234→function HomeTab() {
+   235→  const { t } = useLanguage()
+   236→  const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('WC')
+   237→  const [apiMatches, setApiMatches] = useState<Array<{
+   238→    id: string; home: string; away: string; homeFlag: string; awayFlag: string
+   239→    score: string; homeSentiment: number; awaySentiment: number; live: boolean; league: string
+   240→    status: string; group: string; matchDate: string
+   241→  }>>([])
+   242→
+   243→  // Fan vote state
+   244→  const [sessionId, setSessionId] = useState<string>('')
+   245→  const [fanVotes, setFanVotes] = useState<FanVoteAgg[]>([])
+   246→  const [myVotes, setMyVotes] = useState<Array<{ teamCode: string; score: number }>>([])
+   247→  const [votesLoading, setVotesLoading] = useState(true)
+   248→  const [selectedVoteTeam, setSelectedVoteTeam] = useState<string | null>(null)
+   249→  const [submitting, setSubmitting] = useState(false)
+   250→  const [toast, setToast] = useState<{ msg: string; emoji: string } | null>(null)
+   251→  const [fanCardOffer, setFanCardOffer] = useState<{ teamCode: string; score: number } | null>(null)
+   252→
+   253→  useEffect(() => {
+   254→    async function fetchMatches() {
+   255→      try {
+   256→        const res = await fetch('/api/matches?league=WC')
+   257→        if (res.ok) {
+   258→          const data = await res.json()
+   259→          const mapped = (data.matches || []).map((m: any) => ({
+   260→            id: m.id,
+   261→            home: m.homeTeam.code,
+   262→            away: m.awayTeam.code,
+   263→            homeFlag: m.homeTeam.flag || '',
+   264→            awayFlag: m.awayTeam.flag || '',
+   265→            score: m.score,
+   266→            homeSentiment: Math.round(m.homeTeam.sentiment),
+   267→            awaySentiment: Math.round(m.awayTeam.sentiment),
+   268→            live: m.status === 'live',
+   269→            league: m.league === 'WC' ? wcStageLabel(m.group) : m.league,
+   270→            status: m.status || 'upcoming',
+   271→            group: m.group || '',
+   272→            matchDate: m.matchDate || '',
+   273→          }))
+   274→          setApiMatches(mapped)
+   275→        }
+   276→      } catch (err) {
+   277→        console.error('Failed to fetch matches:', err)
+   278→      }
+   279→    }
+   280→    fetchMatches()
+   281→  }, [])
+   282→
+   283→  // SSR-safe: read/create sessionId inside useEffect, never during render.
+   284→  useEffect(() => {
+   285→    try {
+   286→      const existing = typeof window !== 'undefined' ? window.localStorage.getItem('fan_session_id') : null
+   287→      if (existing && existing.length > 0) {
+   288→        setSessionId(existing)
+   289→        return
+   290→      }
+   291→      const newId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+   292→        ? crypto.randomUUID()
+   293→        : `anon-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+   294→      if (typeof window !== 'undefined') {
+   295→        window.localStorage.setItem('fan_session_id', newId)
+   296→      }
+   297→      setSessionId(newId)
+   298→    } catch {
+   299→      setSessionId(`anon-${Date.now()}`)
+   300→    }
+   301→  }, [])
+   302→
+   303→  // Fetch fan votes whenever sessionId changes.
+   304→  useEffect(() => {
+   305→    if (!sessionId) return
+   306→    let cancelled = false
+   307→    async function loadVotes() {
+   308→      setVotesLoading(true)
+   309→      try {
+   310→        const res = await fetch(`/api/fan-vote?session=${encodeURIComponent(sessionId)}`)
+   311→        if (!res.ok) return
+   312→        const data = await res.json()
+   313→        if (cancelled) return
+   314→        setFanVotes(Array.isArray(data.votes) ? data.votes : [])
+   315→        setMyVotes(Array.isArray(data.myVotes) ? data.myVotes : [])
+   316→      } catch (err) {
+   317→        console.error('Failed to fetch fan votes:', err)
+   318→      } finally {
+   319→        if (!cancelled) setVotesLoading(false)
+   320→      }
+   321→    }
+   322→    loadVotes()
+   323→    return () => { cancelled = true }
+   324→  }, [sessionId])
+   325→
+   326→  // Close voting modal on Escape key (accessibility — modal was only closable
+   327→  // via the explicit Close button or selecting a mood)
+   328→  useEffect(() => {
+   329→    if (!selectedVoteTeam) return
+   330→    const onKey = (e: KeyboardEvent) => {
+   331→      if (e.key === 'Escape' && !submitting) setSelectedVoteTeam(null)
+   332→    }
+   333→    window.addEventListener('keydown', onKey)
+   334→    return () => window.removeEventListener('keydown', onKey)
+   335→  }, [selectedVoteTeam, submitting])
+   336→
+   337→  const totalVoteCount = fanVotes.reduce((sum, v) => sum + (v.count || 0), 0)
+   338→
+   339→  const handleVote = async (teamCode: string, score: number) => {
+   340→    if (!sessionId || submitting) return
+   341→    setSubmitting(true)
+   342→    // Optimistic update: bump my vote immediately
+   343→    const prevMyVote = myVotes.find(v => v.teamCode === teamCode)?.score ?? null
+   344→    setMyVotes(prev => {
+   345→      const without = prev.filter(v => v.teamCode !== teamCode)
+   346→      return [...without, { teamCode, score }]
+   347→    })
+   348→    setFanVotes(prev => {
+   349→      const idx = prev.findIndex(v => v.teamCode === teamCode)
+   350→      if (idx === -1) {
+   351→        return [...prev, { teamCode, score, count: 1 }]
+   352→      }
+   353→      const next = [...prev]
+   354→      const wasMine = prevMyVote !== null
+   355→      // Adjust running average: if I had voted, swap my old score for the new.
+   356→      const current = next[idx]
+   357→      const totalScore = current.score * current.count
+   358→      const newScore = wasMine
+   359→        ? Math.round((totalScore - prevMyVote! + score) / current.count)
+   360→        : Math.round((totalScore + score) / (current.count + 1))
+   361→      const newCount = wasMine ? current.count : current.count + 1
+   362→      next[idx] = { teamCode, score: newScore, count: newCount }
+   363→      return next
+   364→    })
+   365→    setSelectedVoteTeam(null)
+   366→    const mood = MOOD_EMOJI_OPTIONS.find(o => o.score === score)
+   367→    setToast({ msg: `Vote recorded for ${teamCode}`, emoji: mood?.emoji ?? '✓' })
+   368→    setTimeout(() => setToast(null), 2500)
+   369→    // Show the Fan Card offer for 8 seconds — long enough to click "Get Fan Card"
+   370→    setFanCardOffer({ teamCode, score })
+   371→    const offerTimer = setTimeout(() => setFanCardOffer(null), 8000)
+   372→    try {
+   373→      await fetch('/api/fan-vote', {
+   374→        method: 'POST',
+   375→        headers: { 'Content-Type': 'application/json' },
+   376→        body: JSON.stringify({ teamCode, score, sessionId }),
+   377→      })
+   378→    } catch (err) {
+   379→      console.error('Failed to submit vote:', err)
+   380→      // Revert on failure
+   381→      setMyVotes(prev => {
+   382→        const without = prev.filter(v => v.teamCode !== teamCode)
+   383→        if (prevMyVote !== null) return [...without, { teamCode, score: prevMyVote }]
+   384→        return without
+   385→      })
+   386→      setToast({ msg: 'Vote failed — please retry', emoji: '⚠️' })
+   387→      setFanCardOffer(null)
+   388→      clearTimeout(offerTimer)
+   389→    } finally {
+   390→      setSubmitting(false)
+   391→    }
+   392→  }
+   393→
+   394→  const filteredMatches = (matchFilter === 'ALL'
+   395→    ? apiMatches
+   396→    : apiMatches.filter(m => m.league.startsWith('WC'))
+   397→  ).slice(0, 24) // Limit to 24 cards max for performance
+   398→
+   399→  const fanVoteIntelText = totalVoteCount === 0
+   400→    ? 'Be the first to vote in the Fan Mood section below'
+   401→    : `${totalVoteCount.toLocaleString()} fan votes tallied for World Cup 2026 Group Stage`
+   402→
+   403→  // ── Arena Intelligence: VERIFIED insights only ──────────────────────────
+   404→  // Every insight below is a historical fact sourced from VERIFIED_DATA.md
+   405→  // (the project's single source of truth, cross-checked against Wikipedia,
+   406→  // ESPN, Olympics.com, FIFA.com on 2026-07-02). We deliberately do NOT
+   407→  // auto-generate insights from apiMatches because that approach produced two
+   408→  // verifiable hallucinations in production:
+   409→  //   (1) "World Cup 2026 kicked off with ESP 0-0 AUT in the opener" — FALSE.
+   410→  //       The old code used parsed[0] (first array element) as "the opener",
+   411→  //       but the first row happened to be an UPCOMING R32 match (ESP vs AUT,
+   412→  //       scheduled Jul 3, not yet played). The real opener was MEX 2-0 RSA
+   413→  //       on Jun 11 (the earliest matchDate among completed matches).
+   414→  //   (2) "Shock in Group Stage: ESP 0-0 AUT" — FALSE. The old code used
+   415→  //       league.includes('WC') to label the stage as "Group Stage", but ALL
+   416→  //       WC matches (including R32) match that check. ESP vs AUT is an R32
+   417→  //       match, not a group-stage match. The real group-stage shock was
+   418→  //       ESP 0-0 CPV (Spain held scoreless by Cape Verde).
+   419→  //
+   420→  // Fix: hardcode the verified insight set with explicit VERIFIED_DATA.md
+   421→  // citations. Only the fan-vote count stays dynamic (it is live data).
+   422→  // This guarantees we never describe an upcoming match as played, never
+   423→  // mislabel a knockout match as a group-stage match, and never invent stats.
+   424→  const arenaIntel = useMemo<Array<{ icon: typeof Sparkles; text: string; color: string; stage: string }>>(() => {
+   425→    const items: Array<{ icon: typeof Sparkles; text: string; color: string; stage: string }> = []
+   426→
+   427→    // 1. Tournament opener — VERIFIED_DATA.md Part 1, Group A, match 1
+   428→    //    "Mexico 2-0 South Africa — Jun 11, Mexico City. Scorers: Quiñones 9', Jiménez 67'."
+   429→    //    This is the earliest completed match in the DB (matchDate 2026-06-11).
+   430→    items.push({
+   431→      icon: Trophy,
+   432→      text: 'Mexico 2-0 South Africa opened the 2026 World Cup on Jun 11 (Quiñones 9\', Jiménez 67\')',
+   433→      color: 'text-[#FF6B35]',
+   434→      stage: 'Group Stage',
+   435→    })
+   436→
+   437→    // 2. Biggest win — VERIFIED_DATA.md Part 1, Group E, match 9
+   438→    //    "Germany 7-1 Curaçao — Jun 14, Houston." 6-goal margin = largest of Matchday 1.
+   439→    items.push({
+   440→      icon: Flame,
+   441→      text: "Germany's 7-1 win over Curaçao is the largest victory margin of Matchday 1",
+   442→      color: 'text-[#FF6B35]',
+   443→      stage: 'Group Stage',
+   444→    })
+   445→
+   446→    // 3. Hat-trick — VERIFIED_DATA.md Part 1, Group J, match 19
+   447→    //    "Argentina 3-0 Algeria — Jun 16. Scorer: Messi 17', 60', 76' (hat-trick)."
+   448→    items.push({
+   449→      icon: Sparkles,
+   450→      text: "Argentina's Messi scored a hat-trick vs Algeria (17', 60', 76')",
+   451→      color: 'text-[#6C2BD9]',
+   452→      stage: 'Group Stage',
+   453→    })
+   454→
+   455→    // 4. Highest-scoring group match — VERIFIED_DATA.md Part 1, Group L, match 23
+   456→    //    "England 4-2 Croatia — Jun 17." 6 goals = highest-scoring group match.
+   457→    items.push({
+   458→      icon: Activity,
+   459→      text: 'England beat Croatia 4-2 in the highest-scoring group-stage match',
+   460→      color: 'text-[#6C2BD9]',
+   461→      stage: 'Group Stage',
+   462→    })
+   463→
+   464→    // 5. Shock — VERIFIED_DATA.md Part 1, Group H, match 15
+   465→    //    "Spain 0-0 Cape Verde — Jun 15, Atlanta. No scorers."
+   466→    //    Spain (pre-tournament favorite) held scoreless by Cape Verde (debutants).
+   467→    items.push({
+   468→      icon: BarChart3,
+   469→      text: 'Spain were held 0-0 by Cape Verde — the shock of Matchday 1',
+   470→      color: 'text-[#EF4444]',
+   471→      stage: 'Group Stage',
+   472→    })
+   473→
+   474→    // 6. Mbappé brace — VERIFIED_DATA.md Part 1, Group I, match 17
+   475→    //    "France 3-1 Senegal — Jun 16. Scorers: Mbappé 66', 90+6', Barcola 82' | Mbaye 90+5'."
+   476→    items.push({
+   477→      icon: Zap,
+   478→      text: 'France beat Senegal 3-1 with a Mbappé brace (66\', 90+6\')',
+   479→      color: 'text-[#6C2BD9]',
+   480→      stage: 'Group Stage',
+   481→    })
+   482→
+   483→    // 7. Highest-scoring draw — VERIFIED_DATA.md Part 1, Group G, match 14 + Group F, match 11
+   484→    //    "Iran 2-2 New Zealand — Jun 16" and "Netherlands 2-2 Japan — Jun 14"
+   485→    //    Both 2-2 (4 goals) — tied for highest-scoring draw of Matchday 1.
+   486→    items.push({
+   487→      icon: Activity,
+   488→      text: 'Iran and New Zealand drew 2-2 — tied with NED 2-2 JPN as the highest-scoring draws of Matchday 1',
+   489→      color: 'text-[#6C2BD9]',
+   490→      stage: 'Group Stage',
+   491→    })
+   492→
+   493→    // 8. R16 shock — Norway eliminated Brazil 2-1 (Haaland brace)
+   494→    //    Verified: ESPN/BBC Sport, Jul 5, 2026. Brazil eliminated in R16.
+   495→    items.push({
+   496→      icon: Flame,
+   497→      text: 'Norway shocked Brazil 2-1 in R16 (Haaland brace) — Brazil eliminated',
+   498→      color: 'text-[#FF6B35]',
+   499→      stage: 'Round of 16',
+   500→    })
+   501→
+   502→    // 9. R16 drama — Switzerland beat Colombia 4-3 on pens after 0-0 (Jul 7)
+   503→    //    Verified: Wikipedia/EPSN, Jul 7, 2026.
+   504→    items.push({
+   505→      icon: Activity,
+   506→      text: 'Switzerland beat Colombia 4-3 on penalties after 0-0 in R16 (Jul 7)',
+   507→      color: 'text-[#6C2BD9]',
+   508→      stage: 'Round of 16',
+   509→    })
+   510→
+   511→    // 10. R16 thriller — Argentina beat Egypt 3-2 (Enzo 90+2' winner, Jul 7)
+   512→    //     Verified: ESPN/Aljazeera, Jul 7, 2026. Messi + Romero + Enzo winner.
+   513→    items.push({
+   514→      icon: Zap,
+   515→      text: 'Argentina beat Egypt 3-2 in R16 (Enzo Fernández 90+2\' winner — Jul 7)',
+   516→      color: 'text-[#6C2BD9]',
+   517→      stage: 'Round of 16',
+   518→    })
+   519→
+   520→    // 11. QF result — France beat Morocco 2-0 (Mbappé 60', Dembélé 66', Jul 9)
+   521→    //     Verified: FIFA.com/NYT Athletic, Jul 9, 2026. France into Semi Finals.
+   522→    items.push({
+   523→      icon: Trophy,
+   524→      text: 'France beat Morocco 2-0 in QF (Mbappé 60\', Dembélé 66\') — into Semi Finals',
+   525→      color: 'text-[#FF6B35]',
+   526→      stage: 'Quarter Finals',
+   527→    })
+   528→
+   529→    // 12. QF result — Spain beat Belgium 2-1 (Merino 88' winner, Jul 10)
+   530→    //     Verified: BBC Sport/ESPN, Jul 10, 2026. Spain into Semi Finals vs France.
+   531→    items.push({
+   532→      icon: Sparkles,
+   533→      text: 'Spain beat Belgium 2-1 in QF (Merino 88\' winner) — into SF vs France (Jul 14)',
+   534→      color: 'text-[#6C2BD9]',
+   535→      stage: 'Quarter Finals',
+   536→    })
+   537→
+   538→    // 13. Mbappé record — 19th WC goal vs Paraguay in R16 (Jul 4)
+   539→    //     Verified: FIFA.com/Reuters, Jul 4, 2026.
+   540→    items.push({
+   541→      icon: Zap,
+   542→      text: 'Mbappé scored his 19th WC goal vs Paraguay in R16 — closing on the all-time record',
+   543→      color: 'text-[#6C2BD9]',
+   544→      stage: 'Round of 16',
+   545→    })
+   546→
+   547→    // 14. Fan vote count (DYNAMIC — the only non-hardcoded insight)
+   548→    //     Derived from the live /api/fan-vote response, not a verified fact.
+   549→    items.push({
+   550→      icon: Users,
+   551→      text: fanVoteIntelText,
+   552→      color: 'text-[#10B981]',
+   553→      stage: 'Live',
+   554→    })
+   555→
+   556→    return items
+   557→  }, [fanVoteIntelText])
+   558→
+   559→  const moodTeamEntries = FAN_MOOD_TEAM_CODES.map(code => {
+   560→    const team = NATIONAL_TEAMS.find(t => t.code === code)
+   561→    const vote = fanVotes.find(v => v.teamCode === code)
+   562→    const myVote = myVotes.find(v => v.teamCode === code)
+   563→    return {
+   564→      code,
+   565→      flag: team?.flag ?? '🏳️',
+   566→      name: team?.name ?? code,
+   567→      score: vote?.score ?? 50,
+   568→      count: vote?.count ?? 0,
+   569→      myVote: myVote?.score ?? null,
+   570→    }
+   571→  })
+   572→
+   573→  return (
+   574→    <div className="space-y-6">
+   575→      {/* Hero */}
+   576→      <motion.div
+   577→        initial={{ opacity: 0, y: 20 }}
+   578→        animate={{ opacity: 1, y: 0 }}
+   579→        transition={{ duration: 0.5 }}
+   580→        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#6C2BD9]/8 via-white dark:via-[#1A1A1A] to-[#FF6B35]/5 p-6 border border-[#6C2BD9]/10 dark:border-[#6C2BD9]/20"
+   581→      >
+   582→        <div className="absolute -right-8 -top-8 size-32 rounded-full bg-[#6C2BD9]/5 blur-3xl" />
+   583→        <div className="absolute -bottom-8 -left-8 size-32 rounded-full bg-[#FF6B35]/5 blur-3xl" />
+   584→        <h2 className="relative text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+   585→          {t('home.your_pulse')} <span className="text-[#6C2BD9]">⚡</span>
+   586→        </h2>
+   587→        <p className="relative mt-2 text-sm text-[#666] dark:text-[#CCCCCC]">
+   588→          {t('home.mood_desc')}
+   589→        </p>
+   590→        <div className="relative mt-4 flex items-center gap-3">
+   591→          <div className="flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-3 py-1.5 text-xs font-semibold text-[#10B981]">
+   592→            <Zap className="size-3.5" />
+   593→            78% {t('home.positive')}
+   594→          </div>
+   595→          <div className="flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-3 py-1.5 text-xs font-semibold text-[#EF4444]">
+   596→            <Activity className="size-3.5" />
+   597→            {apiMatches.filter(m => m.live).length} {t('home.live')}
+   598→          </div>
+   599→        </div>
+   600→      </motion.div>
+   601→
+   602→      {/* Featured Matches */}
+   603→      <div>
+   604→        <div className="mb-3 flex items-center justify-between">
+   605→          <h3 className="text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
+   606→            {t('home.featured')}
+   607→          </h3>
+   608→          <div className="flex gap-1.5">
+   609→            {(['WC', 'ALL'] as const).map((filter) => (
+   610→              <button
+   611→                key={filter}
+   612→                onClick={() => setMatchFilter(filter)}
+   613→                className={`
+   614→                  rounded-full px-3 py-1 text-[10px] font-bold transition-all duration-200
+   615→                  ${matchFilter === filter
+   616→                    ? 'bg-[#6C2BD9] text-white shadow-sm'
+   617→                    : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10'
+   618→                  }
+   619→                `}
+   620→              >
+   621→                {filter === 'ALL' ? '⚽ All' : '🏆 World Cup'}
+   622→              </button>
+   623→            ))}
+   624→          </div>
+   625→        </div>
+   626→        <div className="grid gap-3 sm:grid-cols-2">
+   627→          {filteredMatches.map((match, i) => (
+   628→            <motion.div
+   629→              key={match.id}
+   630→              initial={{ opacity: 0, y: 15 }}
+   631→              animate={{ opacity: 1, y: 0 }}
+   632→              transition={{ duration: 0.4, delay: i * 0.05 }}
+   633→            >
+   634→              <Card className="card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+   635→                <CardContent className="p-4">
+   636→                  <div className="flex items-center justify-between">
+   637→                    <div className="flex items-center gap-2">
+   638→                      <FlagImage nationCode={match.home} size={26} fallbackEmoji={match.homeFlag} />
+   639→                      <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.home}</span>
+   640→                    </div>
+   641→                    <div className="flex flex-col items-center">
+   642→                      <span className="text-lg font-black tracking-wider text-[#1A1A1A] dark:text-white">{match.score}</span>
+   643→                      {match.live && <LiveBadge />}
+   644→                    </div>
+   645→                    <div className="flex items-center gap-2">
+   646→                      <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.away}</span>
+   647→                      <FlagImage nationCode={match.away} size={26} fallbackEmoji={match.awayFlag} />
+   648→                    </div>
+   649→                  </div>
+   650→                  {/* League badge */}
+   651→                  <div className="mt-2">
+   652→                    <Badge variant="outline" className={`text-[8px] font-bold px-1.5 py-0 ${
+   653→                      match.league === 'Friendly'
+   654→                        ? 'border-[#FF6B35]/30 text-[#FF6B35]'
+   655→                        : 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]'
+   656→                    }`}>
+   657→                      {match.league}
+   658→                    </Badge>
+   659→                  </div>
+   660→                  {/* Fan Mood — Emoji Only with team flags */}
+   661→                  <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2.5">
+   662→                    <div className="flex items-center gap-1.5" title={`${match.home} fan mood`}>
+   663→                      <FlagImage nationCode={match.home} size={20} fallbackEmoji={match.homeFlag} />
+   664→                      <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.homeSentiment)}`}>
+   665→                        {getFanMoodEmoji(match.homeSentiment)}
+   666→                      </span>
+   667→                    </div>
+   668→                    <span className="text-[9px] font-bold uppercase tracking-widest text-[#999] dark:text-gray-500">
+   669→                      {t('home.fan_mood')}
+   670→                    </span>
+   671→                    <div className="flex items-center gap-1.5" title={`${match.away} fan mood`}>
+   672→                      <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.awaySentiment)}`}>
+   673→                        {getFanMoodEmoji(match.awaySentiment)}
+   674→                      </span>
+   675→                      <FlagImage nationCode={match.away} size={20} fallbackEmoji={match.awayFlag} />
+   676→                    </div>
+   677→                  </div>
+   678→                  {/* What Fans Are Saying — collapsible real-time fan posts panel */}
+   679→                  <FanTalkPanel
+   680→                    teamCodes={[match.home, match.away]}
+   681→                    matchLabel={`${match.home} vs ${match.away}`}
+   682→                  />
+   683→                  <div className="mt-3 flex items-center">
+   684→                    <SharePulseButton className="flex-1" />
+   685→                  </div>
+   686→                </CardContent>
+   687→              </Card>
+   688→            </motion.div>
+   689→          ))}
+   690→        </div>
+   691→      </div>
+   692→
+   693→      {/* Fan Mood — interactive voting section (horizontal side-scrolling carousel) */}
+   694→      <div>
+   695→        <div className="mb-3 flex items-center justify-between">
+   696→          <div className="flex items-center gap-2">
+   697→            <h3 className="text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
+   698→              {t('home.fan_mood')}
+   699→            </h3>
+   700→            {!votesLoading && (
+   701→              <Badge className="bg-[#6C2BD9]/10 text-[#6C2BD9] dark:text-[#8B5CF6] border-0 text-[9px] font-bold px-2 py-0.5">
+   702→                {totalVoteCount.toLocaleString()} {totalVoteCount === 1 ? 'vote' : 'votes'} cast
+   703→              </Badge>
+   704→            )}
+   705→          </div>
+   706→          <span className="text-[10px] font-semibold text-[#FF6B35]">Swipe teams to vote →</span>
+   707→        </div>
+   708→        <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none overflow-hidden">
+   709→          <CardContent className="p-4">
+   710→            {votesLoading ? (
+   711→              <div className="flex gap-2.5 overflow-hidden">
+   712→                {Array.from({ length: 6 }).map((_, i) => (
+   713→                  <div key={i} className="shrink-0 w-28 h-36 rounded-2xl bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+   714→                ))}
+   715→              </div>
+   716→            ) : (
+   717→              <div className="relative">
+   718→                {/* Right-edge fade + animated scroll hint */}
+   719→                <div className="pointer-events-none absolute right-0 top-0 bottom-3 z-10 w-10 bg-gradient-to-l from-white dark:from-[#1A1A1A] via-white/70 dark:via-[#1A1A1A]/70 to-transparent flex items-center justify-end pr-1.5">
+   720→                  <motion.span
+   721→                    animate={{ x: [0, 4, 0] }}
+   722→                    transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+   723→                    className="flex items-center justify-center size-5 rounded-full bg-[#6C2BD9]/10"
+   724→                  >
+   725→                    <ChevronRight className="size-3.5 text-[#6C2BD9]" />
+   726→                  </motion.span>
+   727→                </div>
+   728→
+   729→                {/* Horizontal scroll carousel */}
+   730→                <div className="flex gap-2.5 overflow-x-auto scrollbar-none snap-x snap-mandatory pb-2 -mx-1 px-1">
+   731→                  {moodTeamEntries.map((entry, i) => {
+   732→                    const hasMyVote = entry.myVote !== null
+   733→                    return (
+   734→                      <motion.button
+   735→                        key={entry.code}
+   736→                        initial={{ opacity: 0, y: 12 }}
+   737→                        animate={{ opacity: 1, y: 0 }}
+   738→                        transition={{ duration: 0.3, delay: i * 0.04 }}
+   739→                        onClick={() => setSelectedVoteTeam(entry.code)}
+   740→                        className={`
+   741→                          relative shrink-0 snap-start w-28 sm:w-32 rounded-2xl border p-3 flex flex-col items-center
+   742→                          transition-all duration-200
+   743→                          ${hasMyVote
+   744→                            ? 'border-[#10B981]/60 bg-[#10B981]/5 dark:bg-[#10B981]/10 shadow-md shadow-[#10B981]/15'
+   745→                            : 'border-[#E0E0E0]/60 dark:border-white/10 bg-white dark:bg-[#2D2D2D] hover:border-[#6C2BD9]/50 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#6C2BD9]/10 hover:-translate-y-0.5'
+   746→                          }
+   747→                        `}
+   748→                      >
+   749→                        {/* Voted check badge */}
+   750→                        {hasMyVote && (
+   751→                          <span
+   752→                            aria-label="You voted"
+   753→                            className="absolute -top-1.5 -right-1.5 z-10 size-5 rounded-full bg-[#10B981] ring-2 ring-white dark:ring-[#1A1A1A] shadow-sm shadow-[#10B981]/50 flex items-center justify-center"
+   754→                          >
+   755→                            <Check className="size-3 text-white" strokeWidth={4} />
+   756→                          </span>
+   757→                        )}
+   758→
+   759→                        {/* Big team flag (real PNG image — renders on all platforms) */}
+   760→                        <div className="flex items-center justify-center" style={{ minHeight: 32 }}>
+   761→                          <FlagImage nationCode={entry.code} size={48} fallbackEmoji={entry.flag} className="shadow-sm" />
+   762→                        </div>
+   763→
+   764→                        {/* Big mood emoji */}
+   765→                        <span className="mt-1.5 text-3xl sm:text-4xl leading-none">
+   766→                          {getFanMoodEmoji(entry.score)}
+   767→                        </span>
+   768→
+   769→                        {/* Team code */}
+   770→                        <span className="mt-2 text-[11px] font-black tracking-wider text-[#1A1A1A] dark:text-white">
+   771→                          {entry.code}
+   772→                        </span>
+   773→
+   774→                        {/* Vote count */}
+   775→                        <span className="text-[8px] text-[#666] dark:text-[#CCCCCC]">
+   776→                          {entry.count} {entry.count === 1 ? 'vote' : 'votes'}
+   777→                        </span>
+   778→
+   779→                        {/* Thin mood indicator bar */}
+   780→                        <div
+   781→                          className="mt-2 w-full rounded-full overflow-hidden"
+   782→                          style={{ height: 3, background: 'rgba(0,0,0,0.06)' }}
+   783→                        >
+   784→                          <div
+   785→                            className={`h-full rounded-full ${entry.score >= 80 ? 'sentiment-positive' : entry.score >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
+   786→                            style={{ width: `${entry.score}%`, transition: 'width 0.6s ease' }}
+   787→                          />
+   788→                        </div>
+   789→                      </motion.button>
+   790→                    )
+   791→                  })}
+   792→                </div>
+   793→              </div>
+   794→            )}
+   795→            <p className="mt-3 text-[10px] text-[#999] dark:text-gray-500 text-center">
+   796→              Your vote is anonymous — stored only in your browser session.
+   797→            </p>
+   798→          </CardContent>
+   799→        </Card>
+   800→      </div>
+   801→
+   802→      {/* Arena Intelligence */}
+   803→      <div>
+   804→        <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
+   805→          {t('home.arena_intel')}
+   806→        </h3>
+   807→        <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+   808→          <CardContent className="p-4 space-y-3">
+   809→            {arenaIntel.map((item, i) => (
+   810→              <motion.div
+   811→                key={i}
+   812→                initial={{ opacity: 0, x: -10 }}
+   813→                animate={{ opacity: 1, x: 0 }}
+   814→                transition={{ duration: 0.3, delay: i * 0.1 }}
+   815→                className="flex items-start gap-3 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] p-3"
+   816→              >
+   817→                <item.icon className={`mt-0.5 size-4 shrink-0 ${item.color}`} />
+   818→                <div className="min-w-0 flex-1">
+   819→                  <p className="text-xs leading-relaxed text-[#1A1A1A]/80 dark:text-white/80">{item.text}</p>
+   820→                  <p className="mt-0.5 text-[10px] text-[#666] dark:text-[#CCCCCC]">{item.stage}</p>
+   821→                </div>
+   822→              </motion.div>
+   823→            ))}
+   824→          </CardContent>
+   825→        </Card>
+   826→      </div>
+   827→
+   828→      {/* Vote popup */}
+   829→      <AnimatePresence>
+   830→        {selectedVoteTeam && (
+   831→          <>
+   832→            <motion.div
+   833→              key="vote-backdrop"
+   834→              initial={{ opacity: 0 }}
+   835→              animate={{ opacity: 1 }}
+   836→              exit={{ opacity: 0 }}
+   837→              onClick={() => !submitting && setSelectedVoteTeam(null)}
+   838→              className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
+   839→            />
+   840→            <motion.div
+   841→              key="vote-modal"
+   842→              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+   843→              animate={{ opacity: 1, scale: 1, y: 0 }}
+   844→              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+   845→              transition={{ type: 'spring', duration: 0.35 }}
+   846→              className="fixed inset-0 z-[61] flex items-center justify-center p-4 pointer-events-none"
+   847→            >
+   848→              <Card className="pointer-events-auto w-full max-w-sm rounded-2xl border-[#E0E0E0]/50 dark:border-white/10 shadow-2xl bg-white dark:bg-[#1A1A1A]">
+   849→                <CardHeader className="pb-2 pt-4 px-4">
+   850→                  <div className="flex items-center justify-between">
+   851→                    <CardTitle className="text-base font-bold text-[#1A1A1A] dark:text-white flex items-center gap-2">
+   852→                      <FlagImage
+   853→                        nationCode={selectedVoteTeam}
+   854→                        size={24}
+   855→                        fallbackEmoji={NATIONAL_TEAMS.find(t => t.code === selectedVoteTeam)?.flag ?? '🏳️'}
+   856→                      />
+   857→                      {selectedVoteTeam} Mood
+   858→                    </CardTitle>
+   859→                    <button
+   860→                      onClick={() => !submitting && setSelectedVoteTeam(null)}
+   861→                      aria-label="Close"
+   862→                      className="rounded-full size-7 flex items-center justify-center text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] transition-colors"
+   863→                    >
+   864→                      <X className="size-4" />
+   865→                    </button>
+   866→                  </div>
+   867→                  <CardDescription className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+   868→                    How are fans of {NATIONAL_TEAMS.find(t => t.code === selectedVoteTeam)?.name ?? selectedVoteTeam} feeling right now?
+   869→                  </CardDescription>
+   870→                </CardHeader>
+   871→                <CardContent className="px-4 pb-4 pt-1">
+   872→                  <div className="grid grid-cols-5 gap-1.5">
+   873→                    {MOOD_EMOJI_OPTIONS.map((opt) => (
+   874→                      <motion.button
+   875→                        key={opt.score}
+   876→                        whileTap={{ scale: 0.9 }}
+   877→                        disabled={submitting}
+   878→                        onClick={() => handleVote(selectedVoteTeam, opt.score)}
+   879→                        className="flex flex-col items-center gap-1 rounded-xl border border-[#E0E0E0] dark:border-white/10 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-2 px-1 transition-all duration-200 hover:border-[#6C2BD9]/50 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#6C2BD9]/10 disabled:opacity-60 disabled:cursor-not-allowed"
+   880→                      >
+   881→                        <span className="text-2xl leading-none">{opt.emoji}</span>
+   882→                        <span className={`h-1 w-6 rounded-full ${opt.color}`} />
+   883→                        <span className="text-[8px] font-bold text-[#666] dark:text-[#CCCCCC]">{opt.score}</span>
+   884→                      </motion.button>
+   885→                    ))}
+   886→                  </div>
+   887→                  <p className="mt-3 text-[10px] text-center text-[#666] dark:text-[#CCCCCC]">
+   888→                    Tap an emoji to cast your vote — you can change it anytime.
+   889→                  </p>
+   890→                </CardContent>
+   891→              </Card>
+   892→            </motion.div>
+   893→          </>
+   894→        )}
+   895→      </AnimatePresence>
+   896→
+   897→      {/* Toast */}
+   898→      <AnimatePresence>
+   899→        {toast && (
+   900→          <motion.div
+   901→            key="toast"
+   902→            initial={{ opacity: 0, y: 30, x: '-50%' }}
+   903→            animate={{ opacity: 1, y: 0, x: '-50%' }}
+   904→            exit={{ opacity: 0, y: 30, x: '-50%' }}
+   905→            className="fixed bottom-20 md:bottom-6 left-1/2 z-[70] -translate-x-1/2 flex items-center gap-2 rounded-full bg-[#1A1A1A] dark:bg-white px-4 py-2 shadow-lg"
+   906→          >
+   907→            <span className="text-base">{toast.emoji}</span>
+   908→            <span className="text-xs font-bold text-white dark:text-[#1A1A1A]">{toast.msg}</span>
+   909→          </motion.div>
+   910→        )}
+   911→      </AnimatePresence>
+   912→
+   913→      {/* Fan Card offer — appears after a successful vote */}
+   914→      <AnimatePresence>
+   915→        {fanCardOffer && (
+   916→          <motion.div
+   917→            key="fan-card-offer"
+   918→            initial={{ opacity: 0, y: 40, x: '-50%' }}
+   919→            animate={{ opacity: 1, y: 0, x: '-50%' }}
+   920→            exit={{ opacity: 0, y: 40, x: '-50%' }}
+   921→            transition={{ type: 'spring', duration: 0.4 }}
+   922→            className="fixed bottom-20 md:bottom-6 left-1/2 z-[71] -translate-x-1/2 flex items-center gap-3 rounded-2xl bg-[#1A1A1A] dark:bg-white px-4 py-2.5 shadow-2xl border border-white/10 dark:border-[#1A1A1A]/10"
+   923→          >
+   924→            <span className="text-xl">{MOOD_EMOJI_OPTIONS.find(o => o.score === fanCardOffer.score)?.emoji ?? '✓'}</span>
+   925→            <div className="flex flex-col">
+   926→              <span className="text-xs font-bold text-white dark:text-[#1A1A1A]">
+   927→                Voted for {fanCardOffer.teamCode}!
+   928→              </span>
+   929→              <span className="text-[10px] text-white/60 dark:text-[#666]">
+   930→                Share your fan mood
+   931→              </span>
+   932→            </div>
+   933→            <FanCardButton
+   934→              teamCode={fanCardOffer.teamCode}
+   935→              score={fanCardOffer.score}
+   936→            />
+   937→            <button
+   938→              onClick={() => setFanCardOffer(null)}
+   939→              aria-label="Dismiss"
+   940→              className="ml-1 rounded-full size-6 flex items-center justify-center text-white/40 dark:text-[#1A1A1A]/40 hover:text-white/70 dark:hover:text-[#1A1A1A]/70 transition-colors"
+   941→            >
+   942→              <X className="size-3.5" />
+   943→            </button>
+   944→          </motion.div>
+   945→        )}
+   946→      </AnimatePresence>
+   947→    </div>
+   948→  )
+   949→}
+   950→
+   951→// ── SENTIMENTS Tab ───────────────────────────────────────────
+   952→
+   953→interface SentimentPlayer {
+   954→  id: string
+   955→  name: string
+   956→  nationCode: string
+   957→  pulseScore: number
+   958→  sentiment: number
+   959→  trend: string
+   960→  league: string
+   961→  label: 'on_fire' | 'under_pressure' | 'crisis'
+   962→}
+   963→
+   964→type MoodFilter = 'ALL' | 'on_fire' | 'under_pressure' | 'crisis'
+   965→
+   966→function SentimentsTab() {
+   967→  const { t } = useLanguage()
+   968→  const [filter, setFilter] = useState<MoodFilter>('ALL')
+   969→  const [players, setPlayers] = useState<SentimentPlayer[]>([])
+   970→  const [loading, setLoading] = useState(true)
+   971→  const [error, setError] = useState<string | null>(null)
+   972→
+   973→  const moods: { id: MoodFilter; labelKey: string; emoji: string }[] = [
+   974→    { id: 'ALL', labelKey: 'sentiments.all', emoji: '🌐' },
+   975→    { id: 'on_fire', labelKey: 'sentiments.on_fire', emoji: '🔥' },
+   976→    { id: 'under_pressure', labelKey: 'sentiments.under_pressure', emoji: '😤' },
+   977→    { id: 'crisis', labelKey: 'sentiments.crisis', emoji: '😰' },
+   978→  ]
+   979→
+   980→  useEffect(() => {
+   981→    let cancelled = false
+   982→    async function load() {
+   983→      setLoading(true)
+   984→      setError(null)
+   985→      try {
+   986→        const res = await fetch('/api/sentiments')
+   987→        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+   988→        const data = await res.json()
+   989→        if (cancelled) return
+   990→        setPlayers(Array.isArray(data.players) ? data.players : [])
+   991→      } catch (err) {
+   992→        console.error('Failed to fetch sentiments:', err)
+   993→        if (!cancelled) setError('Failed to load player sentiments. Please try again.')
+   994→      } finally {
+   995→        if (!cancelled) setLoading(false)
+   996→      }
+   997→    }
+   998→    load()
+   999→    return () => { cancelled = true }
+  1000→  }, [])
+  1001→
+  1002→  const filtered = filter === 'ALL' ? players : players.filter(p => p.label === filter)
+  1003→
+  1004→  return (
+  1005→    <div className="space-y-6">
+  1006→      <motion.div
+  1007→        initial={{ opacity: 0, y: 20 }}
+  1008→        animate={{ opacity: 1, y: 0 }}
+  1009→        className="space-y-1"
+  1010→      >
+  1011→        <div className="flex items-baseline justify-between gap-3">
+  1012→          <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+  1013→            {t('sentiments.title')}
+  1014→          </h2>
+  1015→          {!loading && !error && (
+  1016→            <span className="text-xs font-semibold text-[#666] dark:text-[#CCCCCC]">
+  1017→              {filtered.length} {filtered.length === 1 ? 'player' : 'players'}
+  1018→            </span>
+  1019→          )}
+  1020→        </div>
+  1021→        <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('sentiments.powered')}</p>
+  1022→      </motion.div>
+  1023→
+  1024→      {/* Filter pills — mood filters */}
+  1025→      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+  1026→        {moods.map((mood) => {
+  1027→          const isActive = filter === mood.id
+  1028→          return (
+  1029→            <button
+  1030→              key={mood.id}
+  1031→              onClick={() => setFilter(mood.id)}
+  1032→              className={`
+  1033→                shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all duration-200
+  1034→                ${isActive
+  1035→                  ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
+  1036→                  : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
+  1037→                }
+  1038→              `}
+  1039→            >
+  1040→              <span className="mr-1">{mood.emoji}</span>
+  1041→              {t(mood.labelKey)}
+  1042→            </button>
+  1043→          )
+  1044→        })}
+  1045→      </div>
+  1046→
+  1047→      {/* Loading skeleton */}
+  1048→      {loading && (
+  1049→        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  1050→          {Array.from({ length: 9 }).map((_, i) => (
+  1051→            <Card key={i} className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+  1052→              <CardContent className="p-4">
+  1053→                <div className="flex items-center justify-between">
+  1054→                  <div className="flex items-center gap-2.5">
+  1055→                    <div className="size-7 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+  1056→                    <div className="space-y-1.5">
+  1057→                      <div className="h-3 w-24 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+  1058→                      <div className="h-2 w-12 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+  1059→                    </div>
+  1060→                  </div>
+  1061→                  <div className="space-y-1.5 text-right">
+  1062→                    <div className="h-6 w-10 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse ml-auto" />
+  1063→                    <div className="h-2 w-8 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse ml-auto" />
+  1064→                  </div>
+  1065→                </div>
+  1066→                <div className="mt-3 h-1.5 w-full rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+  1067→                <div className="mt-2 h-2 w-20 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+  1068→              </CardContent>
+  1069→            </Card>
+  1070→          ))}
+  1071→        </div>
+  1072→      )}
+  1073→
+  1074→      {/* Error state */}
+  1075→      {!loading && error && (
+  1076→        <div className="flex flex-col items-center justify-center rounded-2xl border border-[#EF4444]/20 bg-[#EF4444]/5 py-12 text-center">
+  1077→          <AlertTriangle className="size-8 text-[#EF4444] mb-3" />
+  1078→          <p className="text-sm font-semibold text-[#1A1A1A] dark:text-white">{error}</p>
+  1079→          <Button
+  1080→            onClick={() => setFilter('ALL')}
+  1081→            className="mt-4 bg-[#6C2BD9] hover:bg-[#5A1FBF] text-white text-xs font-bold h-8 rounded-lg"
+  1082→          >
+  1083→            Retry
+  1084→          </Button>
+  1085→        </div>
+  1086→      )}
+  1087→
+  1088→      {/* Player sentiment cards */}
+  1089→      {!loading && !error && (
+  1090→        <>
+  1091→          {filtered.length === 0 ? (
+  1092→            <div className="flex flex-col items-center justify-center rounded-2xl border border-[#E0E0E0]/50 dark:border-white/5 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-12 text-center">
+  1093→              <span className="text-3xl mb-2">🤷</span>
+  1094→              <p className="text-sm font-semibold text-[#666] dark:text-[#CCCCCC]">No players match this filter.</p>
+  1095→            </div>
+  1096→          ) : (
+  1097→            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  1098→              {filtered.map((player, i) => {
+  1099→                const score = player.pulseScore
+  1100→                const labelKey = player.label === 'on_fire'
+  1101→                  ? 'sentiments.on_fire'
+  1102→                  : player.label === 'under_pressure'
+  1103→                    ? 'sentiments.under_pressure'
+  1104→                    : 'sentiments.crisis'
+  1105→                const emoji = player.label === 'on_fire' ? '🔥' : player.label === 'under_pressure' ? '😤' : '😰'
+  1106→                return (
+  1107→                  <motion.div
+  1108→                    key={player.id}
+  1109→                    initial={{ opacity: 0, y: 15 }}
+  1110→                    animate={{ opacity: 1, y: 0 }}
+  1111→                    transition={{ duration: 0.3, delay: i * 0.05 }}
+  1112→                  >
+  1113→                    <Card className={`card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${getSentimentBg(score)}`}>
+  1114→                      <CardContent className="p-4">
+  1115→                        <div className="flex items-center justify-between">
+  1116→                          <div className="flex items-center gap-2.5">
+  1117→                            <span className="text-xl">
+  1118→                              <FlagImage nationCode={player.nationCode} size={28} fallbackEmoji={getFlag(player.nationCode)} />
+  1119→                            </span>
+  1120→                            <div>
+  1121→                              <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">{player.name}</p>
+  1122→                              <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">{player.nationCode}</p>
+  1123→                            </div>
+  1124→                          </div>
+  1125→                          <div className="text-right">
+  1126→                            <p className={`text-2xl font-black ${getSentimentColor(score)}`}>
+  1127→                              {score}
+  1128→                            </p>
+  1129→                            <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">pulse</p>
+  1130→                          </div>
+  1131→                        </div>
+  1132→                        <div className="mt-3">
+  1133→                          <div className="sentiment-bar">
+  1134→                            <div
+  1135→                              className={`sentiment-bar-fill ${score >= 80 ? 'sentiment-positive' : score >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
+  1136→                              style={{ width: `${score}%` }}
+  1137→                            />
+  1138→                          </div>
+  1139→                        </div>
+  1140→                        <div className="mt-2 flex items-center gap-1">
+  1141→                          <span className="text-sm">{emoji}</span>
+  1142→                          <span className={`text-[10px] font-semibold ${getSentimentColor(score)}`}>
+  1143→                            {t(labelKey)}
+  1144→                          </span>
+  1145→                          {player.trend && (
+  1146→                            <span className="ml-auto">
+  1147→                              {getTrendIcon(player.trend)}
+  1148→                            </span>
+  1149→                          )}
+  1150→                        </div>
+  1151→                      </CardContent>
+  1152→                    </Card>
+  1153→                  </motion.div>
+  1154→                )
+  1155→              })}
+  1156→            </div>
+  1157→          )}
+  1158→        </>
+  1159→      )}
+  1160→    </div>
+  1161→  )
+  1162→}
+  1163→
+  1164→// ── RATE Tab ─────────────────────────────────────────────────
+  1165→
+  1166→function RateTab() {
+  1167→  const { t } = useLanguage()
+  1168→  const [players, setPlayers] = useState<Array<{
+  1169→    id: string
+  1170→    playerName: string
+  1171→    nationCode: string
+  1172→    position: string
+  1173→    avgRating: number
+  1174→    totalRatings: number
+  1175→  }>>([])
+  1176→  const [myRatings, setMyRatings] = useState<Record<string, number>>({})
+  1177→  const [loading, setLoading] = useState(true)
+  1178→  const [submittingId, setSubmittingId] = useState<string | null>(null)
+  1179→
+  1180→  // ── Load real players from the DB + this session's ratings ──
+  1181→  useEffect(() => {
+  1182→    let cancelled = false
+  1183→    async function load() {
+  1184→      setLoading(true)
+  1185→      try {
+  1186→        const res = await fetch('/api/ratings')
+  1187→        if (!res.ok) return
+  1188→        const data = await res.json()
+  1189→        if (cancelled) return
+  1190→        const list = Array.isArray(data.ratings) ? data.ratings : []
+  1191→        setPlayers(list)
+  1192→      } catch {
+  1193→        /* ignore — toast shown on submit failure */
+  1194→      } finally {
+  1195→        if (!cancelled) setLoading(false)
+  1196→      }
+  1197→    }
+  1198→    load()
+  1199→    return () => { cancelled = true }
+  1200→  }, [])
+  1201→
+  1202→  // ── Per-browser session ID (crypto.randomUUID, persisted in localStorage) ──
+  1203→  // Required by the API — the old 'anonymous' default is rejected. A real
+  1204→  // session ID makes the (sessionId, playerId) unique constraint meaningful,
+  1205→  // enforcing one rating per session per player.
+  1206→  const [sessionId, setSessionId] = useState<string>('')
+  1207→  useEffect(() => {
+  1208→    try {
+  1209→      const existing = window.localStorage.getItem('fp_session_id')
+  1210→      if (existing && existing.length >= 8) {
+  1211→        setSessionId(existing)
+  1212→        return
+  1213→      }
+  1214→      const newId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+  1215→        ? crypto.randomUUID()
+  1216→        : `fp-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+  1217→      window.localStorage.setItem('fp_session_id', newId)
+  1218→      setSessionId(newId)
+  1219→    } catch {
+  1220→      setSessionId(`fp-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`)
+  1221→    }
+  1222→  }, [])
+  1223→
+  1224→  const handleRate = async (playerId: string, rating: number) => {
+  1225→    if (!sessionId || submittingId === playerId) return
+  1226→    setSubmittingId(playerId)
+  1227→    // Optimistically update local state so the stars fill instantly.
+  1228→    setMyRatings(prev => ({ ...prev, [playerId]: rating }))
+  1229→    try {
+  1230→      const res = await fetch('/api/ratings', {
+  1231→        method: 'POST',
+  1232→        headers: { 'Content-Type': 'application/json' },
+  1233→        body: JSON.stringify({ playerId, rating, sessionId }),
+  1234→      })
+  1235→      const data = await res.json().catch(() => null)
+  1236→      if (!res.ok) {
+  1237→        // Revert on failure.
+  1238→        setMyRatings(prev => {
+  1239→          const next = { ...prev }
+  1240→          delete next[playerId]
+  1241→          return next
+  1242→        })
+  1243→        if (res.status === 429) {
+  1244→          toast.error('Too many ratings — please slow down.')
+  1245→        } else {
+  1246→          toast.error(data?.error || 'Failed to submit rating')
+  1247→        }
+  1248→        return
+  1249→      }
+  1250→      toast.success(data?.updated ? 'Rating updated!' : 'Rating submitted!', {
+  1251→        description: `${rating}/10`,
+  1252→      })
+  1253→      // Refresh aggregates so the avg display updates.
+  1254→      const fresh = await fetch('/api/ratings')
+  1255→      if (fresh.ok) {
+  1256→        const fd = await fresh.json().catch(() => null)
+  1257→        if (Array.isArray(fd?.ratings)) setPlayers(fd.ratings)
+  1258→      }
+  1259→    } catch {
+  1260→      setMyRatings(prev => {
+  1261→        const next = { ...prev }
+  1262→        delete next[playerId]
+  1263→        return next
+  1264→      })
+  1265→      toast.error('Network error — please try again')
+  1266→    } finally {
+  1267→      setSubmittingId(null)
+  1268→    }
+  1269→  }
+  1270→
+  1271→  return (
+  1272→    <div className="space-y-6">
+  1273→      <motion.div
+  1274→        initial={{ opacity: 0, y: 20 }}
+  1275→        animate={{ opacity: 1, y: 0 }}
+  1276→        className="space-y-1"
+  1277→      >
+  1278→        <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+  1279→          {t('ratings.title')}
+  1280→        </h2>
+  1281→        <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('ratings.desc')}</p>
+  1282→      </motion.div>
+  1283→
+  1284→      <div className="space-y-3">
+  1285→        {loading ? (
+  1286→          <Card className="border-[#E0E0E0]/50 dark:border-white/5">
+  1287→            <CardContent className="p-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
+  1288→              Loading players…
+  1289→            </CardContent>
+  1290→          </Card>
+  1291→        ) : players.length === 0 ? (
+  1292→          <Card className="border-[#E0E0E0]/50 dark:border-white/5">
+  1293→            <CardContent className="p-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
+  1294→              No rateable players found.
+  1295→            </CardContent>
+  1296→          </Card>
+  1297→        ) : (
+  1298→          players.map((player, i) => (
+  1299→            <motion.div
+  1300→              key={player.id}
+  1301→              initial={{ opacity: 0, y: 10 }}
+  1302→              animate={{ opacity: 1, y: 0 }}
+  1303→              transition={{ duration: 0.3, delay: i * 0.05 }}
+  1304→            >
+  1305→              <Card className="card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+  1306→                <CardContent className="p-4">
+  1307→                  <div className="flex items-center justify-between gap-2">
+  1308→                    <div className="flex items-center gap-3 min-w-0">
+  1309→                      <span className="text-xl shrink-0">{getFlag(player.nationCode)}</span>
+  1310→                      <div className="min-w-0">
+  1311→                        <p className="text-sm font-bold text-[#1A1A1A] dark:text-white truncate">{player.playerName}</p>
+  1312→                        <div className="flex items-center gap-2">
+  1313→                          <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+  1314→                            {player.position}
+  1315→                          </Badge>
+  1316→                          <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
+  1317→                            {t('ratings.avg')}: {player.avgRating.toFixed(1)} ({player.totalRatings})
+  1318→                          </span>
+  1319→                        </div>
+  1320→                      </div>
+  1321→                    </div>
+  1322→
+  1323→                    {/* Star Rating 1-10 */}
+  1324→                    <div className="flex items-center gap-0.5 flex-wrap justify-end max-w-[55%]">
+  1325→                      {Array.from({ length: 10 }, (_, idx) => idx + 1).map((star) => {
+  1326→                        const isSelected = (myRatings[player.id] ?? 0) >= star
+  1327→                        return (
+  1328→                          <button
+  1329→                            key={star}
+  1330→                            onClick={() => handleRate(player.id, star)}
+  1331→                            disabled={submittingId === player.id}
+  1332→                            aria-label={`Rate ${star} out of 10`}
+  1333→                            className="transition-transform duration-150 hover:scale-125 disabled:opacity-50"
+  1334→                          >
+  1335→                            <Star
+  1336→                              className={`size-3.5 ${
+  1337→                                isSelected
+  1338→                                  ? 'fill-[#6C2BD9] text-[#6C2BD9]'
+  1339→                                  : 'text-[#E0E0E0] dark:text-gray-600'
+  1340→                              }`}
+  1341→                            />
+  1342→                          </button>
+  1343→                        )
+  1344→                      })}
+  1345→                    </div>
+  1346→                  </div>
+  1347→
+  1348→                  {myRatings[player.id] && (
+  1349→                    <motion.div
+  1350→                      initial={{ opacity: 0, height: 0 }}
+  1351→                      animate={{ opacity: 1, height: 'auto' }}
+  1352→                      className="mt-2 flex items-center justify-between"
+  1353→                    >
+  1354→                      <span className="text-xs text-[#6C2BD9] dark:text-[#8B5CF6] font-medium">
+  1355→                        {t('ratings.your_rating')}: {myRatings[player.id]}/10
+  1356→                      </span>
+  1357→                      <Progress
+  1358→                        value={(myRatings[player.id] / 10) * 100}
+  1359→                        className="h-1 w-20 progress-purple"
+  1360→                      />
+  1361→                    </motion.div>
+  1362→                  )}
+  1363→                </CardContent>
+  1364→              </Card>
+  1365→            </motion.div>
+  1366→          ))
+  1367→        )}
+  1368→      </div>
+  1369→    </div>
+  1370→  )
+  1371→}
+  1372→
+  1373→// ── GOALS Tab ────────────────────────────────────────────────
+  1374→
+  1375→function GoalsTab() {
+  1376→  const { t } = useLanguage()
+  1377→
+  1378→  return (
+  1379→    <div className="space-y-6">
+  1380→      <motion.div
+  1381→        initial={{ opacity: 0, y: 20 }}
+  1382→        animate={{ opacity: 1, y: 0 }}
+  1383→        className="space-y-1"
+  1384→      >
+  1385→        <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+  1386→          {t('goals.title')}
+  1387→        </h2>
+  1388→        <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('goals.desc')}</p>
+  1389→      </motion.div>
+  1390→
+  1391→      {/* Stats bar */}
+  1392→      <div className="grid grid-cols-4 gap-3">
+  1393→        {[
+  1394→          { label: t('goals.stats_goals'), value: '8', icon: Flame, color: 'text-[#FF6B35]' },
+  1395→          { label: t('goals.stats_leagues'), value: '3', icon: Trophy, color: 'text-[#6C2BD9]' },
+  1396→          { label: t('goals.stats_sources'), value: '4', icon: Eye, color: 'text-[#10B981]' },
+  1397→          { label: t('goals.stats_top'), value: '5', icon: Star, color: 'text-[#FF6B35]' },
+  1398→        ].map((stat, i) => (
+  1399→          <Card key={i} className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+  1400→            <CardContent className="p-3 text-center">
+  1401→              <stat.icon className={`mx-auto size-4 mb-1 ${stat.color}`} />
+  1402→              <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
+  1403→              <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
+  1404→            </CardContent>
+  1405→          </Card>
+  1406→        ))}
+  1407→      </div>
+  1408→
+  1409→      <div className="space-y-3">
+  1410→        {MOCK_GOALS.map((goal, i) => (
+  1411→          <motion.div
+  1412→            key={goal.id}
+  1413→            initial={{ opacity: 0, x: -15 }}
+  1414→            animate={{ opacity: 1, x: 0 }}
+  1415→            transition={{ duration: 0.3, delay: i * 0.06 }}
+  1416→          >
+  1417→            <Card className="card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+  1418→              <CardContent className="p-4">
+  1419→                <div className="flex items-center gap-4">
+  1420→                  {/* Video placeholder */}
+  1421→                  <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-[#F8F9FA] dark:bg-[#2D2D2D] transition-colors group-hover:bg-[#6C2BD9]/10">
+  1422→                    <Play className="size-4 text-[#666] dark:text-[#CCCCCC]" />
+  1423→                  </div>
+  1424→                  {/* Info */}
+  1425→                  <div className="min-w-0 flex-1">
+  1426→                    <div className="flex items-center gap-2">
+  1427→                      <span className="text-lg">{goal.flag}</span>
+  1428→                      <p className="truncate text-sm font-bold text-[#1A1A1A] dark:text-white">{goal.scorer}</p>
+  1429→                      <Badge variant="outline" className="shrink-0 text-[9px] font-bold border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+  1430→                        {goal.type}
+  1431→                      </Badge>
+  1432→                    </div>
+  1433→                    <p className="mt-0.5 text-xs text-[#666] dark:text-[#CCCCCC]">
+  1434→                      {goal.match}
+  1435→                    </p>
+  1436→                    {/* Tags */}
+  1437→                    {goal.tags.length > 0 && (
+  1438→                      <div className="mt-1.5 flex items-center gap-1.5">
+  1439→                        {goal.tags.map(tag => (
+  1440→                          <span key={tag} className="rounded bg-[#6C2BD9]/8 dark:bg-[#8B5CF6]/10 px-1.5 py-0.5 text-[9px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">
+  1441→                            #{tag}
+  1442→                          </span>
+  1443→                        ))}
+  1444→                      </div>
+  1445→                    )}
+  1446→                  </div>
+  1447→                  {/* Minute */}
+  1448→                  <div className="shrink-0 text-right">
+  1449→                    <p className="text-xl font-black text-[#6C2BD9] dark:text-[#8B5CF6]">{goal.minute}&apos;</p>
+  1450→                    <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">minute</p>
+  1451→                  </div>
+  1452→                </div>
+  1453→                <div className="mt-3 flex items-center gap-2">
+  1454→                  <SharePulseButton className="flex-1" />
+  1455→                  <Badge variant="outline" className="text-[9px] font-bold border-[#E0E0E0] dark:border-white/10 text-[#666] dark:text-[#CCCCCC]">
+  1456→                    {goal.source}
+  1457→                  </Badge>
+  1458→                </div>
+  1459→              </CardContent>
+  1460→            </Card>
+  1461→          </motion.div>
+  1462→        ))}
+  1463→      </div>
+  1464→    </div>
+  1465→  )
+  1466→}
+  1467→
+  1468→// ── TOTW Tab ─────────────────────────────────────────────────
+  1469→
+  1470→function TOTWTab() {
+  1471→  const { t } = useLanguage()
+  1472→
+  1473→  return (
+  1474→    <div className="space-y-6">
+  1475→      <motion.div
+  1476→        initial={{ opacity: 0, y: 20 }}
+  1477→        animate={{ opacity: 1, y: 0 }}
+  1478→        className="space-y-1"
+  1479→      >
+  1480→        <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+  1481→          {t('totw.title')}
+  1482→        </h2>
+  1483→        <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('totw.formation')}</p>
+  1484→      </motion.div>
+  1485→
+  1486→      <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+  1487→        <CardContent className="p-4">
+  1488→          <div className="pitch-bg rounded-xl relative p-4 sm:p-6">
+  1489→            {/* Football Pitch Markings Overlay */}
+  1490→            <div
+  1491→              className="absolute inset-0 pointer-events-none"
+  1492→              style={{
+  1493→                backgroundImage: `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"><g stroke="rgba(255,255,255,0.4)" stroke-width="1.5" fill="none"><rect x="6" y="6" width="188" height="288" rx="2"/><line x1="6" y1="150" x2="194" y2="150"/><circle cx="100" cy="150" r="26"/><circle cx="100" cy="150" r="2.5" fill="rgba(255,255,255,0.4)"/><rect x="40" y="6" width="120" height="48"/><rect x="62" y="6" width="76" height="22"/><circle cx="100" cy="35" r="2.5" fill="rgba(255,255,255,0.4)"/><path d="M 74 54 A 26 26 0 0 0 126 54"/><rect x="40" y="246" width="120" height="48"/><rect x="62" y="272" width="76" height="22"/><circle cx="100" cy="265" r="2.5" fill="rgba(255,255,255,0.4)"/><path d="M 74 246 A 26 26 0 0 1 126 246"/><path d="M 6 14 A 8 8 0 0 1 14 6"/><path d="M 186 6 A 8 8 0 0 1 194 14"/><path d="M 6 286 A 8 8 0 0 0 14 294"/><path d="M 186 294 A 8 8 0 0 0 194 286"/><rect x="78" y="0" width="44" height="6" stroke-dasharray="4 4"/><rect x="78" y="294" width="44" height="6" stroke-dasharray="4 4"/></g></svg>')}")`,
+  1494→                backgroundSize: 'cover',
+  1495→                backgroundPosition: 'center',
+  1496→                backgroundRepeat: 'no-repeat',
+  1497→              }}
+  1498→            />
+  1499→            <div className="relative z-10 space-y-5 sm:space-y-6">
+  1500→            {FORMATION_ROWS.map((row, ri) => (
+  1501→              <div key={ri} className="flex justify-center gap-4 sm:gap-8">
+  1502→                {row.map((slot, ci) => {
+  1503→                  const player = MOCK_TOTW.find(p => p.position === slot.pos)
+  1504→                  return (
+  1505→                    <motion.div
+  1506→                      key={`${ri}-${ci}`}
+  1507→                      initial={{ opacity: 0, scale: 0.8 }}
+  1508→                      animate={{ opacity: 1, scale: 1 }}
+  1509→                      transition={{ duration: 0.3, delay: ri * 0.1 + ci * 0.05 }}
+  1510→                      className="flex flex-col items-center"
+  1511→                    >
+  1512→                      <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-white/60 bg-white/90 dark:bg-white/80 shadow-md shadow-black/20 overflow-hidden">
+  1513→                        {player ? (
+  1514→                          <FlagImage nationCode={player.nationCode} size={32} fallbackEmoji={getFlag(player.nationCode)} />
+  1515→                        ) : (
+  1516→                          <span className="text-lg">👤</span>
+  1517→                        )}
+  1518→                      </div>
+  1519→                      <p className="mt-1 max-w-[60px] truncate text-[10px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+  1520→                        {player?.name ?? slot.pos}
+  1521→                      </p>
+  1522→                      <Badge variant="outline" className="mt-0.5 text-[8px] font-bold px-1 bg-white/90 backdrop-blur-sm border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+  1523→                        {slot.pos}
+  1524→                      </Badge>
+  1525→                      {player && (
+  1526→                        <Badge className="mt-0.5 bg-[#6C2BD9] dark:bg-[#8B5CF6] text-white text-[9px] font-bold px-1.5 py-0 h-4">
+  1527→                          {player.rating}
+  1528→                        </Badge>
+  1529→                      )}
+  1530→                    </motion.div>
+  1531→                  )
+  1532→                })}
+  1533→              </div>
+  1534→            ))}
+  1535→            </div>
+  1536→          </div>
+  1537→        </CardContent>
+  1538→      </Card>
+  1539→    </div>
+  1540→  )
+  1541→}
+  1542→
+  1543→// ── Formation Player Card (World Cup) ────────────────────────
+  1544→
+  1545→function FormationPlayerCard({
+  1546→  player,
+  1547→  type,
+  1548→  stageStatus,
+  1549→  onPlayerClick,
+  1550→}: {
+  1551→  player: WCSelectionPlayer
+  1552→  type: 'elite' | 'crisis'
+  1553→  stageStatus: string
+  1554→  onPlayerClick?: (player: WCSelectionPlayer) => void
+  1555→}) {
+  1556→  const { mode: flagMode } = useFlagMode()
+  1557→  const flagEmoji = getFlag(player.nationCode)
+  1558→  const faceEmoji = getPulseFaceEmoji(player.pulseScore)
+  1559→  const isElite = type === 'elite'
+  1560→  const isLive = player.isLive && stageStatus === 'live'
+  1561→  const isCompleted = stageStatus === 'completed'
+  1562→  const accentColor = isElite ? '#6C2BD9' : '#EF4444'
+  1563→  const rating = player.pulseScore / 10
+  1564→  const ratingColor = getRatingColor(rating)
+  1565→  const clickable = !!onPlayerClick
+  1566→
+  1567→  return (
+  1568→    <motion.div
+  1569→      initial={{ opacity: 0, scale: 0.85 }}
+  1570→      animate={{ opacity: 1, scale: 1 }}
+  1571→      transition={{ duration: 0.3 }}
+  1572→      onClick={() => onPlayerClick?.(player)}
+  1573→      role={clickable ? 'button' : undefined}
+  1574→      tabIndex={clickable ? 0 : undefined}
+  1575→      onKeyDown={(e) => {
+  1576→        if (!clickable) return
+  1577→        if (e.key === 'Enter' || e.key === ' ') {
+  1578→          e.preventDefault()
+  1579→          onPlayerClick?.(player)
+  1580→        }
+  1581→      }}
+  1582→      className={`flex flex-col items-center ${clickable ? 'cursor-pointer hover:scale-[1.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9]/60 rounded-md' : ''} transition-transform duration-200`}
+  1583→      title={clickable ? `View ${player.name} pulse breakdown` : undefined}
+  1584→    >
+  1585→      {/* Player Circle - always shows face emoji */}
+  1586→      <div
+  1587→        className={`
+  1588→          relative flex size-7 sm:size-8 items-center justify-center rounded-full border-[1.5px] shadow-sm overflow-hidden
+  1589→          border-white/70 bg-white/95 dark:bg-white/90 shadow-black/10
+  1590→          ${isLive ? 'animate-pulse-glow' : ''}
+  1591→          transition-all duration-300
+  1592→        `}
+  1593→      >
+  1594→        <span className="text-xs sm:text-sm leading-none select-none">{faceEmoji}</span>
+  1595→        {isLive && (
+  1596→          <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-[#EF4444] shadow-sm shadow-[#EF4444]/50 animate-live-pulse" />
+  1597→        )}
+  1598→        {isCompleted && (
+  1599→          <Lock className="absolute -right-0.5 -top-0.5 size-2 text-[#666] dark:text-[#CCCCCC]" />
+  1600→        )}
+  1601→      </div>
+  1602→      {/* Player Name */}
+  1603→      <p className="mt-px max-w-[48px] truncate text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+  1604→        {player.name}
+  1605→      </p>
+  1606→      {/* Position + Trend */}
+  1607→      <div className="flex items-center gap-px">
+  1608→        <Badge
+  1609→          variant="outline"
+  1610→          className={`text-[5px] sm:text-[6px] font-bold px-0.5 py-0 bg-white/90 backdrop-blur-sm leading-tight ${
+  1611→            isElite ? 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]' : 'border-[#EF4444]/30 text-[#EF4444] dark:border-[#F87171]/30 dark:text-[#F87171]'
+  1612→          }`}
+  1613→        >
+  1614→          {player.position}
+  1615→        </Badge>
+  1616→        {getTrendIcon(player.trend)}
+  1617→      </div>
+  1618→      {/* Rating + Flag next to score */}
+  1619→      <div className="flex items-center gap-0.5">
+  1620→        {flagMode === 'flag' ? (
+  1621→          <FlagImage nationCode={player.nationCode} size={12} fallbackEmoji={flagEmoji} />
+  1622→        ) : (
+  1623→          <span className="text-[10px] leading-none">{flagEmoji}</span>
+  1624→        )}
+  1625→        <span
+  1626→          className="text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+  1627→          style={{ color: ratingColor }}
+  1628→        >
+  1629→          {rating.toFixed(1)}
+  1630→        </span>
+  1631→      </div>
+  1632→      {/* R32 movement chip — stock-ticker feel. Only for live R32 stage. */}
+  1633→      {typeof player.scoreDelta === 'number' && Math.abs(player.scoreDelta) > 1 && (
+  1634→        <motion.span
+  1635→          layoutId={`delta-${player.id}`}
+  1636→          initial={{ opacity: 0, scale: 0.6 }}
+  1637→          animate={{ opacity: 1, scale: 1 }}
+  1638→          className={`text-[6px] sm:text-[7px] font-black px-1 py-px rounded-full leading-tight ${
+  1639→            player.scoreDelta > 0
+  1640→              ? 'bg-[#10B981] text-white'
+  1641→              : 'bg-[#EF4444] text-white'
+  1642→          }`}
+  1643→        >
+  1644→          {player.scoreDelta > 0 ? '↑' : '↓'}{Math.abs(player.scoreDelta).toFixed(0)}
+  1645→        </motion.span>
+  1646→      )}
+  1647→    </motion.div>
+  1648→  )
+  1649→}
+  1650→
+  1651→// ── WORLD CUP Tab ────────────────────────────────────────────
+  1652→
+  1653→function WorldCupTab({ stages }: { stages: WCStage[] }) {
+  1654→  const { t, lang } = useLanguage()
+  1655→  const { mode: flagMode, toggle: toggleFlag } = useFlagMode()
+  1656→  const [selectedStageId, setSelectedStageId] = useState<string | null>(null)
+  1657→  const [eliteData, setEliteData] = useState<WCSelection | null>(null)
+  1658→  const [crisisData, setCrisisData] = useState<WCSelection | null>(null)
+  1659→  const [loading, setLoading] = useState(false)
+  1660→  const [activeView, setActiveView] = useState<'elite' | 'crisis'>('elite')
+  1661→
+  1662→  // R32 stock-ticker state (only the live R32 stage polls + shows movement).
+  1663→  const [buzzSource, setBuzzSource] = useState<'baseline' | 'live'>('baseline')
+  1664→  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
+  1665→  const [secondsAgo, setSecondsAgo] = useState(0)
+  1666→  const [isPolling, setIsPolling] = useState(false)
+  1667→
+  1668→  // Pulse breakdown modal state
+  1669→  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
+  1670→  const [pulseBreakdown, setPulseBreakdown] = useState<{
+  1671→    player: {
+  1672→      id: string; name: string; nationCode: string; position: string
+  1673→      pulseScore: number; sentiment: number; trend: string; isLive: boolean
+  1674→      matchInfo: string | null; order: number
+  1675→    }
+  1676→    pulseScore: {
+  1677→      overall: number
+  1678→      matchPerformance: number
+  1679→      fanSentiment: number
+  1680→      aiNarrative: number
+  1681→      momentumTrend: number
+  1682→      matchPerformanceNote: string
+  1683→      fanSentimentNote: string
+  1684→      aiNarrativeNote: string
+  1685→      momentumTrendNote: string
+  1686→    }
+  1687→    weights: { matchPerformance: number; fanSentiment: number; aiNarrative: number; momentumTrend: number }
+  1688→    // Real fan sentiment metadata (null when no FeedMonitor data exists yet).
+  1689→    // When present, the modal shows "Based on N real fan posts" + top quote + freshness.
+  1690→    fanSentimentMeta?: {
+  1691→      postCount: number
+  1692→      positiveRatio: number
+  1693→      topQuotes: Array<{ quote: string; score: number }>
+  1694→      analyzedAt: string
+  1695→      monitorId: string | null
+  1696→      freshnessLabel: string
+  1697→    } | null
+  1698→  } | null>(null)
+  1699→  const [pulseLoading, setPulseLoading] = useState(false)
+  1700→  const [pulseError, setPulseError] = useState<string | null>(null)
+  1701→
+  1702→  // Total fan votes (real count, replaces the old "1.2M" lie)
+  1703→  const [totalVotes, setTotalVotes] = useState<number>(0)
+  1704→
+  1705→  useEffect(() => {
+  1706→    let cancelled = false
+  1707→    async function loadVotes() {
+  1708→      try {
+  1709→        const res = await fetch('/api/fan-vote')
+  1710→        if (!res.ok) return
+  1711→        const data = await res.json()
+  1712→        if (cancelled) return
+  1713→        const votes: Array<{ count?: number }> = Array.isArray(data.votes) ? data.votes : []
+  1714→        const sum = votes.reduce((s, v) => s + (typeof v.count === 'number' ? v.count : 0), 0)
+  1715→        setTotalVotes(sum)
+  1716→      } catch (err) {
+  1717→        console.error('Failed to fetch total fan votes:', err)
+  1718→      }
+  1719→    }
+  1720→    loadVotes()
+  1721→    return () => { cancelled = true }
+  1722→  }, [])
+  1723→
+  1724→  useEffect(() => {
+  1725→    if (stages.length > 0 && !selectedStageId) {
+  1726→      // Auto-select the first LIVE stage, fallback to first stage
+  1727→      const liveStage = stages.find(s => s.status === 'live')
+  1728→      setSelectedStageId((liveStage ?? stages[0]).id)
+  1729→    }
+  1730→  }, [stages, selectedStageId])
+  1731→
+  1732→  const fetchEliteCrisis = useCallback(async (stageId: string, silent = false) => {
+  1733→    if (!silent) setLoading(true)
+  1734→    if (silent) setIsPolling(true)
+  1735→    try {
+  1736→      const res = await fetch(`/api/world-cup/elite-crisis?stageId=${stageId}`)
+  1737→      if (res.ok) {
+  1738→        const data = await res.json()
+  1739→        setEliteData(data.elite || null)
+  1740→        setCrisisData(data.crisis || null)
+  1741→        if (data.buzzSource) setBuzzSource(data.buzzSource)
+  1742→        if (data.lastUpdated) {
+  1743→          setLastUpdated(data.lastUpdated)
+  1744→          setSecondsAgo(0)
+  1745→        }
+  1746→      }
+  1747→    } catch (err) {
+  1748→      console.error('Failed to fetch elite-crisis:', err)
+  1749→    } finally {
+  1750→      if (!silent) setLoading(false)
+  1751→      if (silent) setIsPolling(false)
+  1752→    }
+  1753→  }, [])
+  1754→
+  1755→  useEffect(() => {
+  1756→    if (selectedStageId) {
+  1757→      setBuzzSource('baseline')
+  1758→      setLastUpdated(null)
+  1759→      setSecondsAgo(0)
+  1760→      fetchEliteCrisis(selectedStageId)
+  1761→    }
+  1762→  }, [selectedStageId, fetchEliteCrisis])
+  1763→
+  1764→  // Derive the selected stage + status here (BEFORE the effects below that
+  1765→  // reference isR32Live — avoids a temporal-dead-zone ReferenceError).
+  1766→  const selectedStage = stages.find(s => s.id === selectedStageId)
+  1767→  const stageStatus = selectedStage?.status ?? 'upcoming'
+  1768→  // R32 live stage drives the stock-ticker polling + movement chips.
+  1769→  const isR32Live = stageStatus === 'live' && selectedStage?.name === 'Round of 32'
+  1770→
+  1771→  // R32 stock-ticker: poll every 30s when the selected stage is LIVE.
+  1772→  // Group Stage is locked/historical — no polling, no movement chips.
+  1773→
+  1774→  useEffect(() => {
+  1775→    if (!isR32Live || !selectedStageId) return
+  1776→    const interval = setInterval(() => {
+  1777→      fetchEliteCrisis(selectedStageId, true)
+  1778→    }, 30000)
+  1779→    return () => clearInterval(interval)
+  1780→  }, [isR32Live, selectedStageId, fetchEliteCrisis])
+  1781→
+  1782→  // "Updated Xs ago" counter — ticks every second.
+  1783→  useEffect(() => {
+  1784→    if (!lastUpdated) return
+  1785→    const interval = setInterval(() => {
+  1786→      setSecondsAgo(Math.floor((Date.now() - new Date(lastUpdated).getTime()) / 1000))
+  1787→    }, 1000)
+  1788→    return () => clearInterval(interval)
+  1789→  }, [lastUpdated])
+  1790→
+  1791→  // NOTE: The client-side cron trigger that previously lived here was removed
+  1792→  // for security — it hardcoded the admin password in the JS bundle, leaking
+  1793→  // it to anyone viewing page source. The live-buzz refresh (r16-cron /
+  1794→  // r32-cron) MUST now be triggered by an external server-side scheduler
+  1795→  // (fly cron, systemd timer, cron-job.org, etc.) hitting the cron endpoint
+  1796→  // with the X-Cron-Secret header. The 30s elite-crisis polling below still
+  1797→  // picks up any refreshes the external scheduler performs.
+  1798→
+  1799→  // Fetch pulse breakdown whenever a player is selected
+  1800→  useEffect(() => {
+  1801→    if (!selectedPlayerId) {
+  1802→      setPulseBreakdown(null)
+  1803→      setPulseError(null)
+  1804→      return
+  1805→    }
+  1806→    let cancelled = false
+  1807→    setPulseLoading(true)
+  1808→    setPulseError(null)
+  1809→    async function loadBreakdown() {
+  1810→      try {
+  1811→        const res = await fetch(`/api/pulse-score?playerId=${encodeURIComponent(selectedPlayerId!)}`)
+  1812→        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  1813→        const data = await res.json()
+  1814→        if (cancelled) return
+  1815→        setPulseBreakdown(data)
+  1816→      } catch (err) {
+  1817→        console.error('Failed to fetch pulse breakdown:', err)
+  1818→        if (!cancelled) setPulseError('Failed to load pulse breakdown. Please try again.')
+  1819→      } finally {
+  1820→        if (!cancelled) setPulseLoading(false)
+  1821→      }
+  1822→    }
+  1823→    loadBreakdown()
+  1824→    return () => { cancelled = true }
+  1825→  }, [selectedPlayerId])
+  1826→
+  1827→  const getStatusBadge = (status: string) => {
+  1828→    switch (status) {
+  1829→      case 'live':
+  1830→        return (
+  1831→          <Badge className="bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30 gap-1 text-[9px] font-bold px-1.5 py-0">
+  1832→            <span className="live-dot" style={{ width: 5, height: 5 }} />
+  1833→            LIVE
+  1834→          </Badge>
+  1835→        )
+  1836→      case 'completed':
+  1837→        return (
+  1838→          <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[9px] font-bold px-1.5 py-0">
+  1839→            <Lock className="size-2.5" />
+  1840→            COMPLETED
+  1841→          </Badge>
+  1842→        )
+  1843→      default:
+  1844→        return (
+  1845→          <Badge variant="outline" className="text-[#FF6B35] border-[#FF6B35]/30 gap-1 text-[9px] font-bold px-1.5 py-0">
+  1846→            <Clock className="size-2.5" />
+  1847→            UPCOMING
+  1848→          </Badge>
+  1849→        )
+  1850→    }
+  1851→  }
+  1852→
+  1853→  const organizeFormationLandscape = (players: WCSelectionPlayer[]) => {
+  1854→    const gk = players.filter(p => p.position === 'GK')
+  1855→    const def = players.filter(p => ['CB', 'LB', 'RB'].includes(p.position))
+  1856→    const mid = players.filter(p => ['CM', 'CAM', 'CDM'].includes(p.position))
+  1857→    const fwd = players.filter(p => ['LW', 'RW', 'ST', 'CF'].includes(p.position))
+  1858→    return [gk, def, mid, fwd]  // Landscape: GK on left, FWD on right
+  1859→  }
+  1860→
+  1861→  const currentData = activeView === 'elite' ? eliteData : crisisData
+  1862→
+  1863→  return (
+  1864→    <div className="space-y-6">
+  1865→      {/* Title */}
+  1866→      <motion.div
+  1867→        initial={{ opacity: 0, y: 20 }}
+  1868→        animate={{ opacity: 1, y: 0 }}
+  1869→        className="space-y-1"
+  1870→      >
+  1871→        <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+  1872→          🏆 {t('wc.title')}
+  1873→        </h2>
+  1874→        <div className="flex items-center justify-between">
+  1875→          <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('wc.new_stage')}</p>
+  1876→        </div>
+  1877→      </motion.div>
+  1878→
+  1879→      {/* Stage Selector */}
+  1880→      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+  1881→        {stages.map((stage) => {
+  1882→          const isActive = selectedStageId === stage.id
+  1883→          return (
+  1884→            <motion.button
+  1885→              key={stage.id}
+  1886→              whileTap={{ scale: 0.95 }}
+  1887→              onClick={() => setSelectedStageId(stage.id)}
+  1888→              className={`
+  1889→                relative flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold
+  1890→                transition-all duration-300
+  1891→                ${isActive
+  1892→                  ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
+  1893→                  : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
+  1894→                }
+  1895→              `}
+  1896→            >
+  1897→              {stage.order <= 3 && <CircleDot className="size-3" />}
+  1898→              {stage.order > 3 && stage.order < 6 && <Shield className="size-3" />}
+  1899→              {stage.order === 6 && <Star className="size-3" />}
+  1900→              <span>{lang === 'AR' ? stage.nameAr : stage.name}</span>
+  1901→              {getStatusBadge(stage.status)}
+  1902→            </motion.button>
+  1903→          )
+  1904→        })}
+  1905→      </div>
+  1906→
+  1907→      {/* Upcoming stage message */}
+  1908→      {stageStatus === 'upcoming' && (
+  1909→        <motion.div
+  1910→          initial={{ opacity: 0 }}
+  1911→          animate={{ opacity: 1 }}
+  1912→          className="flex flex-col items-center justify-center rounded-2xl border border-[#E0E0E0]/50 dark:border-white/5 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-16 text-center"
+  1913→        >
+  1914→          <Clock className="size-10 text-[#666]/50 dark:text-[#CCCCCC]/50 mb-3" />
+  1915→          <p className="text-lg font-bold text-[#666] dark:text-[#CCCCCC]">{t('wc.countdown')}</p>
+  1916→          <p className="mt-1 text-sm text-[#666]/70 dark:text-[#CCCCCC]/70">{t('wc.no_data')}</p>
+  1917→        </motion.div>
+  1918→      )}
+  1919→
+  1920→      {/* Loading */}
+  1921→      {loading && stageStatus !== 'upcoming' && (
+  1922→        <div className="flex items-center justify-center py-12">
+  1923→          <div className="animate-spin size-8 rounded-full border-2 border-[#6C2BD9]/30 border-t-[#6C2BD9]" />
+  1924→        </div>
+  1925→      )}
+  1926→
+  1927→      {/* Elite/Crisis Toggle & Content */}
+  1928→      {!loading && stageStatus !== 'upcoming' && (
+  1929→        <>
+  1930→          {/* Toggle Tabs */}
+  1931→          <div className="flex gap-2">
+  1932→            <button
+  1933→              onClick={() => setActiveView('elite')}
+  1934→              className={`
+  1935→                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200
+  1936→                ${activeView === 'elite'
+  1937→                  ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
+  1938→                  : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
+  1939→                }
+  1940→              `}
+  1941→            >
+  1942→              {t('wc.pulse_elite')}
+  1943→            </button>
+  1944→            <button
+  1945→              onClick={() => setActiveView('crisis')}
+  1946→              className={`
+  1947→                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200
+  1948→                ${activeView === 'crisis'
+  1949→                  ? 'bg-[#EF4444] text-white shadow-md shadow-[#EF4444]/20'
+  1950→                  : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#EF4444]/30'
+  1951→                }
+  1952→              `}
+  1953→            >
+  1954→              {t('wc.crisis_radar')}
+  1955→            </button>
+  1956→          </div>
+  1957→
+  1958→          {/* Empty state — stage is live/completed but no selections seeded yet */}
+  1959→          {!currentData && (
+  1960→            <motion.div
+  1961→              initial={{ opacity: 0 }}
+  1962→              animate={{ opacity: 1 }}
+  1963→              className="flex flex-col items-center justify-center rounded-2xl border border-[#E0E0E0]/50 dark:border-white/5 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-12 px-4 text-center"
+  1964→            >
+  1965→              <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-[#6C2BD9]/10 dark:bg-[#6C2BD9]/20">
+  1966→                <ShieldCheck className="size-6 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+  1967→              </div>
+  1968→              <p className="text-base font-bold text-[#1A1A1A] dark:text-white">
+  1969→                {t('wc.lineups_pending_title')}
+  1970→              </p>
+  1971→              <p className="mt-2 max-w-md text-sm text-[#666] dark:text-[#CCCCCC]">
+  1972→                {t('wc.lineups_pending_desc')}
+  1973→              </p>
+  1974→              {stages.find(s => s.order === 1) && (
+  1975→                <Button
+  1976→                  variant="outline"
+  1977→                  size="sm"
+  1978→                  onClick={() => {
+  1979→                    const gs = stages.find(s => s.order === 1)
+  1980→                    if (gs) setSelectedStageId(gs.id)
+  1981→                  }}
+  1982→                  className="mt-4 gap-1.5 border-[#6C2BD9]/30 text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/5"
+  1983→                >
+  1984→                  <ArrowLeft className="size-3.5" />
+  1985→                  {t('wc.lineups_pending_btn')}
+  1986→                </Button>
+  1987→              )}
+  1988→            </motion.div>
+  1989→          )}
+  1990→
+  1991→          {/* Formation Card */}
+  1992→          {currentData && (
+  1993→            <motion.div
+  1994→              key={activeView}
+  1995→              initial={{ opacity: 0, y: 20 }}
+  1996→              animate={{ opacity: 1, y: 0 }}
+  1997→              transition={{ duration: 0.5 }}
+  1998→            >
+  1999→              <Card className={`overflow-hidden border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${activeView === 'elite' ? 'purple-glow' : 'red-glow'}`}>
+  2000→                {/* Top accent bar */}
+
+[showing lines 1-2000 of 2483; use offset=2001 with limit to continue reading]

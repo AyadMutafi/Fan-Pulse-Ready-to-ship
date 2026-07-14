@@ -8,7 +8,7 @@
  * through to Grok.
  */
 
-import type { ChatMessage, ChatResult } from '../chat'
+import type { ChatMessage, ChatResult } from '../types'
 
 const GROQ_BASE = 'https://api.groq.com/openai/v1'
 const DEFAULT_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant'

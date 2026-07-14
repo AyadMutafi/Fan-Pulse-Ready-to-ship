@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import TopHeader from '@/components/TopHeader'
 import Navigation, { type TabId } from '@/components/Navigation'
+import TransfersTab from '@/components/tabs/TransfersTab'
 import { useLanguage } from '@/context/LanguageContext'
 import { findNationalTeam, NATIONAL_TEAMS } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
@@ -2466,6 +2467,7 @@ export default function Home() {
                 {activeTab === 'goals' && <PausedTabOverlay tabName="Goals" />}
                 {activeTab === 'totw' && <PausedTabOverlay tabName="Team of the Week" />}
                 {activeTab === 'worldcup' && <WorldCupTab stages={stages} />}
+                {activeTab === 'transfers' && <TransfersTab />}
               </motion.div>
             </AnimatePresence>
           </main>

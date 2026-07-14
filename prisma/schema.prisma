@@ -274,3 +274,109 @@ model PlayerSentiment {
 
   @@index([monitorId])
 }
+
+// ── Transfer Pulse Models ────────────────────────────────────────────────────
+// Pre-season retention bridge between the WC 2026 final (Jul 19) and EPL
+// kickoff (mid-August). Tracks fan SENTIMENT around transfer rumors.
+//
+// ANTI-HALLUCINATION CONTRACT (enforced in src/lib/transfer-pulse/):
+//   - A rumor only enters the system if a Tier 1 journalist reported it
+//     (verified against TIER1_HANDLES in tier1-sources.ts).
+//   - Every card is labeled "RUMOR" in the UI.
+//   - "fanReadLikelihood" is a FAN READ of how likely fans think it is —
+//     NOT a prediction of whether the transfer will actually happen.
+//   - Debunked sagas are ARCHIVED (status="debunked"), never deleted, so the
+//     audit trail of what was reported and by whom is always preserved.
+//   - Every TransferPost carries a real source URL with a real hostname
+//     (x.com, reddit.com, etc.) — no fabricated content.
+
+/// A single transfer rumor (a "saga"). One per (playerName, toClubCode).
+model TransferSaga {
+  id                  String   @id @default(cuid())
+  playerName          String   // e.g. "Mohamed Salah"
+  playerNationCode    String   @default("") // ISO code e.g. "EGY" (display only)
+  fromClubCode        String   @default("") // e.g. "LIV"
+  fromClubName        String   @default("") // e.g. "Liverpool"
+  toClubCode          String   // e.g. "SAU" (Al-Hilal)
+  toClubName          String   // e.g. "Al-Hilal"
+  status              String   @default("active") // "active" | "completed" | "debunked"
+  feeReported         String   @default("") // e.g. "£150m" (display string, may be empty)
+  tier1Count          Int      @default(0) // number of distinct Tier 1 journalists reporting
+  fanReadLikelihood   Float    @default(50) // 0-100, FAN READ not prediction
+  buzzVolume          Int      @default(0) // total fan posts analyzed
+  buzzTrend           String   @default("stable") // "rising" | "stable" | "falling"
+  excitedPct          Float    @default(0) // 0-100
+  skepticalPct        Float    @default(0) // 0-100
+  dreadingPct         Float    @default(0) // 0-100
+  avgSentiment        Float    @default(50) // 0-100
+  firstReportedAt     DateTime @default(now())
+  lastUpdatedAt       DateTime @default(now())
+  resolvedAt          DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sources             TransferSource[]
+  posts               TransferPost[]
+  timeline            SentimentTimeline[]
+
+  @@unique([playerName, toClubCode])
+  @@index([status, buzzVolume])
+  @@index([status, lastUpdatedAt])
+}
+
+/// A Tier 1 journalist report that anchors a saga. A saga only exists because
+/// at least one of these was verified. URL is unique — same article never
+/// counted twice.
+model TransferSource {
+  id              String   @id @default(cuid())
+  sagaId          String
+  saga            TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
+  journalistName  String   // e.g. "Fabrizio Romano"
+  journalistHandle String  // e.g. "FabrizioRomano" (without @)
+  tier            Int      @default(1) // 1 = Tier 1 (always 1 in v1)
+  url             String   @unique // the real article/post URL
+  headline        String   @default("") // short headline / summary
+  outlet          String   @default("") // e.g. "The Athletic", "Sky Sports"
+  reportedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@index([sagaId])
+}
+
+/// A single fan post about a saga, scored for sentiment. URL is unique —
+/// same post never ingested twice across refreshes.
+model TransferPost {
+  id              String   @id @default(cuid())
+  sagaId          String
+  saga            TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
+  platform        String   // "twitter" | "reddit" | "web" | "instagram" | "youtube" | "facebook" | "tiktok"
+  author          String   @default("") // handle without @, or username
+  content         String   @default("") // verbatim or near-verbatim text
+  url             String   @unique // real source URL
+  sentimentScore  Float    @default(50) // 0-100
+  sentimentLabel  String   @default("neutral") // "excited" | "skeptical" | "dreading" | "neutral"
+  postedAt        DateTime @default(now())
+  analyzedAt      DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  @@index([sagaId, postedAt])
+  @@index([sagaId, sentimentLabel])
+}
+
+/// Daily sentiment snapshot for the 7-day timeline chart. One per (saga, date).
+model SentimentTimeline {
+  id              String   @id @default(cuid())
+  sagaId          String
+  saga            TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
+  date            String   // YYYY-MM-DD (SQLite-friendly; avoids TZ issues)
+  excitedPct      Float    @default(0) // 0-100
+  skepticalPct    Float    @default(0) // 0-100
+  dreadingPct     Float    @default(0) // 0-100
+  avgSentiment    Float    @default(50) // 0-100
+  postCount       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([sagaId, date])
+  @@index([sagaId, date])
+}

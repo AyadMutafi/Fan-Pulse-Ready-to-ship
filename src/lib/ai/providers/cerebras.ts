@@ -13,7 +13,7 @@
  * https://api.cerebras.ai/v1)
  */
 
-import type { ChatMessage, ChatResult } from '../chat'
+import type { ChatMessage, ChatResult } from '../types'
 
 const CEREBRAS_BASE = 'https://api.cerebras.ai/v1'
 const DEFAULT_MODEL = process.env.CEREBRAS_MODEL || 'llama3.1-8b'

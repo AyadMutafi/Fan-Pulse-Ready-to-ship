@@ -14,7 +14,7 @@
  */
 
 import ZAI from 'z-ai-web-dev-sdk'
-import type { ChatMessage, ChatResult } from '../chat'
+import type { ChatMessage, ChatResult } from '../types'
 
 let cachedZai: any = null
 

@@ -16,6 +16,7 @@ const tabTitles: Record<TabId, string> = {
   goals: 'Goals',
   totw: 'Team of the Week',
   worldcup: 'World Cup',
+  transfers: 'Transfer Pulse',
 }
 
 export default function TopHeader({ activeTab }: TopHeaderProps) {
