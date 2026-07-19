@@ -21,6 +21,7 @@ import { findNationalTeam, NATIONAL_TEAMS } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
 import FlagImage from '@/components/common/FlagImage'
 import { FanTalkPanel } from '@/components/FanTalkPanel'
+import { TournamentRetroModal } from '@/components/TournamentRetroTab'
 import { getPulseScoreColor, getPulseScoreColorClass } from '@/types'
 import { toast } from 'sonner'
 
@@ -1660,6 +1661,9 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
   const [loading, setLoading] = useState(false)
   const [activeView, setActiveView] = useState<'elite' | 'crisis'>('elite')
 
+  // Team of the Tournament retro modal (closure content).
+  const [showRetro, setShowRetro] = useState(false)
+
   // R32 stock-ticker state (only the live R32 stage polls + shows movement).
   const [buzzSource, setBuzzSource] = useState<'baseline' | 'live'>('baseline')
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
@@ -1872,10 +1876,21 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
         <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
           🏆 {t('wc.title')}
         </h2>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <p className="text-sm text-[#666] dark:text-[#CCCCCC]">{t('wc.new_stage')}</p>
+          <Button
+            size="sm"
+            onClick={() => setShowRetro(true)}
+            className="shrink-0 gap-1.5 text-[11px] font-bold h-8 rounded-lg bg-[#F59E0B] hover:bg-[#D97706] text-white shadow-sm"
+          >
+            <Trophy className="size-3" />
+            Team of the Tournament
+          </Button>
         </div>
       </motion.div>
+
+      {/* Team of the Tournament retro modal */}
+      <TournamentRetroModal open={showRetro} onOpenChange={setShowRetro} />
 
       {/* Stage Selector */}
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">

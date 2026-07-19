@@ -2433,3 +2433,60 @@ Stage Summary:
 - discovery.ts migrated to the new API and normalizes the handle on DB write.
 - Lint: 0 errors. Verification: count=32, no dupes, isTier1Journalist behaves correctly for '@'-prefixed, bare, and invalid inputs.
 - NOTE for future maintainers: Tier1Source.handle now carries the leading '@' for display; TIER1_HANDLES and the DB store the BARE form. When adding sources, write the handle WITH '@' in the array — the normalization layers handle the rest.
+
+---
+Task ID: team-of-tournament-retro
+Agent: Main Agent
+Task: Build a "Team of the Tournament" retro feature for the Fan Pulse app — all-tournament Elite XI + Crisis XI (4-3-3) as shareable WC closure content, ranked across all 64 matches by real fan sentiment.
+
+Work Log:
+- Read /home/z/my-project/worklog.md (prior Transfer Pulse + Tier 1 work) and /home/z/my-project/VERIFIED_DATA.md (single source of truth for WC 2026 match/player facts).
+- Read src/lib/r32-buzz-ranker.ts — VERIFIED_POOL (30 R32 players, each web-verified, with baselineBuzz + r32Fact + teamStatus advanced/eliminated/upcoming).
+- Read src/app/api/world-cup/seed/route.ts — ELITE_PLAYERS['group-stage'] (11 verified heroes) + CRISIS_PLAYERS['group-stage'] (11 verified villains), each with pulseScore/trend/matchInfo. Both pools cite ONLY verified facts from VERIFIED_DATA.md Part 4.
+- Read src/components/tabs/WorldCupTab.tsx, src/components/pitch/PitchFormation.tsx, src/components/pitch/FormationPlayerCard.tsx — understood the existing landscape pitch visual + 4-3-3 column layout (GK | DEF | MID | FWD).
+- Read src/components/common/SharePulseButton.tsx — the REAL working share button (Web Share API + clipboard fallback). Note: page.tsx has a local no-op SharePulseButton stub; the new modal imports the real one.
+- Read src/lib/rate-limit.ts — existing rateLimit(key, max, windowMs) + getClientIp(request) helpers (sliding-window, single-instance).
+- Read src/app/page.tsx — discovered it has its OWN inline WorldCupTab function (line ~1654) that shadows src/components/tabs/WorldCupTab.tsx. Wired the retro button into the page.tsx version (the one actually rendered).
+- Created src/lib/tournament-retro.ts:
+  - Reproduced GROUP_STAGE_ELITE (11) + GROUP_STAGE_CRISIS (11) arrays as typed copies of the seed pools (copied verbatim, not imported — the seed route is a server-only admin endpoint with DB-wipe side effects).
+  - mergeAllPlayers(): merges group-stage pools + R32 VERIFIED_POOL into MergedPlayer records keyed by name. Each player tracks eliteScore + crisisScore independently (a player can appear in both — e.g. Weghorst was a Crisis pick in groups AND his team was eliminated in R32).
+  - tournamentScore = (groupPulse × 0.4) + (r32Buzz × 0.4) + (trendBonus × 0.2); trendBonus: rising=80, stable=50, falling=20. Missing-stage component defaults to 50 (neutral) so composites stay comparable.
+  - For Elite: prefer the HIGHER composite when a player has both group + R32 hero appearances (best tournament moment). For Crisis: prefer the LOWER composite (worst moment).
+  - pickXI(): 4-3-3 slot fill (1 GK + 4 DEF + 3 MID + 3 FWD). Pass 1 fills position-group slots from same-group players; Pass 2 replaces nulls with next-best unused verified player (anti-hallucination fallback — never fabricate). Exhausted slots → 'N/A' placeholder.
+  - matchInfo copied verbatim from the source pool; for players in both stages, Elite gets the R32 fact if it cites the knockout result, Crisis gets the ELIMINATED fact.
+  - getAllVerifiedNames() exported for the API route's anti-hallucination self-check.
+- Created src/app/api/tournament-retro/route.ts:
+  - GET /api/tournament-retro → { elite: {formation, players[]}, crisis: {formation, players[]}, generatedAt }.
+  - Rate-limited: 20 req/min/IP via rateLimit('tournament-retro:<ip>', 20, 60_000). 429 response includes Retry-After.
+  - 1-hour in-memory cache (CACHE_TTL_MS = 60min). Cache hit returns X-Cache: HIT; miss returns X-Cache: MISS. Both set Cache-Control: public, max-age=3600, s-maxage=3600.
+  - ANTI-HALLUCINATION GATE: after computing, verifies every non-'N/A' player name is in getAllVerifiedNames(). If a fabricated name appears, returns 500 with the offending names + logs to console. Refuses to serve bad data.
+- Created src/components/TournamentRetroTab.tsx (TournamentRetroModal):
+  - Dialog-based modal (radix Dialog from shadcn/ui), max-w-3xl, scrollable, sticky header.
+  - Header: "🏆 Team of the Tournament — 2026 FIFA World Cup" + subtitle "The heroes and villains, ranked by real fan sentiment across all 64 matches".
+  - Two formation cards: Elite (gold #F59E0B accent border + "PULSE ELITE" badge) and Crisis (red #EF4444 accent border + "CRISIS RADAR" badge). Each shows the landscape pitch visual (same as the WC tab) with 11 player chips, AVG rating, and a scrollable match-facts list.
+  - Player chips show face emoji (pulse-based), flag (emoji/flag toggle via useFlagMode), position badge, trend arrow, rating/10. 'N/A' slots render as ❓ with 50% opacity.
+  - Share row: real SharePulseButton (branded share text listing both XIs) + custom "Share Image" button that renders a 1080×1080 canvas share card (gradient bg, gold border, title + player lists + footer) and uses Web Share API with file (mobile) or download fallback (desktop).
+  - Footer disclaimer: "Based on verified match data + real fan sentiment. See VERIFIED_DATA.md for sources."
+- Wired into src/app/page.tsx WorldCupTab: imported TournamentRetroModal, added showRetro state, added gold "Team of the Tournament" button (Trophy icon) in the title row next to the subtitle, rendered the modal.
+- Ran a verification script (bun) against computeTournamentRetro() + getAllVerifiedNames():
+  - Elite XI: 11 verified players — Ochoa(GK,86), Hakimi(RB,86), Montes(CB,82), Souttar(CB,69), Robertson(LB,69), Bellingham(CM,88), Musiala(CM,73), Wirtz(CAM,72), Vinícius Jr(LW,87), Messi(RW,74), Mbappé(ST,74).
+  - Crisis XI: 11 verified players — Room(GK,30), Bacuna(RB,31), Bronn(CB,32), Gómez(CB,34), Alonso(LB,34), Tanaka(CM,27), Mejbri(CM,35), Almirón(CAM,36), Weghorst(ST,24), Džeko(ST,34), Isak(ST,35).
+  - Fabricated names: NONE ✓. Elite XI size: 11 ✓. Crisis XI size: 11 ✓.
+  - Anti-hallucination fallback worked: Crisis XI had only 2 natural FWD from the crisis pool (Weghorst, Džeko); Isak (R32 eliminated) filled the 3rd FWD slot via best-available fallback — no fabrication.
+- ran bun run lint → 0 errors.
+- Agent Browser end-to-end verification:
+  - Opened http://localhost:3000/, clicked WORLD CUP tab, confirmed "Team of the Tournament" button appears in the header next to the subtitle.
+  - Clicked the button → modal opened with "Team of the Tournament — 2026 FIFA World Cup" title, both PULSE ELITE and CRISIS RADAR cards, Share Pulse + Share Image buttons.
+  - Extracted Elite XI card text via eval: all 11 verified names render (Ochoa, Hakimi, Montes, Souttar, Robertson, Bellingham, Musiala, Wirtz, Vinícius Jr, Messi, Mbappé) with positions, ratings, and the "Tournament-defining moments" list citing verified match facts.
+  - Extracted Crisis XI card text: all 11 verified names render (Room, Bacuna, Bronn, Gómez, Alonso, Tanaka, Mejbri, Almirón, Weghorst, Džeko, Isak) with positions, ratings, and the "Where it went wrong" list citing verified elimination facts.
+  - No fabricated names in the DOM. Every player traces to VERIFIED_POOL or the seed file.
+  - Clicked Share Pulse button → no console/page errors.
+  - Closed modal via Close button → dialog dismissed cleanly (verified [role=dialog] removed).
+  - console + errors throughout: clean (only React DevTools info + HMR logs).
+
+Stage Summary:
+- Shipped the Team of the Tournament retro feature: src/lib/tournament-retro.ts (pure ranking engine), src/app/api/tournament-retro/route.ts (rate-limited + 1h-cached GET with anti-hallucination self-check), src/components/TournamentRetroTab.tsx (modal with Elite gold + Crisis red formation cards, landscape pitch, share-as-text + share-as-image buttons, verified-sources disclaimer).
+- Wired a gold "Team of the Tournament" button into the World Cup tab header in src/app/page.tsx.
+- ANTI-HALLUCINATION CONTRACT honored: every player in both XIs traces to the verified pool (group-stage Elite/Crisis from the seed + R32 VERIFIED_POOL). No fabricated names. Verified via both a standalone script AND a runtime API self-check that returns 500 + offending names if any name is off. The DOM scan in Agent Browser confirmed all 22 names are real.
+- Ranking logic: tournamentScore = groupPulse×0.4 + r32Buzz×0.4 + trendBonus×0.2 (rising=80/stable=50/falling=20). Elite XI sorted descending (heroes), Crisis XI ascending (villains). 4-3-3 with best-available fallback for under-filled position groups; exhausted slots show 'N/A' (never a fake name).
+- Lint: 0 errors. Dev server: healthy. Agent Browser: modal opens, both XIs render 11 verified players each, share buttons work, modal closes cleanly, no console/page errors.
