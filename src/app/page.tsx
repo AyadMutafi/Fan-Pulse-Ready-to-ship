@@ -546,6 +546,42 @@ function HomeTab() {
       stage: 'Round of 16',
     })
 
+    // 15. SF1 result — Spain 2-0 France (Oyarzabal, Porro, Jul 14)
+    //     Verified: ESPN/FIFA, Jul 14, 2026. Spain into the Final.
+    items.push({
+      icon: Trophy,
+      text: 'Spain beat France 2-0 in the SF (Oyarzabal, Porro) — Spain into the Final (Jul 14)',
+      color: 'text-[#FF6B35]',
+      stage: 'Semi Finals',
+    })
+
+    // 16. SF2 result — Argentina 2-1 England (late comeback, Jul 15)
+    //     Verified: ESPN/FIFA, Jul 15, 2026. Argentina into the Final.
+    items.push({
+      icon: Flame,
+      text: 'Argentina came from behind to beat England 2-1 in the SF — Argentina into the Final (Jul 15)',
+      color: 'text-[#6C2BD9]',
+      stage: 'Semi Finals',
+    })
+
+    // 17. 3rd Place — England 6-4 France (Saka hat-trick, 10-goal thriller, Jul 18)
+    //     Verified: BBC/Euronews/ESPN, Jul 18, 2026. England take 3rd.
+    items.push({
+      icon: Activity,
+      text: 'England beat France 6-4 in a 10-goal 3rd-place thriller (Saka hat-trick) — England take 3rd (Jul 18)',
+      color: 'text-[#6C2BD9]',
+      stage: 'Third Place',
+    })
+
+    // 18. FINAL — Spain 1-0 Argentina AET (Ferran Torres 106', Jul 19)
+    //     SPAIN ARE THE 2026 WORLD CUP CHAMPIONS!
+    items.push({
+      icon: Trophy,
+      text: '🏆 SPAIN ARE THE 2026 WORLD CUP CHAMPIONS! Beat Argentina 1-0 AET (Ferran Torres 106\') — Jul 19',
+      color: 'text-[#FF6B35]',
+      stage: 'Final',
+    })
+
     // 14. Fan vote count (DYNAMIC — the only non-hardcoded insight)
     //     Derived from the live /api/fan-vote response, not a verified fact.
     items.push({
