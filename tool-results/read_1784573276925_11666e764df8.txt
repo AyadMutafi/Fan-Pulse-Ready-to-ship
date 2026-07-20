@@ -1,0 +1,358 @@
+  2543→Task ID: 1
+  2544→Agent: general-purpose (Spain research)
+  2545→Task: Research Spain WC 2026 — SF vs FRA + Final vs ARG player ratings, tweet sentiment
+  2546→
+  2547→Work Log:
+  2548→- Read /home/z/my-project/worklog.md (most recent 200 lines) to understand prior context: previous agent had verified Spain as 2026 WC champions (ESP 1-0 ARG AET, Ferran Torres 106'), the bracket structure, and the app's hand-curated Elite/Crisis XIs in scripts/complete-tournament.ts.
+  2549→- Read scripts/complete-tournament.ts (lines 40-149): extracted app's FINAL_ELITE (11 Spain players with pulseScores) and SF_ELITE (mixed Spain+Argentina) for cross-checking.
+  2550→- Created /home/z/my-project/research/ folder.
+  2551→- Ran 17 targeted z-ai web_search calls via Bash, saving each raw JSON to its own file. Topics:
+  2552→  1. spain-final-ratings.json — Sofascore/ESPN Final player ratings
+  2553→  2. spain-ferran-torres.json — Ferran Torres 106' AET winner
+  2554→  3. spain-rodri-golden-ball.json — Rodri Golden Ball
+  2555→  4. spain-yamal-young-player.json — Lamine Yamal Young Player (sources revealed Cubarsí actually won)
+  2556→  5. spain-unai-simon.json — Unai Simón clean-sheet record
+  2557→  6. spain-sf-ratings.json — Sofascore SF Spain-France ratings
+  2558→  7. spain-champion-squad.json — Spain WC 2026 champion squad roster
+  2559→  8. spain-tweet-reactions.json — Messi tweet / Final social-media reaction
+  2560→  9. spain-sf-all-ratings.json — Full SF Sofascore Spain ratings (SI.com, chaseyoursport, BBC)
+  2561→  10. spain-carvajal-injury.json — Carvajal ruled out of WC 2026 squad (ACL)
+  2562→  11. spain-final-lineup.json — Confirmed Spain Final starting XI (SI.com, Yahoo, LWOS, WhoScored)
+  2563→  12. spain-cubarsi-award.json — Cubarsí = real FIFA Young Player winner (FIFA.com)
+  2564→  13. spain-ferran-tweets.json — Ferran Torres fan sentiment
+  2565→  14. spain-yamal-tweets.json — Lamine Yamal fan sentiment
+  2566→  15. spain-rodri-tweets.json — Rodri fan sentiment
+  2567→  16. spain-unai-tweets.json — Unai Simón fan sentiment
+  2568→  17. spain-nico-injury.json — Nico Williams injury status
+  2569→- Parsed all 17 JSON outputs: extracted verified lineups, per-player Sofascore/Goal.com/SI.com ratings, award winners, and fan-sentiment snippets.
+  2570→- Ran z-ai chat for sentiment synthesis: passed consolidated snippets for 5 Spain players (Rodri, Yamal, Ferran, Unai, Nico) to a sentiment-analysis system prompt. Got per-player sentiment labels + recurring themes.
+  2571→- Cross-checked app's FINAL_ELITE (11 Spain players in scripts/complete-tournament.ts) against real-world data: identified 3 MAJOR discrepancies + 2 MEDIUM discrepancies.
+  2572→- Wrote final report to /home/z/my-project/research/spain-report.md (8 sections: verified Final XI, per-player Final ratings, per-player SF ratings, tweet/sentiment summary, comparison table vs app, 3-bullet trend summary, files produced, critical flags for app maintainer).
+  2573→
+  2574→Stage Summary:
+  2575→- VERIFIED FACTS (multiple Tier-1 sources, Jul 19-20 2026):
+  2576→  * Spain are 2026 WC Champions (ESP 1-0 ARG AET, Ferran Torres 106' — substitute scorer). Title #2 for Spain (first since 2010).
+  2577→  * Confirmed Final starting XI (4-2-3-1): Unai Simón; Pedro Porro, Pau Cubarsí, Aymeric Laporte, Marc Cucurella; Rodri, Fabián Ruiz; Lamine Yamal, Dani Olmo/Álex Baena (sources split), Mikel Oyarzabal; (LW not Nico Williams). Ferran Torres = sub.
+  2578→  * FIFA award winners: Golden Ball=Rodri, Golden Glove=Unai Simón (7 clean sheets, record), Best Young Player=PAU CUBARSI (NOT Lamine Yamal — FIFA.com official), Golden Boot=Mbappé.
+  2579→  * SF (ESP 2-0 FRA): goals by Oyarzabal + Porro. Sofascore: Porro 8.1 (MVP), Cubarsí 7.4, Laporte 7.2, Rodri 7.2 (halftime); Mbappé 6.1.
+  2580→
+  2581→- 🚨 DISCREPANCIES FLAGGED (app vs reality):
+  2582→  1. MAJOR — Dani Carvajal (RB 88) is in app's FINAL_ELITE & SF_ELITE, but Carvajal was NOT in Spain's WC 2026 squad at all (ACL injury Oct 2024; ruled out by De la Fuente; Guardian: "Zero Real Madrid players in Spain WC squad"). Real RB was PEDRO PORRO (Goal.com Final 7/10; Sofascore SF 8.1 + scored).
+  2583→  2. MAJOR — App credits Lamine Yamal as "Best Young Player" in FINAL_ELITE matchInfo. WRONG — Pau Cubarsí won the FIFA Young Player Award (FIFA.com, NYT, FC Barcelona, Fox Sports).
+  2584→  3. MAJOR — App lists Nico Williams as starting LW (88). WRONG — Williams was hampered by hamstring+groin injury from group stage (Uruguay match); did NOT start the Final (Yahoo, Athlonsports, SportingNews).
+  2585→  4. MEDIUM — App lists Pedri as starting CM (89). WRONG — Pedri was BENCHED in Final (Instagram: "Pedri starts from the bench"); lost his place to Fabián Ruiz (Yahoo/Iniesta interview); came on as sub at 78' in SF (AS.com).
+  2586→  5. MEDIUM — App lists Ferran Torres as starting ST (96). WRONG positionally — Torres was a SUBSTITUTE (ESPN, Reuters, CNBC, PBS, Olympics.com all say "substitute Torres"); scored the 106' AET winner. Defensible to include in Elite XI as match hero, but app should flag he was a sub.
+  2587→
+  2588→- ANTI-HALLUCINATION — stale/discarded snippets:
+  2589→  * Instagram post conflating Yamal's Euro 2024 Young Player Award with WC 2026 — DISCARDED (FIFA.com confirms Cubarsí won WC 2026).
+  2590→  * Sky Sports Facebook lineup mislabeled as Argentina (actually Spain's XI) with errors (Huijsen not in squad per Guardian; Torres listed as starter) — DISCARDED as unreliable.
+  2591→  * 2021 "Argentina 3-2 Spain" tweet that went viral post-Final — DISCARDED as a meme, not a fact (actual score was ESP 1-0 ARG AET).
+  2592→  * Wikipedia "He also won the tournament's Young Player Award" for Yamal — DISCARDED as ambiguous (could refer to Euro 2024).
+  2593→
+  2594→- SENTIMENT (z-ai chat synthesis): Rodri=POSITIVE (Golden Ball, "best midfielder/all-timer"); Yamal=POSITIVE (consoling-Messi embrace went viral, generational respect); Ferran Torres=POSITIVE redemption arc ("answers critics, feeling of liberation"); Unai Simón=POSITIVE (Golden Glove, record 7 clean sheets); Nico Williams=NEGATIVE (injury sympathy, didn't start).
+  2595→
+  2596→- FILES PRODUCED:
+  2597→  * /home/z/my-project/research/spain-report.md (final deliverable — 8 sections)
+  2598→  * /home/z/my-project/research/spain-*.json (17 raw search outputs, ~40 KB total)
+  2599→
+  2600→- NEXT ACTIONS for app maintainer (no code changes made — research only):
+  2601→  * Replace Dani Carvajal with Pedro Porro in both FINAL_ELITE and SF_ELITE.
+  2602→  * Re-attribute "Best Young Player" credit from Lamine Yamal to Pau Cubarsí in FINAL_ELITE matchInfo.
+  2603→  * Demote Pedri from starting CM (or annotate as benched/sub).
+  2604→  * Annotate Ferran Torres as substitute (not starter).
+  2605→  * Annotate Nico Williams as injury-hampered, didn't start Final.
+  2606→
+  2607→---
+  2608→Task ID: 2
+  2609→Agent: general-purpose (Argentina research)
+  2610→Task: Research Argentina WC 2026 — SF vs ENG + Final vs ESP player ratings, tweet sentiment
+  2611→
+  2612→Work Log:
+  2613→- Read /home/z/my-project/worklog.md (most recent ~110 lines, lines 2500-2606) to understand prior context: Task ID 1 (Spain research) had just been completed, Spain verified as 2026 WC Champions (ESP 1-0 ARG AET, Ferran Torres 106'), and the app's hand-curated Elite/Crisis XIs in scripts/complete-tournament.ts (FINAL_CRISIS = 11 Argentina players, SF_ELITE = 4 Argentina players among Spain) needed cross-checking against real-world data.
+  2614→- Read /home/z/my-project/research/spain-report.md (174 lines) to avoid duplicating Spain-side work — Spain's Final XI, ratings, award winners (Rodri Golden Ball, Unai Simón Golden Glove, Cubarsí Young Player), and the 5 Spain discrepancies are already documented there. Argentina side was open.
+  2615→- Read /home/z/my-project/scripts/complete-tournament.ts (lines 47-134) to extract app's Argentina picks: SF_ELITE Argentina = Cristian Romero (CB), Rodrigo De Paul (CM), Lionel Messi (CAM), Julián Álvarez (ST); FINAL_CRISIS Argentina (all 11) = Emiliano Martínez (GK), Nahuel Molina (RB), Cristian Romero (CB), Nicolás Otamendi (CB), Marcos Acuña (LB), Rodrigo De Paul (CM), Enzo Fernández (CM), Lionel Messi (CAM), Ángel Di María (LW), Lautaro Martínez (RW), Julián Álvarez (ST).
+  2616→- Created research/ folder (already existed from Task ID 1).
+  2617→- Ran 16 targeted z-ai web_search calls via Bash (the 8 mandatory + 8 supplementary to nail down the full Final XI and squad status), saving each raw JSON to its own file:
+  2618→  1. argentina-final-ratings.json — Sofascore/ESPN Final player ratings (Emi 9.6, Messi 3/10)
+  2619→  2. argentina-messi-final.json — Messi WC Final 2026 performance (3/10, "last dance", 10-man Argentina)
+  2620→  3. argentina-sf-england.json — Sofascore SF Messi 8.0 + 2 assists + Lautaro 90+2 winner
+  2621→  4. argentina-emiliano.json — Emi Martínez 9.6, 11-save all-time WC Final record
+  2622→  5. argentina-alvarez-sf.json — Julián Álvarez QF "screamer" vs Switzerland (NOT SF)
+  2623→  6. argentina-squad.json — Argentina WC 2026 26-man squad (Di María absent)
+  2624→  7. argentina-messi-retirement.json — Messi "Last Tango" Adidas IG posts + retirement hints
+  2625→  8. argentina-fan-reactions.json — Buenos Aires fan reactions, Milei scheduled tweet, viral 5-yr-old tweet
+  2626→  9. argentina-final-lineup.json — Confirmed Final XI (4-4-2: Montiel, Lisandro Martínez, Tagliafico, etc.)
+  2627→  10. argentina-dimaria.json — Di María NOT in WC 2026 squad (retired after Copa America 2024)
+  2628→  11. argentina-red-card.json — Enzo Fernández 93' red card + post-match Paredes/Molina brawl
+  2629→  12. argentina-lautaro.json — Mirror Football Lautaro 4/10 + multi-source Argentina Final ratings
+  2630→  13. argentina-final-xi-full.json — Full Final XI (Messi, Álvarez, Nico González confirmed starters; Mac Allister)
+  2631→  14. argentina-final-all-ratings.json — Multi-source Final Argentina ratings (ESPN/Goal/SI/Athlonsports/Allfootball/Mirror)
+  2632→  15. argentina-sf-all-ratings.json — Sofascore Messi 8.0-8.2 SF + tournament 9.03 Sofascore leaderboard
+  2633→  16. argentina-otamendi-acuna.json — Otamendi in squad (benched Final); Acuña status unclear; Di María retired
+  2634→- Parsed all 16 JSON outputs: extracted verified Final XI (4-4-2), per-player Sofascore/ESPN/Goal.com/SI.com/Athlonsports/Allfootball/Mirror ratings, SF goalscorers (FIFA.com: Enzo 85', Lautaro 90+2', Messi 2 assists), red card (Enzo 93'), Di María retirement status, and fan-sentiment snippets.
+  2635→- Ran z-ai chat for sentiment synthesis: passed consolidated snippets for 4 Argentina players (Messi, Emi Martínez, Álvarez, De Paul) to a sentiment-analysis system prompt ("Classify sentiment + identify recurring themes + flag stale tweets referencing other tournaments or matches Messi didn't play in"). Output saved to argentina-sentiment-synthesis.json. Got per-player sentiment labels + recurring themes + (model-reported) no stale snippets — but I manually added 6 stale/discarded snippets the model missed (Di María 2022 Real Madrid letter quote, fake Facebook fan XI matching the app's data, garbled Sofascore SF snippet, mid-tournament Messi stat graphic, etc.).
+  2636→- Cross-checked app's FINAL_CRISIS (11 Argentina players) AND SF_ELITE (4 Argentina players) against real-world data: identified 1 CRITICAL + 5 MAJOR + 2 MEDIUM discrepancies in FINAL_CRISIS, plus 2 MAJOR discrepancies in SF_ELITE.
+  2637→- Wrote final report to /home/z/my-project/research/argentina-report.md (9 sections: verified Final XI, per-player Final ratings, per-player SF ratings, tweet/sentiment summary, comparison table vs app's FINAL_CRISIS, bonus comparison vs app's SF_ELITE, 3-bullet trend summary, files produced, critical flags for app maintainer).
+  2638→
+  2639→Stage Summary:
+  2640→- VERIFIED FACTS (multiple Tier-1 sources, Jul 15-20 2026):
+  2641→  * Argentina are 2026 WC RUNNER-UP (lost Final 0-1 AET to Spain, Ferran Torres 106'). 10-man Argentina after Enzo Fernández 93' red card (2nd yellow, challenge on Cubarsí).
+  2642→  * SF (ENG 1-2 ARG, Jul 15, Atlanta): Argentina goals = Enzo Fernández (85') + Lautaro Martínez (90+2'). Messi had 2 assists (Sofascore 8.0, MOTM). England led 1-0 ~84 min before late Argentina comeback.
+  2643→  * Confirmed Final starting XI (4-4-2 per SI.com/SportingNews/Yahoo/ESPN): Emiliano Martínez; Gonzalo Montiel, Cristian Romero, Lisandro Martínez, Nicolás Tagliafico; Rodrigo De Paul, Alexis Mac Allister (likely), Enzo Fernández; Nico González, Lionel Messi, Julián Álvarez. Lautaro Martínez came off bench (Mirror 4/10 "disappearing act").
+  2644→  * Argentina made 3 changes for the Final (vs SF): Gonzalo Montiel, Nico González, Rodrigo De Paul came INTO the XI (ESPN/Yahoo).
+  2645→  * Ángel Di María was NOT in Argentina's WC 2026 squad — retired from international football after Copa América 2024 (FIFA.com, OpenTheMagazine, Foot-Africa, Squawka, Reddit). Sent emotional message to squad AFTER the Final loss (Goal.com).
+  2646→  * Otamendi WAS in 26-man squad (ESPN Argentina 2026 squad page) but BENCHED for the Final. Acuña's squad status unclear from snippets (likely benched or not in 26); Tagliafico started at LB.
+  2647→
+  2648→- PLAYER RATINGS (Final vs Spain):
+  2649→  * Emi Martínez: Sofascore 9.6 (MOTM), ESPN 9/10 (highest on pitch), 11 saves (all-time WC Final record), 1.76-1.81 goals prevented.
+  2650→  * Messi: ESPN 3/10 (lowest on pitch), "had little impact as Argentina barely approached Spain's goal". Tournament avg Sofascore 9.03 (highest in WC 2026); 8 goals 4 assists; broke Klose's all-time WC scoring record; was leading Golden Boot race before Final.
+  2651→  * Montiel: ESPN 6/10, Allfootball 5, Yahoo 5. Romero: ESPN 7, Allfootball 6, Athlonsports 6.5. Lisandro Martínez: Allfootball 4, Athlonsports 6.5. Tagliafico: ESPN 7, Allfootball 6, Athlonsports 6.5. De Paul: Allfootball 5. Álvarez: Mirror 5/10. Lautaro (sub): Mirror 4/10. Enzo: red card 93'. Mac Allister & Nico González: ratings NOT FOUND.
+  2652→  * Messi SF: Sofascore 8.0 (MOTM), 2 assists, 4 key passes, 94 touches, 9/11 dribbles. (AFA Facebook also reported 8.2 with note of a penalty miss.)
+  2653→
+  2654→- 🚨 DISCREPANCIES FLAGGED — FINAL_CRISIS (app vs reality):
+  2655→  1. CRITICAL — Ángel Di María (LW 40) is in app's FINAL_CRISIS, but Di María was NOT in WC 2026 squad AT ALL (retired after Copa America 2024). Real starting FW = Nico González (one of 3 confirmed changes).
+  2656→  2. MAJOR — Nahuel Molina (RB 40) did NOT start Final. Real RB = Gonzalo Montiel (ESPN 6/10). Molina only appeared in post-match brawl.
+  2657→  3. MAJOR — Nicolás Otamendi (CB 40) did NOT start Final. Real CB = Lisandro Martínez. Otamendi was in squad but benched.
+  2658→  4. MAJOR — Marcos Acuña (LB 41) did NOT start Final. Real LB = Nicolás Tagliafico (ESPN 7/10). Acuña's squad status unclear.
+  2659→  5. MAJOR — Lautaro Martínez (RW 41) did NOT start Final at RW — came off bench (Mirror 4/10 "disappearing act"). Real starting forwards = Messi, Álvarez, Nico González.
+  2660→  6. MAJOR (inverted pulse) — Emiliano Martínez (GK 42, falling) was the MOTM (Sofascore 9.6, 11-save all-time WC Final record). Listing him as a "crisis" player with falling pulse is the opposite of reality.
+  2661→  7. MEDIUM — Enzo Fernández matchInfo is generic ("10-man Argentina") — should mention his 93' red card AND his SF 85' equalizer.
+  2662→  8. MEDIUM — Messi matchInfo ("dethroned as defending champions") misses tournament-GOAT context (Sofascore 9.03 highest in WC 2026; 8 goals 4 assists; broke Klose record).
+  2663→  → 5 of 11 app picks are factually wrong (wrong starter or fabricated); 1 has inverted pulse; only 5 of 11 fully correct (Romero, De Paul, Enzo, Messi, Álvarez — and even those have matchInfo gaps).
+  2664→  → 5 real-world Argentina Final starters are MISSING from app's FINAL_CRISIS: Gonzalo Montiel, Lisandro Martínez, Nicolás Tagliafico, Alexis Mac Allister, Nicolán González.
+  2665→
+  2666→- 🚨 DISCREPANCIES FLAGGED — SF_ELITE (Argentina portion, 4 players):
+  2667→  1. MAJOR — Rodrigo De Paul (CM 86) did NOT start SF — he was one of the 3 changes brought INTO the Final XI (ESPN/Yahoo), implying he was benched in SF. App lists him as SF starter.
+  2668→  2. MAJOR — Julián Álvarez (ST 88) matchInfo "scored in the comeback" is factually WRONG. SF goals were Enzo Fernández (85') and Lautaro Martínez (90+2'); Messi had 2 assists. Álvarez's WC 2026 "screamer" was in the QF vs Switzerland (112' per ESPN/Yahoo/NYT), not the SF.
+  2669→  → App's SF_ELITE also misses Enzo Fernández and Lautaro Martínez, the two actual SF goalscorers.
+  2670→
+  2671→- ANTI-HALLUCINATION — stale/discarded snippets:
+  2672→  * Di María "Real Madrid letter" quote recirculated post-Final = from 2022 WC Final (vs France), NOT WC 2026. DISCARDED as stale.
+  2673→  * Fake Facebook fan XI "Martínez; Acuña, Otamendi, Romero, Molina; De Paul, Enzo, Mac Allister; Messi, Álvarez, Di María" = fabricated; matches the app's FINAL_CRISIS almost exactly — strong indicator the app's data was seeded from a stale/wrong fan lineup, not a verified Tier-1 source. FLAGGED as unreliable.
+  2674→  * Sofascore SF snippet "Lionel Messi scored the first goal in the 29th minute, England led 1-0 for 84 minutes" = internally contradictory/garbled. DISCARDED. FIFA.com authoritative match report: Argentina goals = Enzo Fernández (85'), Lautaro Martínez (90+2').
+  2675→  * Facebook fozzfootball post dated Jul 19 2026 congratulating Messi for "2-1 victory over England" = SF-result post recirculated on Final day. FLAGGED as contextually stale.
+  2676→  * Facebook mundoalbiceleste Di María "Copa América next year will mark his final appearance" = 2024 Copa América retirement cycle, recirculated post-Final. DISCARDED as stale.
+  2677→  * Instagram "Messi World Cup 2026 So Far — 7 Goals, 4 Matches, 8.9 Average Rating" (Jul 20) = mid-tournament stat graphic (after 4 matches), not Final/full-tournament. FLAGGED as mid-tournament snapshot (full-tournament Sofascore avg was 9.03).
+  2678→
+  2679→- SENTIMENT (z-ai chat synthesis + manual review):
+  2680→  * Messi = NEGATIVE for Final (3/10, "false goat", "didn't show up when it mattered", "participation trophy", ESPN FC "complete and utter disgrace") / POSITIVE for SF + tournament body of work (GOAT, 9.03 Sofascore, 8 goals 4 assists, broke Klose record) / MIXED on retirement ("The Last Tango" IG post, "It's just not meant to be for me", fans mourning possible end of career).
+  2681→  * Emi Martínez = STRONGLY POSITIVE (9.6 MOTM, 11-save record, "greatest WC goalkeeping performance ever", universally defended despite loss).
+  2682→  * Julián Álvarez = NEUTRAL/mixed (started Final, Mirror 5/10; highlight reel is the QF vs SUI screamer, not SF/Final).
+  2683→  * Rodrigo De Paul = NEUTRAL (Allfootball 5/10; low social volume; many fans wrongly assumed he started the SF).
+  2684→
+  2685→- FILES PRODUCED:
+  2686→  * /home/z/my-project/research/argentina-report.md (final deliverable — 9 sections, ~10 KB)
+  2687→  * /home/z/my-project/research/argentina-*.json (16 raw search outputs + 1 sentiment synthesis, ~65 KB total)
+  2688→
+  2689→- NEXT ACTIONS for app maintainer (no code changes made — research only):
+  2690→  1. Remove Ángel Di María from FINAL_CRISIS (not in WC 2026 squad — retired after Copa America 2024). Replace with Nicolás González (real starting FW) or Alexis Mac Allister.
+  2691→  2. Replace Argentina back four in FINAL_CRISIS: Molina→Montiel (RB), Otamendi→Lisandro Martínez (CB), Acuña→Tagliafico (LB). Add Enzo Fernández red-card context.
+  2692→  3. Fix Lautaro Martínez role in FINAL_CRISIS (sub, not RW starter; credit his SF 90+2' winner somewhere).
+  2693→  4. Fix Emiliano Martínez pulse score in FINAL_CRISIS (he was MOTM 9.6 Sofascore — listing him as crisis/falling is inverted).
+  2694→  5. Fix SF_ELITE: remove Rodrigo De Paul (benched in SF) and fix Julián Álvarez matchInfo (didn't score in SF — his screamer was QF vs SUI). Add Enzo Fernández and Lautaro Martínez to SF_ELITE as the real SF goalscorers.
+  2695→  6. Add Messi tournament-GOAT context to FINAL_CRISIS matchInfo (Sofascore 9.03, 8 goals 4 assists, broke Klose record — then 3/10 Final).
+  2696→  7. Re-seed Argentina's Final XI from SI.com/SportingNews/ESPN confirmed lineups (the app's current XI matches a fake fan-XI Facebook post).
+  2697→
+  2698→---
+  2699→Task ID: 3
+  2700→Agent: general-purpose (England research)
+  2701→Task: Research England WC 2026 — SF vs ARG + 3rd place vs FRA player ratings, tweet sentiment
+  2702→
+  2703→Work Log:
+  2704→- Read /home/z/my-project/worklog.md (most recent ~190 lines, lines 2490-2697) to understand prior context: Task IDs 1 (Spain) and 2 (Argentina) had just been completed. Both flagged MAJOR discrepancies in app's Elite/Crisis XIs (Spain: Carvajal ACL not in squad; Argentina: Di María retired 2024 not in squad, back four entirely wrong). The pattern across both: app data appeared seeded from stale/fabricated fan-XI Facebook posts, not Tier-1 sources. The app's hand-curated XIs in scripts/complete-tournament.ts (SF_CRISIS England = 4 players, THIRD_ELITE = 11 players incl. Mbappé) needed cross-checking against real-world data.
+  2705→- Read /home/z/my-project/research/spain-report.md (174 lines) and /home/z/my-project/scripts/complete-tournament.ts (310 lines) to extract app's England picks: SF_CRISIS = John Stones (CB 40), Declan Rice (CM 41), Jude Bellingham (RW 42), Harry Kane (ST 41); THIRD_ELITE = Pickford (GK 80), Walker (RB 78), Stones (CB 79), Guéhi (CB 78), Shaw (LB 79), Rice (CM 82), Bellingham (CM 87 "breakaway goal"), Foden (CAM 83 "playmaker"), Saka (RW 95 "HAT-TRICK, 87' pen"), Mbappé (LW 86 "broke all-time WC scoring record"), Kane (ST 84 "scored").
+  2706→- Created research/ folder (already existed from Tasks 1 & 2).
+  2707→- Ran 16 targeted z-ai web_search calls via Bash (the 8 mandatory + 8 supplementary to nail down the SF/3rd-place XIs, Saka's exact goal times, Bellingham's position, Kane's status, Mbappé's Sofascore rating, Foden/Shaw/Walker squad status, the SF goal scorer). Saved each raw JSON to its own file:
+  2708→  1. england-sf-ratings.json — Sofascore SF Messi 8.0 + tournament top-5 leaderboard (Bellingham 7.76)
+  2709→  2. england-3rd-ratings.json — Sofascore 3rd place preview + Mbappé position-by-position
+  2710→  3. england-saka-hat-trick.json — Saka hat-trick vs France (People, BBC, Chicago Tribune, Fox Sports)
+  2711→  4. england-bellingham-sf.json — Bellingham SF Sofascore 6.6 + tournament 7.76 avg + "Midfielder" position
+  2712→  5. england-kane-wc2026.json — Kane dropped for 3rd place (Yahoo); L'Équipe SF 3/10; Metro tournament ratings
+  2713→  6. england-squad.json — England WC 2026 26-man squad (ESPN, FIFA, SI.com, BBC)
+  2714→  7. england-saka-tweets.json — Saka reactions (England Football, Telegraph, BBC, Reddit, Sportskeeda)
+  2715→  8. england-bellingham-tweets.json — Bellingham reactions (Comeback, Mirror, Telegraph, Athletic FC IG)
+  2716→  9. england-sf-lineup.json — Confirmed SF XI: Pickford; Reece James, Stones, Guéhi, Spence; Anderson, Rice; Rogers, Bellingham (CAM), Gordon, Kane (SI.com, Yahoo, Marca, MoroccoWorldNews)
+  2717→  10. england-3rd-lineup.json — Predicted + confirmed 3rd place XI (ESPN, SportingNews, Sky Sports, USA Today)
+  2718→  11. england-shaw-injury.json — Luke Shaw injury history (Sportsmole, NYT, BBC, ESPN, Sun) — NOT in WC squad
+  2719→  12. england-pickford-3rd.json — Pickford RESTED for 3rd place; Henderson started (Bolavip, Everton.news, Reddit)
+  2720→  13. england-tournament-arc.json — QF vs Norway: Bellingham scored BOTH goals (BBC, Guardian, FIFA.com, VAVEL) — NOT "Bellingham + Saka" as app claims
+  2721→  14. england-sf-goals.json — SF: Anthony Gordon scored England's lone goal (NBC, Yahoo, Guardian, Facebook)
+  2722→  15. england-saka-penalty.json — Saka 87' pen confirmed (Fox Sports, Reddit r/soccer, Guardian)
+  2723→  16. england-rb.json — Kyle Walker NOT in WC 2026 squad (worldsoccertalk, beIN, NYT Athletic)
+  2724→- Ran 8 additional supplementary searches: england-foden (Foden NOT in squad), england-mbappe-10 (Mbappé Sofascore 10.0 + 22 all-time WC goals), england-3rd-confirmed-xi (SportingNews/Bolavip/Threads confirmed XI), england-saka-goal-times (37' + 45+1' + 87' pen), england-sf-player-ratings (Metro/ESPN/Mirror/Sky/Guardian/Football365 ratings), england-sf-england-scorer (Anthony Gordon), england-3rd-all-goals (NYT/AP/Olympics/Yahoo/Detroit News/WaPo), england-squad-full (englandfootball.com/BBC/FIFA/SI.com).
+  2725→- Ran 4 more supplementary searches: england-saka-37min (Saka 37' + first-half stoppage — England Football, WESH), england-3rd-xi-final (NYT Athletic/Yahoo/USA Today final confirmed XI), england-bellingham-goal-time (Bellingham 98' stoppage-time — USA Today, Fox Sports, YouTube), england-saka-dropped-sf (Saka dropped for SF — BBC, MSN, Goal.com, Telegraph, Reddit, IG).
+  2726→- Parsed all 20 JSON outputs: extracted verified SF XI (4-2-3-1), verified 3rd place XI (4-3-3), per-player Sofascore/ESPN/Metro/Mirror/Sky Sports/L'Équipe ratings, exact goal times (Rice ~3', Konsa early, Saka 37'+45+1'+87'pen, Bellingham 98'), Mbappé Sofascore 10.0, Bellingham SF Sofascore 6.6, Bellingham tournament avg 7.76, Kane dropped for 3rd place, Pickford rested, Henderson/Toney/Rashford/Eze/Rogers/Anderson/Quansah/Spence/Reece James/Gordon all in squad, Walker/Shaw/Foden/Palmer/TAA all NOT in squad, Saka redemption arc (dropped SF → hat-trick 3rd place), and fan-sentiment snippets.
+  2727→- Ran z-ai chat for sentiment synthesis: passed consolidated snippets for 4 England players (Bellingham, Saka, Kane, Pickford) to a sentiment-analysis system prompt ("Classify sentiment + identify recurring themes + flag stale tweets referencing other tournaments or matches players didn't play in"). Output saved to england-sentiment-synthesis.json. Model produced per-player sentiment labels + recurring themes + flagged several stale/wrong-reference snippets (though I manually overrode a few stale-flag calls the model got wrong — e.g., it flagged "after SF loss to Argentina" as stale, but that IS the WC 2026 SF).
+  2728→- Cross-checked app's SF_CRISIS (4 England players) AND THIRD_ELITE (11 players incl. Mbappé) against real-world data: identified 4 CRITICAL + 2 MAJOR + 1 MEDIUM discrepancies in THIRD_ELITE, plus 1 MAJOR + 1 MEDIUM in SF_CRISIS, plus 1 MAJOR bracket-header error (QF scorer attribution).
+  2729→- Wrote final report to /home/z/my-project/research/england-report.md (11 sections: verified SF XI, verified 3rd place XI, per-player SF ratings, per-player 3rd place ratings, verified goal scorers + times, tweet/sentiment summary, comparison table vs app's SF_CRISIS, comparison table vs app's THIRD_ELITE, 3-bullet trend summary, files produced, critical flags for app maintainer).
+  2730→
+  2731→Stage Summary:
+  2732→- VERIFIED FACTS (multiple Tier-1 sources, Jul 15-20 2026):
+  2733→  * SF (ENG 1-2 ARG, Jul 15, Mercedes-Benz Stadium, Atlanta): England's lone goal = ANTHONY GORDON (assist: Morgan Rogers cross) — 1st career WC goal. Argentina goals: Enzo Fernández 85' + Lautaro Martínez 90+2'. Messi MOTM (Sofascore 8.0, 2 assists, 4 key passes, 94 touches, 9/11 dribbles). England: 0.53 xG from 5 shots, Argentina 64% possession.
+  2734→  * Confirmed SF XI (4-2-3-1): Pickford; Reece James, Stones, Guéhi, Spence; Elliot Anderson, Rice; Morgan Rogers, Bellingham (CAM), Anthony Gordon; Kane. Saka was DROPPED (Tuchel: "Rogers' physicality suited the match" + Saka injury recovery).
+  2735→  * 3rd Place (ENG 6-4 FRA, Jul 18, Hard Rock Stadium, Miami): England scorers = Rice (early ~3'), Konsa (early), Saka (37', 45+1', 87' pen — HAT-TRICK), Bellingham (98' stoppage-time SUB). 3rd England WC knockout hat-trick after Hurst 1966 & Lineker 1986.
+  2736→  * Confirmed 3rd place XI (4-3-3): Dean HENDERSON (Pickford rested); Quansah, Konsa (Stones benched), Guéhi, Spence; Rice, Eze, Rogers; Saka, Marcus Rashford, Ivan Toney (Kane didn't play). Bellingham came off bench.
+  2737→  * Mbappé Sofascore 10.0 (perfect), 2 goals + 1 assist, 8 shots, 4 on target; broke Messi's all-time WC scoring record (22 goals); Golden Boot winner (10 in WC 2026).
+  2738→  * Bellingham SF Sofascore 6.6; ESPN 5; Sky 6. Tournament avg Sofascore 7.76 (top-5 WC 2026, top England player).
+  2739→  * Kane SF ratings: L'Équipe 3, Mirror 4, Sky 5, ESPN 6. Kane was DROPPED for 3rd place.
+  2740→
+  2741→- 🚨 DISCREPANCIES FLAGGED — THIRD_ELITE (app vs reality):
+  2742→  1. CRITICAL — Kyle Walker (RB 78) NOT IN WC 2026 SQUAD AT ALL (Tuchel left him out; Walker publicly questioned TAA omission). Real RB = Jarell Quansah (3rd place) or Reece James (SF). PARALLEL to Spain's Carvajal discrepancy (Task ID 1).
+  2743→  2. CRITICAL — Luke Shaw (LB 79) NOT IN WC 2026 SQUAD AT ALL (calf/foot/shin injuries; pre-WC injury fears; not in Tuchel's 26). Real LB = Djed Spence.
+  2744→  3. CRITICAL — Phil Foden (CAM 83) NOT IN WC 2026 SQUAD AT ALL (Tuchel left him + Cole Palmer out — "biggest talking point" of squad selection; ESPN, Guardian, talkSPORT, en.as.com all confirm). Real CAM = Eberechi Eze or Morgan Rogers.
+  2745→  4. CRITICAL — Harry Kane (ST 84, "scored") DID NOT PLAY in 3rd place (Yahoo: "Harry Kane doesn't play in wild World Cup third-place match vs France"). Real ST = Ivan Toney. The "scored" claim is factually WRONG.
+  2746→  5. MAJOR — Jordan Pickford (GK 80) DID NOT START 3rd place — rested; Dean Henderson started. (Bolavip, Yahoo, USA Today, SportingNews, PrizePicks, Everton.news).
+  2747→  6. MAJOR — John Stones (CB 79) BENCHED for 3rd place — sub only. Real CB starter = Ezri Konsa (who scored).
+  2748→  7. MEDIUM — Jude Bellingham (CM 87, "breakaway goal") was a SUBSTITUTE, not starter. Did score 98' stoppage-time breakaway (verified correct).
+  2749→  → 4 CRITICAL + 2 MAJOR + 1 MEDIUM = 7 of 11 app picks have factual errors.
+  2750→  → 4 fully verified: Guéhi, Rice, Saka (hat-trick + 87' pen VERIFIED), Mbappé (Sofascore 10.0 + record VERIFIED).
+  2751→  → 8 real-world England 3rd-place starters MISSING from app's THIRD_ELITE: Henderson, Quansah, Konsa (who scored!), Spence, Eze, Rogers, Rashford, Toney.
+  2752→
+  2753→- 🚨 DISCREPANCIES FLAGGED — SF_CRISIS (4 England players):
+  2754→  1. MAJOR — Jude Bellingham listed as RW (42); real SF position was CAM (central, 4-2-3-1). Sofascore 6.6, ESPN 5. Position mislabel.
+  2755→  2. MEDIUM — John Stones CB pulse 40 "falling" is INVERTED — Stones was actually rated 6-8 (Mirror 8, Metro 7, Sky 7, ESPN 6) — one of England's better defenders.
+  2756→  3. Stones, Rice, Kane all started SF — verified correct (positions correct). But Kane matchInfo misses that Anthony Gordon — not Kane — scored England's lone goal.
+  2757→
+  2758→- 🚨 BONUS discrepancy (tournament bracket header in same script):
+  2759→  * App claims: "QF2: ENG 2-1 NOR (Bellingham, Saka; Haaland)" — WRONG. BBC, Guardian, NYT Athletic, VAVEL, FIFA.com match centre all confirm Bellingham scored BOTH goals vs Norway (2-1 AET). Saka did NOT score in the QF. Norway's scorer was Schjelderup (per VAVEL), not Haaland.
+  2760→
+  2761→- ANTI-HALLUCINATION — stale/discarded snippets:
+  2762→  * Facebook mancityloversglobal (Jul 17): "Harry Kane is the third player to score a hat-trick for England at the World Cup, after Geoff Hurst in 1966 and Gary Lineker in 1986" — MISLEADING/WRONG. This credit belongs to Bukayo SAKA (3rd place vs France), confirmed by England Football, BBC, Sky Sports, AP, NBC. FB snippet conflates Kane with Saka. DISCARDED as inaccurate.
+  2763→  * Facebook fake fan XI (Jul 18): "England expected XI vs France... Pickford, Walker, Stones, Maguire, Shaw, Bellingham, Rice, Henderson, Saka, Foden, Kane" — FABRICATED. None of Walker/Shaw/Foden/Maguire were in WC 2026 squad; Kane didn't play; Pickford was rested. This fake fan XI matches the app's THIRD_ELITE almost exactly — strong indicator the app's data was seeded from a stale/wrong fan lineup, not a verified Tier-1 source. FLAGGED as unreliable (PARALLEL to fake Argentina fan XI flagged in Task ID 2).
+  2764→  * Instagram comment "I don't want Saka to miss... He took so much flak from the English fans last time" — references Saka's EURO 2020 final penalty miss vs Italy (Jul 2021), NOT WC 2026. DISCARDED as past-tournament reference (though it contextualizes the redemption narrative).
+  2765→  * Mirror (Jul 17) Bellingham letter "win the World Cup in 4 years" — used as evidence of Bellingham's post-SF defiant reaction (forward-looking to 2030 WC, not stale).
+  2766→  * Standard (Jul 18) pre-match prediction "Kane should both be keen to start... they each have six goals" — turned out wrong (Kane didn't play); used only as evidence of pre-match expectation.
+  2767→
+  2768→- SENTIMENT (z-ai chat synthesis + manual review):
+  2769→  * Bellingham = MIXED (positive overall; negative SF backlash). POSITIVE: QF hero vs Norway (2 AET goals, Metro tournament rating 9.5 — "England's standout player"; Sofascore tournament avg 7.76 — top-5 WC 2026; "tells England fans to pull a sickie" group-stage viral moment; Fox Sports IG: "Is Bellingham England's most important player?"; 98' stoppage-time goal in 3rd place). NEGATIVE: SF Sofascore 6.6 + ESPN 5 ("quiet evening for England's talisman"); Yahoo/Comeback: "Unlikable and insufferable: Bellingham sparks outrage for 'getting violent' after World Cup loss"; Mirror: defiant letter "I WILL BE BACK... in 4 years".
+  2770→  * Saka = POSITIVE (redemption arc). "Saka pleased to finish strongly" (England Football); "I wanted to play more" (Telegraph) — making a point to Tuchel; BBC headline "Has Bukayo Saka proved he is undroppable?"; Sportskeeda: "England fans question Tuchel after 24-year-old star shines"; Reddit r/ThreeLions: "Tuchel logic: Saka too unfit for a single minute in a Semifinal but can start a gimmick game" (sarcastic criticism of Tuchel); Fotmob: "best EVER rating"; hat-trick joins Hurst 1966 + Lineker 1986.
+  2771→  * Kane = NEGATIVE (SF) / NEUTRAL (3rd place). SF: L'Équipe 3/10, Mirror 4, Sky 5, Football365 "flop"; Olympics.com quote "blood, sweat and tears"; ITV reflection. 3rd place: Yahoo "Kane doesn't play" — Kane was DROPPED, no fan backlash captured (the silence is the story).
+  2772→  * Pickford = NEUTRAL. Bolavip: "rested his first-choice [keeper]"; Everton.news: "irony as Pickford sits out 6-4 win — France woke up, England conceded four second-half goals"; "8 goals conceded all tournament" — mixed. Low social volume overall — not a major narrative flashpoint.
+  2773→
+  2774→- FILES PRODUCED:
+  2775→  * /home/z/my-project/research/england-report.md (final deliverable — 11 sections, ~17 KB)
+  2776→  * /home/z/my-project/research/england-*.json (20 raw search outputs + 1 sentiment synthesis, ~95 KB total)
+  2777→
+  2778→- NEXT ACTIONS for app maintainer (no code changes made — research only):
+  2779→  1. Replace Kyle Walker (RB 78) → Jarell Quansah (3rd place) or Reece James (SF) in THIRD_ELITE. Walker not in WC 2026 squad (Tuchel left him out).
+  2780→  2. Replace Luke Shaw (LB 79) → Djed Spence in THIRD_ELITE. Shaw not in WC 2026 squad (injury-prone, pre-WC injury fears).
+  2781→  3. Replace Phil Foden (CAM 83) → Eberechi Eze (started 3rd place, assisted Saka's 1st) or Morgan Rogers. Foden not in WC 2026 squad (Tuchel left him + Palmer out).
+  2782→  4. Replace Harry Kane (ST 84 "scored") → Ivan Toney in THIRD_ELITE — OR remove Kane entirely. Kane did NOT play in 3rd place (Yahoo confirms). The "scored" claim is factually WRONG.
+  2783→  5. Replace Jordan Pickford (GK 80) → Dean Henderson in THIRD_ELITE — OR annotate as "rested, didn't play". Henderson started 3rd place.
+  2784→  6. Replace/demote John Stones (CB 79) in THIRD_ELITE → Ezri Konsa (started 3rd place, scored). Or annotate Stones as "started SF, benched 3rd place".
+  2785→  7. Fix Jude Bellingham position in SF_CRISIS: RW → CAM (he played centrally in 4-2-3-1, Sofascore 6.6, ESPN 5). Also annotate Bellingham in THIRD_ELITE as "sub, scored 98' stoppage-time breakaway" (not starter).
+  2786→  8. Fix app's tournament bracket header comment: QF was ENG 2-1 NOR AET — Bellingham scored BOTH (BBC, Guardian, NYT, VAVEL, FIFA.com), not "Bellingham + Saka". Norway's scorer was Schjelderup, not Haaland.
+  2787→  9. Re-verify John Stones pulse in SF_CRISIS (40 "falling") — he was rated 6-8 in SF (Mirror 8, Metro 7, Sky 7, ESPN 6), one of England's better defenders. Consider replacing with Anthony Gordon (scored but eventually lost), Marc Guéhi, or Djed Spence.
+  2788→  10. Re-seed all 6 Elite/Crisis XIs (SF_ELITE, SF_CRISIS, THIRD_ELITE, THIRD_CRISIS, FINAL_ELITE, FINAL_CRISIS) from SI.com/SportingNews/ESPN confirmed lineups. The identical pattern across Tasks 1, 2, 3 (fabricated squad members + fake fan-XI matches) strongly indicates the app's data was seeded from Facebook fan XIs, not Tier-1 sources.
+  2789→
+  2790→---
+  2791→Task ID: 4
+  2792→Agent: general-purpose (France research)
+  2793→Task: Research France WC 2026 — SF vs ESP + 3rd place vs ENG player ratings, tweet sentiment
+  2794→
+  2795→Work Log:
+  2796→- Read /home/z/my-project/worklog.md (most recent ~300 lines, lines 2490-2788) to understand prior context: Task IDs 1 (Spain), 2 (Argentina), 3 (England) had all been completed. Each flagged MAJOR discrepancies in app's Elite/Crisis XIs (Spain: Carvajal ACL not in squad; Argentina: Di María retired 2024 not in squad, back four entirely wrong; England: Walker/Shaw/Foden not in squad, Kane didn't play 3rd place, Dembélé 98' was actually Bellingham's goal). The pattern across all 3 prior tasks: app data appeared seeded from stale/fabricated fan-XI Facebook posts, not Tier-1 sources. The app's hand-curated XIs in scripts/complete-tournament.ts (SF_CRISIS France = 7 players: Maignan/Koundé/Upamecano/T.Hernández/Tchouaméni/Griezmann/Mbappé; THIRD_CRISIS = full 11-man France XI: Maignan/Koundé/Upamecano/Saliba/T.Hernández/Tchouaméni/Camavinga/Griezmann/Olise/Thuram/Dembélé) needed cross-checking against real-world data.
+  2797→- Read /home/z/my-project/research/spain-report.md, argentina-report.md, england-report.md to understand the discrepancy pattern. Read /home/z/my-project/scripts/complete-tournament.ts (line 63-103 specifically) to extract app's France picks: SF_CRISIS France 7 players (pulse 36-40, all "falling"); THIRD_CRISIS France 11 players (pulse 28-34, all "falling"). App also lists Mbappé in THIRD_ELITE (England section, pulse 86 "broke all-time WC scoring record") and THIRD_CRISIS Dembélé (pulse 34 "98' goal made it 5-4 but still lost").
+  2798→- Created/used research/ folder (already existed from Tasks 1, 2, 3).
+  2799→- Ran 22 targeted z-ai web_search calls via Bash (8 mandatory + 14 supplementary to nail down: SF/3rd-place XIs, Sofascore team ratings, Mbappé goal-by-goal breakdown, Griezmann retirement verification, Maignan injury history, Saliba injury in SF, Dembélé sub vs starter in 3rd place, France R32 opponent = Sweden, France tournament path, Mbappé Sofascore 9.9 vs 10.0 discrepancy, all-time WC goals record history, Mbappé/Maignan/Saliba/Griezmann tweet reactions). Saved each raw JSON to its own file in /home/z/my-project/research/.
+  2800→- Parsed all 22 JSON outputs: extracted verified SF XI (4-2-3-1), verified 3rd place XI (4-2-3-1), per-player Sofascore/L'Équipe/Livescore/SI.com/BBC ratings, Mbappé's 10 WC 2026 goals broken down per match (Senegal brace, Iraq brace, Norway 0g+2a, Sweden brace R32, Paraguay pen R16, Morocco 1g QF, Spain 0g SF, England brace 3rd), all-time WC goals record (22, broke Messi 21 + Klose 16), Griezmann retirement confirmed Sep 30 2024 (FIFA/ESPN/BBC/NYT/Le Monde), Saliba back injury in SF (subbed 30', replaced by Lacroix), Dembélé was a SUB in 3rd place (Yahoo + WorldSoccerTalk confirm), Dembélé goal was 90+6' NOT 98' (Bellingham was 98' per Guardian), Mbappé Sofascore 9.9 in 3rd place (authoritative Sofascore player page; "10.0" was in-game article), Mbappé Sofascore 6.1 in SF (Sofascore-direct), Maignan Sofascore 5.6 SF + 6.5 3rd place.
+  2801→- Ran z-ai chat for sentiment synthesis: passed 17 consolidated Mbappé snippets to a sentiment-analysis system prompt ("Classify sentiment + identify recurring themes + flag stale tweets referencing other tournaments or matches Mbappé didn't play in. Mbappé played 8 matches at WC 2026: Senegal/Iraq/Norway group, Sweden R32, Paraguay R16, Morocco QF, Spain SF (lost 0-2), England 3rd (lost 4-6, scored 2). He did NOT play in the 2026 WC Final."). Output saved to france-mbappe-sentiment-synthesis.json. Model produced per-snippet sentiment labels + recurring themes (record-breaking achievement, Golden Boot, sportsmanship, emotional reaction, statistical performance) + flagged stale 2022 WC Final quote + confusing "English footballer" Instagram snippet + ambiguous-timing FIFA snippet.
+  2802→- Cross-checked app's SF_CRISIS (7 France players) AND THIRD_CRISIS (11 France players) against real-world data: identified 6 CRITICAL + 3 MAJOR + 2 MEDIUM discrepancies in THIRD_CRISIS, plus 2 CRITICAL + 2 MAJOR + 1 MEDIUM in SF_CRISIS. The Griezmann inclusion (retired Sep 30 2024 — FIFA/ESPN/BBC/NYT confirmed) is the most damaging — appearing in BOTH SF_CRISIS and THIRD_CRISIS, parallel to Di María discrepancy in Task 2.
+  2803→- Wrote final report to /home/z/my-project/research/france-report.md (11 sections: verified SF XI, verified 3rd place XI, per-player SF Sofascore ratings, per-player 3rd place Sofascore ratings, Mbappé goal totals + all-time record breakdown, tweet/sentiment summary for Mbappé/Maignan/Griezmann/Saliba, comparison table SF_CRISIS, comparison table THIRD_CRISIS, 3-bullet trend summary, files produced, critical flags for app maintainer + anti-hallucination notes).
+  2804→
+  2805→Stage Summary:
+  2806→- VERIFIED FACTS (multiple Tier-1 sources, Jul 14-19 2026):
+  2807→  * SF (FRA 0-2 ESP, Jul 14, AT&T Stadium, Arlington): Spain goals = Mikel Oyarzabal (pen) + Pedro Porro. Confirmed France XI (4-2-3-1): Maignan; Koundé, Upamecano, Saliba (subbed 30' back injury, replaced by Lacroix), Lucas Digne (NOT Theo Hernández); Rabiot, Tchouaméni; Ousmane Dembélé (RW), Michael Olise (CAM), Bradley Barcola (LW); Mbappé (lone ST). Sofascore: Rabiot 7.4 (best), Upamecano 7.3, Saliba 7.1 (limited mins), Koundé 7.1, Digne 7.0, Mbappé 6.1 (3 shots/0 on target/0.09 xG), Maignan 5.6. L'Équipe harsh: Maignan 4, Tchouaméni 3, Digne/Dembélé/Olise 2 each.
+  2808→  * 3rd Place (FRA 4-6 ENG, Jul 18, Hard Rock Stadium, Miami): England scorers = Rice 3', Konsa 18', Saka 37'+45+1'+87'pen (HAT-TRICK), Bellingham 90+8' (98'). France scorers = Mbappé 48'+66', Barcola 54' (sub), Dembélé 90+6' (96', SUB). Confirmed France XI (4-2-3-1): Maignan; Malo Gusto (NOT Koundé), Ibrahima Konaté (NOT Upamecano), Maxence Lacroix (NOT Saliba — injured), Theo Hernández; Warren Zaïre-Emery (NOT Tchouaméni), Adrien Rabiot (NOT Camavinga); Michael Olise (RW), Rayan Cherki (CAM, NOT Griezmann — RETIRED), Désiré Doué (LW, NOT Thuram); Mbappé (lone ST, NOT Dembélé). Sofascore: Mbappé 9.9 (2g+1a, 8 shots/4 on target, broke all-time WC record at 22), Maignan 6.5 (4 saves, -1.14 goals prevented). Other ratings partial via Livescore/SI.com/BBC.
+  2809→  * Mbappé WC 2026: 10 goals in 8 matches (Senegal 2, Iraq 2, Norway 0+2a, Sweden 2, Paraguay 1 pen, Morocco 1, Spain 0, England 2). Golden Boot winner (2nd career). All-time WC goals: 22 (4 in 2018 + 8 in 2022 + 10 in 2026) — broke Klose 16 + Messi 21.
+  2810→  * Mbappé Sofascore SF = 6.1 (NOT 5.4 from Instagram OCR — used Sofascore-direct source).
+  2811→  * Mbappé Sofascore 3rd place = 9.9 (NOT 10.0 — Task ID 3 report error; "10" was in-game article after 1st goal; final = 9.9 per Sofascore player page).
+  2812→  * Griezmann RETIRED Sep 30 2024 (FIFA/ESPN/BBC/NYT/Le Monde all confirm). Not in WC 2026 squad (Bolavip/WorldSoccerTalk/Turkiyetoday confirm).
+  2813→  * William Saliba INJURED in SF (29' minute, back injury, "my back is gone" quote per Daily Mail). Subbed off 30'. Replaced by Maxence Lacroix. Did NOT play 3rd place game. May need surgery (5-month layoff).
+  2814→  * Dembélé was a SUB in 3rd place (Yahoo: "will not start... tactical rotation"). WorldSoccerTalk: "Deschamps made a technical decision to put Desiré Doué and Rayan Cherki" in lineup.
+  2815→  * Dembélé 3rd-place goal time = 90+6' (96th minute), per Guardian "Goal! France 4-5 England (Dembele, 90+6)". Bellingham scored in 90+8' (98th minute). App's claim "Dembélé 98' goal" is WRONG — that's Bellingham's goal.
+  2816→
+  2817→- 🚨 DISCREPANCIES FLAGGED — THIRD_CRISIS (app vs reality, 11 France players):
+  2818→  1. CRITICAL — Antoine Griezmann (CAM 30) NOT IN WC 2026 SQUAD. Retired Sep 30 2024. Real CAM = Rayan Cherki. **PARALLEL** to Di María discrepancy in Task 2.
+  2819→  2. CRITICAL — Jules Koundé (RB 30) DID NOT START 3rd place. Benched. Real RB = Malo Gusto.
+  2820→  3. CRITICAL — Dayot Upamecano (CB 29) DID NOT START 3rd place. Benched. Real CB = Ibrahima Konaté.
+  2821→  4. CRITICAL — William Saliba (CB 30) DID NOT PLAY 3rd place — INJURED in SF (back, 30'). Real CB = Maxence Lacroix.
+  2822→  5. CRITICAL — Aurélien Tchouaméni (CM 32) DID NOT START 3rd place. Benched. Real CM = Warren Zaïre-Emery.
+  2823→  6. CRITICAL — Eduardo Camavinga (CM 31) DID NOT START 3rd place. Benched. Real CM = Adrien Rabiot.
+  2824→  7. CRITICAL — Marcus Thuram (RW 30) DID NOT START 3rd place. Real RW = Désiré Doué.
+  2825→  8. MAJOR — Michael Olise (LW 33) started, but app's "scored but 6 conceded" is WRONG — Olise did NOT score. France goals: Mbappé 48'+66', Barcola 54' sub, Dembélé 90+6' sub.
+  2826→  9. MAJOR — Ousmane Dembélé (ST 34) — THREE errors in one entry: (a) was a SUB not starter; (b) goal was 90+6' (96') NOT 98'; (c) was NOT at ST — Mbappé was the lone ST. Dembélé played winger off bench.
+  2827→  → 7 CRITICAL + 2 MAJOR = 9 of 11 app picks have factual errors.
+  2828→  → 2 fully verified: Maignan (GK), Theo Hernández (LB).
+  2829→  → 7 real-world France 3rd-place starters MISSING from app's THIRD_CRISIS: Malo Gusto, Ibrahima Konaté, Maxence Lacroix, Warren Zaïre-Emery, Adrien Rabiot, Rayan Cherki, Désiré Doué. Plus 2 sub-scorers: Barcola, Dembélé.
+  2830→
+  2831→- 🚨 DISCREPANCIES FLAGGED — SF_CRISIS (7 France players):
+  2832→  1. CRITICAL — Antoine Griezmann (CAM 37) NOT IN SQUAD (retired Sep 30 2024). Real CAM = Michael Olise (Sofascore 6.3, L'Équipe 2).
+  2833→  2. CRITICAL — Theo Hernández (LB 37) DID NOT START SF — Lucas Digne started at LB (Sofascore 7.0, L'Équipe 2).
+  2834→  3. MAJOR — Jules Koundé (RB 36, "falling") pulse INVERTED. Koundé rated 7.1, one of France's better defenders. Real underperformers were Digne/Tchouaméni/Dembélé/Olise/Mbappé.
+  2835→  4. MAJOR — Dayot Upamecano (CB 38, "falling") pulse INVERTED. Upamecano was France's most solid performer per Sofascore (7.3, top defensive number). L'Équipe 5 harsh but Sofascore authoritative.
+  2836→  5. MAJOR — Kylian Mbappé position WRONG. App lists LW; real position was ST (lone striker in 4-2-3-1). Performance claim ("failed to score") verified correct.
+  2837→  6. MEDIUM — Maignan (GK 38, "falling") verified OK; Sofascore 5.6, L'Équipe 4, Yahoo 5.5.
+  2838→  7. MEDIUM — Tchouaméni (CM 39, "falling") verified OK; L'Équipe 3.
+  2839→  → 2 CRITICAL + 3 MAJOR = 5 of 7 app picks have factual errors.
+  2840→  → 2 fully verified: Maignan, Tchouaméni (positions correct, pulse direction OK).
+  2841→  → 5 real SF France starters MISSING from app: Rabiot (7.4, France's best!), Digne (7.0), Olise (6.3), Barcola (6.2), Dembélé (6.4). Lacroix (sub for injured Saliba).
+  2842→
+  2843→- 🚨 PATTERN CONFIRMATION (Task 4 of 4):
+  2844→  * Task 1 (Spain): Carvajal ACL, not in squad.
+  2845→  * Task 2 (Argentina): Di María retired 2024, not in squad.
+  2846→  * Task 3 (England): Walker/Shaw/Foden not in squad; Kane didn't play 3rd place; Dembélé 98' was Bellingham's goal.
+  2847→  * Task 4 (France): Griezmann retired Sep 2024 (NOT in squad); 6 of 11 THIRD_CRISIS France "starters" were benched; Saliba INJURED in SF (didn't play 3rd place); Dembélé was a sub not starter, goal was 96' not 98'; Mbappé position mislabeled (LW→ST).
+  2848→  * The pattern is now CONCLUSIVE: app's Elite/Crisis XI seed data was sourced from a Facebook fan-XI post (the Lloris/Varane/Giroud/Griezmann fake XI discovered in this task is the smoking gun — none of those players were in WC 2026 squad) — NOT from a Tier-1 source (Sofascore/ESPN lineup page).
+  2849→
+  2850→- ANTI-HALLUCINATION — stale/discarded snippets:
+  2851→  * Facebook fake fan XI (Jul 18): "France XI: GK: Lloris (c), Kounde, Upamecano, Varane, Hernandez, Tchouameni, Rabiot, Dembele, Griezmann, Mbappe, Giroud" — FABRICATED. Lloris retired int'l after 2022 WC; Varane retired all football 2024; Giroud was 39 and not in WC 2026 squad; Griezmann retired Sep 2024. This is the likely source of app's THIRD_CRISIS France picks. FLAGGED as unreliable.
+  2852→  * Mbappé quote (STALE — 2022 reference): "I would exchange my 3 goals in the World Cup Final for an ugly own goal and a 1-0 win in the Final." — references 2022 WC Final vs Argentina (Mbappé hat-trick), NOT 2026 WC. Flagged by z-ai chat synthesis. DISCARDED for 2026 sentiment analysis.
+  2853→  * keeperstopgk IG (Jun 17): "Did Maignan Get This Wrong Against Senegal?" — references group stage opener, not SF/3rd-place. STALE for our purposes. Discarded.
+  2854→  * Sofascore news article "Mbappé Sofascore Rating 10" (3rd place): in-game/early-game rating when Mbappé was at 21 all-time goals. Final rating after 2nd goal = 9.9 per his Sofascore player profile page. Used 9.9 as authoritative.
+  2855→  * Instagram OCR snippet showing Mbappé SF Sofascore = 5.4: conflicts with Sofascore-direct source which says 6.1 ("Mbappé had 3 shots, 0.09 xG and 1/6 dribbles, earning a Sofascore Rating of 6.1"). Used 6.1 (Sofascore-direct authoritative).
+  2856→  * Instagram (CONFUSING): "Mbappe is now huge favourite to beat Messi to the World Cup Golden Boot, the first and only English footballer to score 7 goals..." — "English footballer" mismatch. Flagged by z-ai chat. Discarded.
+  2857→
+  2858→- SENTIMENT (z-ai chat synthesis + manual review):
+  2859→  * Mbappé = MIXED (positive personal achievement, negative team result). POSITIVE: 22 all-time WC goals record (broke Messi 21, Klose 16); 2nd career Golden Boot; "Mbappé went directly to every player in England to congratulate them" (class moment). NEGATIVE: SF Sofascore 6.1 ("frustrating night"); 3rd place 6-4 loss despite his 9.9 rating + 2 goals; "heartbreaking reaction after breaking the World Cup goal record" (YouTube); "Mbappe was far from happy with the result" (The-Express); Trevor Noah IG: "France has mentally left the tournament already". Reddit praise: "Mbappé is by far the greatest goalscorer the World Cup has ever seen. 22 goals in 22 [matches]."
+  2860→  * Maignan = NEGATIVE. YouTube "MAIGNAN SLAMMED! MIKE MAIGNAN IS A SHAME ON FRANCE!"; Facebook "Mike Maignan is the reason France lost to Spain" (Jay Jay Okocha quote); Reddit "France is just unlucky in terms of goalkeepers - Maignan is looking like another Lloris"; Instagram "worst World Cup goalkeeper ever"; Sofascore "Maignan had four saves but finished at -1.14 goals prevented"; GOAL rating 5/10 "Didn't keep much out but can't be blamed for the loss". Recurring theme: "France's goalkeeping curse" (echoes of Lloris 2022 Final).
+  2861→  * Griezmann = N/A — not in squad, no WC 2026 in-tournament tweets exist. Only retirement-decision coverage from Sep 30 2024 (outside scope).
+  2862→  * Saliba = NEGATIVE (injury-driven). Two sentiment streams: (1) France fans — Saliba's 30' injury was the turning point of the SF (Thierry Henry: "that single setback disrupted France's entire structure, paving the way for Spain to seize complete control"); (2) Arsenal fans — anxiety about club season (potential 5-month layoff, back surgery needed, £4M FIFA insurance payout). Daily Mail: Saliba quote "My back is gone, my back is gone". BBC: "Arsenal will assess William Saliba's back injury when he reports back to the club". Mirror: "may require surgery on his back".
+  2863→
+  2864→- FILES PRODUCED:
+  2865→  * /home/z/my-project/research/france-report.md (final deliverable — 11 sections, ~38 KB)
+  2866→  * /home/z/my-project/research/france-*.json (41 raw search outputs + 1 sentiment synthesis, ~205 KB total)
+  2867→
+  2868→- NEXT ACTIONS for app maintainer (no code changes made — research only):
+  2869→  1. 🚨 Remove Antoine Griezmann from BOTH SF_CRISIS (CAM) AND THIRD_CRISIS (CAM). He retired Sep 30 2024 — was not in WC 2026 squad. Replace with Michael Olise (SF, Sofascore 6.3) and Rayan Cherki (3rd place). PARALLEL to Di María removal in Task 2.
+  2870→  2. 🚨 Remove Theo Hernández from SF_CRISIS (LB). He did NOT start the SF — Lucas Digne did (Sofascore 7.0, L'Équipe 2). Keep Theo Hernández in THIRD_CRISIS (verified correct).
+  2871→  3. 🚨 Replace William Saliba (CB 30) in THIRD_CRISIS → Maxence Lacroix (started 3rd place, replaced injured Saliba in SF too). Saliba was INJURED in SF (back, subbed 30') and did NOT play 3rd place.
+  2872→  4. 🚨 Replace 5 benched France "starters" in THIRD_CRISIS: Koundé→Malo Gusto, Upamecano→Ibrahima Konaté, Tchouaméni→Warren Zaïre-Emery, Camavinga→Adrien Rabiot, Thuram→Désiré Doué.
+  2873→  5. 🚨 Fix Ousmane Dembélé entry in THIRD_CRISIS: was a SUB (not starter); goal was 90+6' (96', NOT 98'); was NOT at ST (Mbappé was the lone ST; Dembélé played winger off bench). Yahoo + WorldSoccerTalk confirm Dembélé was benched for "tactical rotation".
+  2874→  6. 🚨 Fix Michael Olise entry in THIRD_CRISIS: remove false "scored" claim — Olise did NOT score. France goals were Mbappé (48', 66'), Barcola (54' sub), Dembélé (90+6' sub).
+  2875→  7. 🚨 Fix Kylian Mbappé position in SF_CRISIS: LW → ST (lone striker in 4-2-3-1). Yahoo lineup confirms Mbappé as ST.
+  2876→  8. 🚨 Re-verify Koundé + Upamecano pulse in SF_CRISIS (36/38 "falling"). Both were rated 7.1+ by Sofascore — among France's BETTER performers, not worst. Pulse inverted. Real underperformers were Digne/Tchouaméni/Dembélé/Olise/Mbappé.
+  2877→  9. 🚨 Add Adrien Rabiot (Sofascore 7.4, France's BEST SF player) and 4 other real SF starters (Digne, Olise, Barcola, Dembélé) to SF_CRISIS — currently missing.
+  2878→  10. 🚨 Update Task ID 3 (England) report: Mbappé Sofascore 3rd place is 9.9, NOT 10.0. The "10.0" was an in-game Sofascore news article headline; authoritative player profile page says 9.9.
+  2879→  11. Re-seed all 6 Elite/Crisis XIs (SF_ELITE, SF_CRISIS, THIRD_ELITE, THIRD_CRISIS, FINAL_ELITE, FINAL_CRISIS) from Sofascore/ESPN confirmed lineups. The CONCLUSIVE pattern across Tasks 1-4 (4 retirees/not-in-squad + 6 benched "starters" + 1 fake goal time + multiple position mislabels + fake fan XI matching app data) confirms the app was seeded from Facebook fan XIs, not Tier-1 sources.
+  2880→
+  2881→---
+  2882→Task ID: 6 (Synthesis)
+  2883→Agent: Main Agent
+  2884→Task: Synthesize per-round Elite/Crisis trends from Tasks 1-5 + spot-check earlier rounds + flag stale/fabricated data
+  2885→
+  2886→Work Log:
+  2887→- Read all 4 sub-agent reports (spain-report.md, argentina-report.md, england-report.md, france-report.md)
+  2888→- Ran 6 parallel z-ai web_search calls to verify Group + QF matches (ger-cuw, arg-alg, qf-fra-mar, qf-eng-nor, qf-esp-bel, qf-arg-sui)
+  2889→- Hit rate-limit on parallel calls; recovered by spacing sequential searches 8s apart
+  2890→- Cross-referenced app's data (scripts/complete-tournament.ts + tournament-retro.ts + seed/route.ts) against verified Tier-1 sources
+  2891→- Compiled master discrepancy table (25 issues: ~10 CRITICAL, ~12 MAJOR, ~3 MEDIUM)
+  2892→- Wrote synthesis report to /home/z/my-project/research/synthesis-report.md
+  2893→
+  2894→Stage Summary:
+  2895→- Bracket SCORES are now correct (Spain champions ESP 1-0 ARG AET; England 3rd via 6-4 vs FRA; SFs as documented)
+  2896→- Elite/Crisis XI PLAYER PICKS for SF/3rd/Final are ~50% unreliable (fabricated from fake Facebook fan XIs)
+  2897→- Earlier rounds (Group/R32) hold up well; QF goalscorer strings partially fabricated (ENG + ARG)
+  2898→- Team of the Tournament retro modal is trustworthy because it excludes SF/3rd/Final XIs but is missing Spain knockout heroes (Torres, Rodri, Simón, Cubarsí, Yamal) because they were never added to verified R32 pool
+  2899→- 8 recommended next actions written in synthesis-report.md §8
+  2900→

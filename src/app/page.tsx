@@ -564,6 +564,14 @@ function HomeTab() {
       stage: 'Semi Finals',
     })
 
+    // 16b. SF2 scorers — verified Enzo 85' + Lautaro 90+2' (Jul 15)
+    items.push({
+      icon: Zap,
+      text: 'Argentina SF2 scorers: Enzo Fernández 85\' + Lautaro Martínez 90+2\' — late comeback vs England',
+      color: 'text-[#6C2BD9]',
+      stage: 'Semi Finals',
+    })
+
     // 17. 3rd Place — England 6-4 France (Saka hat-trick, 10-goal thriller, Jul 18)
     //     Verified: BBC/Euronews/ESPN, Jul 18, 2026. England take 3rd.
     items.push({
@@ -579,6 +587,42 @@ function HomeTab() {
       icon: Trophy,
       text: '🏆 SPAIN ARE THE 2026 WORLD CUP CHAMPIONS! Beat Argentina 1-0 AET (Ferran Torres 106\') — Jul 19',
       color: 'text-[#FF6B35]',
+      stage: 'Final',
+    })
+
+    // 19. FIFA awards — Rodri Golden Ball, Unai Simón Golden Glove, Mbappé Golden Boot, Cubarsí Best Young Player
+    //     Verified: FIFA.com / Kalshi Sports tweet, Jul 18-19 2026.
+    items.push({
+      icon: Trophy,
+      text: 'FIFA awards: Rodri (Golden Ball), Unai Simón (Golden Glove, 7 clean sheets), Mbappé (Golden Boot, 10 goals), Pau Cubarsí (Best Young Player)',
+      color: 'text-[#FF6B35]',
+      stage: 'Final',
+    })
+
+    // 20. Mbappé all-time WC scoring record (22 goals)
+    //     Verified: AP / NYT / Sofascore, Jul 18-19 2026.
+    items.push({
+      icon: Zap,
+      text: 'Mbappé broke the all-time World Cup scoring record (22 goals, surpassing Messi 21 + Klose 16) — despite France finishing 4th',
+      color: 'text-[#6C2BD9]',
+      stage: 'Final',
+    })
+
+    // 21. Emi Martínez 11-save Final MOTM
+    //     Verified: Sofascore / ESPN / SI.com, Jul 19 2026.
+    items.push({
+      icon: Activity,
+      text: 'Emiliano Martínez posted an 11-save Final MOTM (9.6 Sofascore) — the highest individual Final rating of the tournament — but Argentina fell 0-1 AET',
+      color: 'text-[#6C2BD9]',
+      stage: 'Final',
+    })
+
+    // 22. B/R Football Best XI tweet (Jul 20) — Spain-heavy XI
+    //     Verified: @brfootball x.com post + B/R Football article, Jul 20 2026.
+    items.push({
+      icon: Sparkles,
+      text: 'B/R Football writers\' Best XI (Jul 20): Vozinha (CPV); Porro, Cubarsí, Laporte, Cucurella; Olise, Rodri; Messi; Yamal, Mbappé +1 — Spain back 4 dominates',
+      color: 'text-[#6C2BD9]',
       stage: 'Final',
     })
 

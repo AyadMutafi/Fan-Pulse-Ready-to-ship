@@ -78,6 +78,81 @@ const GROUP_STAGE_CRISIS: GroupStageEntry[] = [
   { name: 'Wout Weghorst', nationCode: 'NED', position: 'ST', pulseScore: 26, trend: 'falling', matchInfo: 'NED 2-2 JPN (2-goal lead squandered)', tier: 'crisis' },
 ]
 
+// ── Knockout heroes (QF / SF / 3rd / Final) — VERIFIED via Tier-1 sources ────
+// These are players who produced decisive hero (or villain) performances in
+// the knockout rounds. Each entry's WC 2026 squad participation AND knockout
+// match outcome was verified against Tier-1 sources (Sofascore, ESPN, FIFA.com,
+// BBC, Guardian, NYT Athletic, DAZN, Yahoo Sports, NBC Sports) on 2026-07-20.
+//
+// ANTI-HALLUCINATION: every player here was in their nation's WC 2026 squad.
+// Players who retired before the tournament (Di María, Griezmann, Carvajal)
+// or were left out by their coach (Walker, Shaw, Foden) are NOT in this list.
+// See /home/z/my-project/research/synthesis-report.md for the full discrepancy
+// table and verification trail.
+
+interface KnockoutHeroEntry {
+  name: string
+  nationCode: string
+  position: GroupStageEntry['position']
+  /** App-internal composite pulse (0-100) reflecting knockout-stage heroism. */
+  pulseScore: number
+  trend: Trend
+  /** Verified knockout-stage match fact (copied from the research reports). */
+  matchInfo: string
+  /** 'elite' = hero performance, 'crisis' = villain performance */
+  tier: 'elite' | 'crisis'
+}
+
+const KNOCKOUT_HEROES: KnockoutHeroEntry[] = [
+  // ── Spain champions — Elite picks (QF/SF/Final) ──────────────────────────
+  { name: 'Unai Simón', nationCode: 'ESP', position: 'GK', pulseScore: 99, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — Golden Glove, record 7 clean sheets, only 1 conceded all tournament, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Pedro Porro', nationCode: 'ESP', position: 'RB', pulseScore: 95, trend: 'rising', matchInfo: 'ESP 2-0 FRA (SF — scored + clean sheet, into the Final) + ESP 1-0 ARG (FINAL — owned the right side, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Pau Cubarsí', nationCode: 'ESP', position: 'CB', pulseScore: 97, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — FIFA Best Young Player, defensive rock, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Aymeric Laporte', nationCode: 'ESP', position: 'CB', pulseScore: 96, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — only 1 goal conceded all tournament, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Marc Cucurella', nationCode: 'ESP', position: 'LB', pulseScore: 94, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — defensive solidity, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Rodri', nationCode: 'ESP', position: 'CM', pulseScore: 99, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — FIFA Golden Ball winner, midfield masterclass, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Fabián Ruiz', nationCode: 'ESP', position: 'CM', pulseScore: 94, trend: 'rising', matchInfo: 'ESP 2-1 BEL (QF — Fabián 30\' opener) + ESP 1-0 ARG (FINAL — controlled tempo, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Dani Olmo', nationCode: 'ESP', position: 'CAM', pulseScore: 93, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — playmaker, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 98, trend: 'rising', matchInfo: 'ESP 2-0 FRA (SF — terrorized France) + ESP 1-0 ARG (FINAL — terrorized Argentina, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Mikel Oyarzabal', nationCode: 'ESP', position: 'LW', pulseScore: 95, trend: 'rising', matchInfo: 'ESP 2-0 FRA (SF — Oyarzabal opener, into the Final)', tier: 'elite' },
+  { name: 'Ferran Torres', nationCode: 'ESP', position: 'ST', pulseScore: 99, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — Ferran Torres 106\' AET WINNER, super-sub, CHAMPIONS!)', tier: 'elite' },
+  { name: 'Mikel Merino', nationCode: 'ESP', position: 'CM', pulseScore: 92, trend: 'rising', matchInfo: 'ESP 2-1 BEL (QF — Merino 88\' winner) + POR 0-1 ESP (R16 — injury-time winner)', tier: 'elite' },
+
+  // ── Argentina runner-up — Elite picks (SF) + Crisis picks (Final) ────────
+  { name: 'Emiliano Martínez', nationCode: 'ARG', position: 'GK', pulseScore: 95, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — 11-save MOTM, Sofascore 9.6, all-time WC Final save record, runner-up)', tier: 'elite' },
+  { name: 'Lionel Messi', nationCode: 'ARG', position: 'CAM', pulseScore: 92, trend: 'rising', matchInfo: 'ARG 3-0 ALG (group — hat-trick 17\', 60\', 76\', equalled all-time WC scoring record)', tier: 'elite' },
+  { name: 'Enzo Fernández', nationCode: 'ARG', position: 'CM', pulseScore: 88, trend: 'rising', matchInfo: 'ENG 1-2 ARG (SF — Enzo 85\' equalizer, into the Final)', tier: 'elite' },
+  { name: 'Lautaro Martínez', nationCode: 'ARG', position: 'ST', pulseScore: 93, trend: 'rising', matchInfo: 'ENG 1-2 ARG (SF — Lautaro 90+2\' winner off bench, into the Final) + ARG 3-1 SUI (QF — Lautaro 120+1\' AET)', tier: 'elite' },
+  { name: 'Alexis Mac Allister', nationCode: 'ARG', position: 'CM', pulseScore: 86, trend: 'rising', matchInfo: 'ARG 3-1 SUI (QF — Mac Allister 10\' opener)', tier: 'elite' },
+  { name: 'Julián Álvarez', nationCode: 'ARG', position: 'ST', pulseScore: 87, trend: 'rising', matchInfo: 'ARG 3-1 SUI (QF — Álvarez 112\' AET screamer)', tier: 'elite' },
+
+  // ── England 3rd place — Elite picks ──────────────────────────────────────
+  { name: 'Bukayo Saka', nationCode: 'ENG', position: 'RW', pulseScore: 97, trend: 'rising', matchInfo: 'ENG 6-4 FRA (3rd place — HAT-TRICK 37\', 45+1\', 87\' pen, 3rd-place medal)', tier: 'elite' },
+  { name: 'Jude Bellingham', nationCode: 'ENG', position: 'CAM', pulseScore: 92, trend: 'rising', matchInfo: 'NOR 1-2 ENG (QF — Bellingham brace incl. 3\' ET winner) + ENG 6-4 FRA (3rd — 98\' sealer as sub, 3rd-place medal)', tier: 'elite' },
+  { name: 'Anthony Gordon', nationCode: 'ENG', position: 'LW', pulseScore: 84, trend: 'rising', matchInfo: 'ENG 1-2 ARG (SF — Gordon scored England\'s lone goal)', tier: 'elite' },
+
+  // ── France 4th place — Elite (Mbappé record) + Crisis (Maignan 6 conceded) ──
+  { name: 'Kylian Mbappé', nationCode: 'FRA', position: 'ST', pulseScore: 98, trend: 'rising', matchInfo: 'WC 2026 Golden Boot (10 goals) + broke all-time WC scoring record (22 goals, surpassing Messi 21 + Klose 16), despite France finishing 4th', tier: 'elite' },
+  { name: 'Michael Olise', nationCode: 'FRA', position: 'CAM', pulseScore: 86, trend: 'rising', matchInfo: 'FRA 0-2 ESP (SF — France\'s creative hub) + ENG 6-4 FRA (3rd — scored but France lost)', tier: 'elite' },
+  { name: 'Ousmane Dembélé', nationCode: 'FRA', position: 'LW', pulseScore: 84, trend: 'rising', matchInfo: 'FRA 2-0 MAR (QF — Dembélé 66\' clincher) + ENG 6-4 FRA (3rd — 90+6\' goal made it 5-4 but France still lost)', tier: 'elite' },
+
+  // ── Morocco R16 hero ─────────────────────────────────────────────────────
+  // (Achraf Hakimi already in group-stage Elite + R32 pool — no need to duplicate)
+
+  // ── Norway R16 shock ─────────────────────────────────────────────────────
+  { name: 'Erling Haaland', nationCode: 'NOR', position: 'ST', pulseScore: 93, trend: 'rising', matchInfo: 'NOR 2-1 BRA (R16 — Haaland brace, eliminated Brazil)', tier: 'elite' },
+  { name: 'Martin Ødegaard', nationCode: 'NOR', position: 'CAM', pulseScore: 88, trend: 'rising', matchInfo: 'NOR 2-1 BRA (R16 — orchestrated the upset of the tournament)', tier: 'elite' },
+
+  // ── Cape Verde Cinderella ────────────────────────────────────────────────
+  { name: 'Vozinha', nationCode: 'CPV', position: 'GK', pulseScore: 88, trend: 'rising', matchInfo: 'B/R Football writers\' 2026 World Cup Best XI GK — Cape Verde\'s Cinderella run to R16', tier: 'elite' },
+
+  // ── Crisis picks (knockout-stage villains) ───────────────────────────────
+  { name: 'Enzo Fernández', nationCode: 'ARG', position: 'CM', pulseScore: 35, trend: 'falling', matchInfo: 'ESP 1-0 ARG (FINAL — RED CARD 93\', left Argentina with 10 men, runner-up)', tier: 'crisis' },
+  { name: 'Nico González', nationCode: 'ARG', position: 'LW', pulseScore: 38, trend: 'falling', matchInfo: 'ESP 1-0 ARG (FINAL — anonymous, subbed off, runner-up)', tier: 'crisis' },
+  { name: 'Mike Maignan', nationCode: 'FRA', position: 'GK', pulseScore: 28, trend: 'falling', matchInfo: 'ENG 6-4 FRA (3rd place — 6 conceded, 4th-place finish) + FRA 0-2 ESP (SF — 2 conceded, eliminated)', tier: 'crisis' },
+  { name: 'John Stones', nationCode: 'ENG', position: 'CB', pulseScore: 38, trend: 'falling', matchInfo: 'ENG 1-2 ARG (SF — conceded 2 late goals, eliminated from Final)', tier: 'crisis' },
+]
+
 // ── Merged player record ─────────────────────────────────────────────────────
 
 type PosGroup = 'GK' | 'DEF' | 'MID' | 'FWD'
@@ -206,6 +281,56 @@ function mergeAllPlayers(): Map<string, MergedPlayer> {
       else if (r.r32Fact && r.r32Fact.includes('ELIMINATED')) p.crisisMatchInfo = r.r32Fact
     }
     // 'upcoming' R32 teamStatus is ignored — those players have no result yet.
+  }
+
+  // ── KNOCKOUT_HEROES appearances ──
+  // These are verified QF/SF/3rd/Final hero/villain performances. The pulseScore
+  // here is app-internal (0-100) and reflects the knockout-stage moment only — it
+  // is combined with the existing group/R32 score (if any) using the same
+  // best-moment routing: Elite keeps the HIGHER score, Crisis keeps the LOWER.
+  for (const k of KNOCKOUT_HEROES) {
+    const p = ensure(k.name, k.nationCode, k.position, k.trend)
+    // Knockout buzz: high for heroes (esp. Final winners), low for villains.
+    // Use the entry's pulseScore directly as the "buzz" component.
+    const knockoutBuzz = k.pulseScore
+    // Group-stage pulse: use the SAME-TIER group-stage pulse if present, else 50.
+    // (Don't cross-contaminate — e.g. Lamine Yamal was a Crisis pick in the group
+    // stage but an Elite hero in the knockouts; his eliteScore should NOT inherit
+    // his group-stage crisis pulse of 30.)
+    const groupEliteEntry = GROUP_STAGE_ELITE.find(g => g.name === k.name)
+    const groupCrisisEntry = GROUP_STAGE_CRISIS.find(g => g.name === k.name)
+    const r32Entry = VERIFIED_POOL.find(r => r.name === k.name)
+    let groupPulse: number
+    if (k.tier === 'elite') {
+      groupPulse = groupEliteEntry?.pulseScore ?? (r32Entry && r32Entry.teamStatus === 'advanced' ? 50 : 50)
+    } else {
+      groupPulse = groupCrisisEntry?.pulseScore ?? (r32Entry && r32Entry.teamStatus === 'eliminated' ? 50 : 50)
+    }
+    const score = Math.round(groupPulse * 0.4 + knockoutBuzz * 0.4 + trendBonus(k.trend) * 0.2)
+
+    if (k.tier === 'elite') {
+      // Hero: keep the HIGHER score (their best tournament moment).
+      if (p.eliteScore === null || score > p.eliteScore) {
+        p.eliteScore = score
+      }
+      // Prefer the knockout matchInfo (more decisive) — but only overwrite if the
+      // existing one doesn't already cite the Final/SF.
+      if (!p.eliteMatchInfo) p.eliteMatchInfo = k.matchInfo
+      else if (!p.eliteMatchInfo.includes('FINAL') && !p.eliteMatchInfo.includes('SF') && !p.eliteMatchInfo.includes('3rd')) {
+        p.eliteMatchInfo = k.matchInfo
+      }
+      p.trend = k.trend
+    } else {
+      // Crisis: keep the LOWER score (their worst tournament moment).
+      if (p.crisisScore === null || score < p.crisisScore) {
+        p.crisisScore = score
+      }
+      if (!p.crisisMatchInfo) p.crisisMatchInfo = k.matchInfo
+      else if (!p.crisisMatchInfo.includes('FINAL') && !p.crisisMatchInfo.includes('SF') && !p.crisisMatchInfo.includes('3rd')) {
+        p.crisisMatchInfo = k.matchInfo
+      }
+      p.trend = k.trend
+    }
   }
 
   return map
@@ -371,5 +496,6 @@ export function getAllVerifiedNames(): Set<string> {
   for (const g of GROUP_STAGE_ELITE) names.add(g.name)
   for (const g of GROUP_STAGE_CRISIS) names.add(g.name)
   for (const r of VERIFIED_POOL) names.add(r.name)
+  for (const k of KNOCKOUT_HEROES) names.add(k.name)
   return names
 }
