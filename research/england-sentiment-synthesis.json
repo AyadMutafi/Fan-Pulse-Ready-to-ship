@@ -1,0 +1,22 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "# Player Sentiment Analysis - England 2026 FIFA World Cup\n\n## Sentiment Classification\n\n| Player | Sentiment | Recurring Themes |\n|--------|-----------|------------------|\n| Jude Bellingham | Positive | Leadership, determination, resilience, clutch performances, fan connection, future optimism |\n| Bukayo Saka | Positive | Resilience, overcoming past criticism, goal-scoring prowess, physical fitness questions, undroppable status |\n| Harry Kane | Mixed | Leadership, goal-scoring record, inconsistent performances, tactical decisions (benching) |\n| Jordan Pickford | Neutral | Goalkeeping consistency, rotation decisions, defensive performance concerns |\n\n## Stale/Incorrect Reference Snippets\n\n- **Yahoo/Comeback (Jul 15)**: Mentions \"after SF loss to Argentina\" - This appears to reference a match that didn't happen in the 2026 World Cup timeline provided (July 14-20)\n- **Mirror (Jul 17)**: References \"win the World Cup in 4 years\" - This suggests looking beyond 2026, making it stale in context\n- **Instagram (Jul 18)**: Mentions \"Euro 2020 final penalty miss vs Italy\" - This references a past tournament (Euro 2020), making it stale\n- **Reddit r/ThreeLions (Jul 18)**: Mentions \"Tuchel logic\" and questions about Saka's fitness - This appears to reference coaching decisions that may not align with the 2026 tournament details provided\n- **Standard (Jul 18)**: Predicts Kane starting with \"six goals\" - This appears to be incorrect as Kane was reportedly dropped for the third-place match\n\nNote: Several snippets reference match outcomes and player performances that don't align with the provided 2026 World Cup timeline (July 14-20), suggesting they may be from previous tournaments or contain inaccuracies.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1784562559,
+  "id": "20260720234912ec296fa0307a4384",
+  "model": "glm-4-plus",
+  "object": "chat.completion",
+  "request_id": "20260720234912ec296fa0307a4384",
+  "usage": {
+    "completion_tokens": 388,
+    "prompt_tokens": 1574,
+    "total_tokens": 1962
+  }
+}
