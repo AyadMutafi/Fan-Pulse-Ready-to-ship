@@ -8,6 +8,18 @@
  *      BBC Sport, USA Today, OneFootball, Standard.co.uk, tempo.co, Bolavip) on
  *      2026-07-02/03. DO NOT add a player without first verifying them via a real
  *      web_search — if you can't verify, don't add.
+ *   1b. APPEARANCE GATE (added 2026-07-21): a player is eligible for an R32 XI
+ *       ONLY if their AppearanceRecord confirms they actually appeared on the
+ *       pitch (status ∈ {starter, sub_played}, minutesPlayed > 0). Being named
+ *       to the squad is necessary but NOT sufficient — bench-only players are
+ *       EXCLUDED. See src/lib/appearance-tracker.ts for the full formula.
+ *       The formula also weights the buzz score by minutes played and source
+ *       evidence tier, so a verified starter ranks above a team-outcome-derived
+ *       starter with the same baseline. This was added after the Guillermo
+ *       Ochoa error: Ochoa was named to Mexico's WC 2026 squad but did NOT play
+ *       the R32 vs Ecuador (Raúl Rangel started — USA Today / El Paso Times /
+ *       ESPN / ekantipur lineup pages). Ochoa has been removed; Rangel replaces
+ *       him with a tier1_lineup_page appearance record.
  *   2. All buzz scores come from EITHER the embedded baseline (labeled
  *      "VERIFIED BUZZ · captured 2026-07-02") OR a fresh real web_search call
  *      (labeled "LIVE BUZZ · updated Xs ago"). Never invent a score.
@@ -16,6 +28,8 @@
  *   4. Match results may ONLY transition upcoming → live → completed when verified
  *      against a real web source (handled by /api/world-cup/r32-match-sync).
  *   5. Excluded players (user-confirmed non-participants): Morata, Depay, Rodrygo.
+ *      EXCLUDED via appearance-verification 2026-07-21: Guillermo Ochoa (MEX GK —
+ *      was on the bench for the R32 vs ECU; Raúl Rangel started).
  *
  * VERIFICATION SOURCES per player:
  *   - Group-stage-verified players (Part 1 / Part 4 of VERIFIED_DATA.md): their WC
@@ -35,6 +49,13 @@
  */
 
 import type { PrismaClient } from '@prisma/client'
+import {
+  type AppearanceRecord,
+  isEligibleForXI,
+  computeAppearanceAdjustedBuzz,
+  inferredStarter,
+  verifiedStarter,
+} from '@/lib/appearance-tracker'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +76,14 @@ export interface R32Player {
   baselineBuzz: number
   /** ISO timestamp the baseline was captured. */
   baselineCapturedAt: string
+  /**
+   * Appearance verification record — gates eligibility AND weights the buzz
+   * score. See src/lib/appearance-tracker.ts. Optional: if omitted, the ranker
+   * treats the player as an inferred starter with the weakest evidence tier
+   * (team_outcome_derived) — eligible but discounted. Upgrade individual
+   * entries to verifiedStarter()/verifiedSub() as lineup sources are consulted.
+   */
+  appearance?: AppearanceRecord
 }
 
 export interface RankedPlayer extends R32Player {
@@ -72,6 +101,8 @@ export interface RankedPlayer extends R32Player {
   sentiment: number
   /** App-internal trend, derived from scoreDelta. */
   trend: 'rising' | 'stable' | 'falling'
+  /** Resolved appearance record (always present on RankedPlayer). */
+  appearance: AppearanceRecord
 }
 
 export interface R32SelectionResult {
@@ -152,11 +183,24 @@ export const VERIFIED_POOL: readonly R32Player[] = [
     r32Fact: 'BEL 3-2 SEN AET (R32, Jul 1). Belgium advanced. De Bruyne started.',
     baselineBuzz: 87, baselineCapturedAt: BASELINE_CAPTURED_AT,
   },
+  // ── MEX GK — APPEARANCE-VERIFIED 2026-07-21 ──────────────────────────────
+  // Guillermo Ochoa was REMOVED: he was named to Mexico's WC 2026 squad (record
+  // 6th WC) but did NOT play the R32 vs Ecuador. Multiple Tier-1 lineup pages
+  // (USA Today, El Paso Times, ESPN, ekantipur) confirm Raúl Rangel started.
+  // Ochoa's only WC 2026 appearance was the group-stage match vs Czechia
+  // (Fox Sports). The appearance-tracker formula (src/lib/appearance-tracker.ts)
+  // now gates eligibility on actually having played, which would have caught
+  // this error at rank time.
   {
-    name: 'Guillermo Ochoa', nationCode: 'MEX', position: 'GK',
+    name: 'Raúl Rangel', nationCode: 'MEX', position: 'GK',
     teamStatus: 'advanced',
-    r32Fact: 'MEX 2-0 ECU (R32, Jun 28). Mexico advanced (clean sheet).',
+    r32Fact: 'MEX 2-0 ECU (R32, Jun 30). Mexico advanced (clean sheet). Rangel started.',
     baselineBuzz: 86, baselineCapturedAt: BASELINE_CAPTURED_AT,
+    appearance: verifiedStarter(
+      'https://www.usatoday.com/story/sports/soccer/worldcup/2026/06/30/mexico-lineup-today-world-cup-ecuador/90752315007',
+      'USA Today lineup page (+ El Paso Times, ESPN, ekantipur corroboration)',
+      90,
+    ),
   },
   {
     name: 'César Montes', nationCode: 'MEX', position: 'CB',
@@ -312,14 +356,33 @@ function pickFormation(
   liveOverrides: Map<string, { buzz: number; source: 'live'; at: string }>,
   previousScores: Map<string, number>,
 ): RankedPlayer[] {
-  const candidates = pool.filter((p) => p.teamStatus === status)
-  const ranked: RankedPlayer[] = candidates.map((p) => {
+  // ── APPEARANCE GATE (Step 1 of the formula) ───────────────────────────────
+  // A player is eligible ONLY if their AppearanceRecord confirms they actually
+  // appeared on the pitch. Players without an explicit appearance record fall
+  // back to inferredStarter() (team_outcome_derived) — still eligible but their
+  // buzz is discounted by the evidence-confidence multiplier in Step 3.
+  // This gate would have caught the Ochoa error: if his appearance record had
+  // been 'sub_unused' (bench-only), he'd have been excluded automatically.
+  const candidates = pool
+    .filter((p) => p.teamStatus === status)
+    .map((p) => ({ p, appearance: p.appearance ?? inferredStarter('Legacy pool entry — appearance inferred from team outcome, pending Tier-1 lineup verification') }))
+    .filter(({ appearance }) => isEligibleForXI(appearance))
+
+  const ranked: RankedPlayer[] = candidates.map(({ p, appearance }) => {
     const live = liveOverrides.get(p.name)
-    const buzzScore = live ? live.buzz : p.baselineBuzz
+    // ── APPEARANCE-ADJUSTED BUZZ (Steps 2–4 of the formula) ────────────────
+    // Baseline (non-live) buzz is weighted by minutes played (Step 2) and
+    // source evidence tier (Step 3). Live buzz from a real web_search refresh
+    // bypasses the appearance weight (it's already a real signal) but the
+    // eligibility gate above still applies.
+    const buzzScore = live
+      ? live.buzz
+      : computeAppearanceAdjustedBuzz(p.baselineBuzz, appearance)
     const previousBuzzScore = previousScores.get(p.name) ?? 0
     const delta = buzzScore - (previousBuzzScore || p.baselineBuzz)
     return {
       ...p,
+      appearance,
       buzzScore,
       buzzSource: live ? 'live' : 'baseline',
       previousBuzzScore: previousBuzzScore || p.baselineBuzz,

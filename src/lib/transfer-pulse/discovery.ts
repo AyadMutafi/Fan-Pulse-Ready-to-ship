@@ -225,6 +225,24 @@ async function discoverForPlayer(
     const toClubName = extracted.toClubName
     const reportedAt = post.postedAt ? safeParseDate(post.postedAt) : new Date()
 
+    // ── SAME-CLUB GUARD (added 2026-07-21) ─────────────────────────────────
+    // If the LLM extracted a destination that matches the player's CURRENT club,
+    // this is a contract renewal / "stay" post, NOT a transfer. Reject it.
+    // This fixes the "Bruno Fernandes Man United → Manchester United" and
+    // "Marcus Rashford Man United → Manchester United" bad sagas where Romano
+    // posts about contract talks were misclassified as same-club transfers.
+    if (
+      toClubCode.toUpperCase() === player.fromClubCode.toUpperCase() ||
+      toClubName.toLowerCase().includes(player.fromClubName.toLowerCase()) ||
+      player.fromClubName.toLowerCase().includes(toClubName.toLowerCase())
+    ) {
+      console.log(
+        `[transfer-pulse/discovery] rejecting same-club extraction for ${player.name}: ` +
+          `"${toClubName}" matches current club "${player.fromClubName}" — likely a contract-renewal post, not a transfer`,
+      )
+      continue
+    }
+
     // Upsert the saga (one per player + destination club)
     const existing = await db.transferSaga.findUnique({
       where: {

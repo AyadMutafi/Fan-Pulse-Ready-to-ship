@@ -227,10 +227,15 @@ export const VERIFIED_POOL: readonly R16Player[] = [
     r16Fact: 'ENG vs MEX (R16, Jul 5). Saka in ENG 2026 squad. Source: FIFA.com (Saka interview).',
     baselineBuzz: 84, baselineCapturedAt: BASELINE_CAPTURED_AT,
   },
+  // MEX GK — Guillermo Ochoa REMOVED 2026-07-21: he was named to Mexico's WC
+  // 2026 squad (record 6th WC) but did NOT play R32 vs ECU nor R16 vs ENG.
+  // Raúl Rangel is Mexico's #1 GK (Squawka / USA Today / El Paso Times lineup
+  // pages confirm Rangel started both the opener vs RSA and R32 vs ECU).
+  // Ochoa's only WC 2026 appearance was the group-stage match vs Czechia.
   {
-    name: 'Guillermo Ochoa', nationCode: 'MEX', position: 'GK',
+    name: 'Raúl Rangel', nationCode: 'MEX', position: 'GK',
     teamStatus: 'advanced',
-    r16Fact: 'ENG vs MEX (R16, Jul 5). Ochoa kept R32 clean sheet vs ECU. Source: VERIFIED_DATA Part 2.',
+    r16Fact: 'ENG vs MEX (R16, Jul 5). Rangel is Mexico #1 GK (started opener vs RSA + R32 clean sheet vs ECU). Source: USA Today / El Paso Times / Squawka lineup pages.',
     baselineBuzz: 76, baselineCapturedAt: BASELINE_CAPTURED_AT,
   },
   {

@@ -113,7 +113,7 @@ const R16_ELITE: PlayerSeed[] = [
 
 // R16 Crisis XI (4-3-3) — players from eliminated R16 teams (CAN, PAR, BRA, MEX, POR, USA, COL, EGY)
 const R16_CRISIS: PlayerSeed[] = [
-  { name: 'Guillermo Ochoa', nationCode: 'MEX', position: 'GK', pulseScore: 28, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'MEX 2-3 ENG (3 conceded, eliminated)', order: 0 },
+  { name: 'Raúl Rangel', nationCode: 'MEX', position: 'GK', pulseScore: 28, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'MEX 2-3 ENG (3 conceded, eliminated — Rangel started; Ochoa was bench)', order: 0 },
   { name: 'Alphonso Davies', nationCode: 'CAN', position: 'LB', pulseScore: 22, sentiment: 14, trend: 'falling', isLive: true, matchInfo: 'CAN 0-3 MAR (3 conceded, eliminated)', order: 1 },
   { name: 'Marquinhos', nationCode: 'BRA', position: 'CB', pulseScore: 25, sentiment: 16, trend: 'falling', isLive: true, matchInfo: 'BRA 1-2 NOR (eliminated by Norway)', order: 3 },
   { name: 'Sergio Ramos', nationCode: 'POR', position: 'CB', pulseScore: 26, sentiment: 18, trend: 'falling', isLive: true, matchInfo: 'POR 0-1 ESP (eliminated by Spain)', order: 4 },

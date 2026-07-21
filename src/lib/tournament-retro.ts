@@ -51,7 +51,7 @@ interface GroupStageEntry {
 }
 
 const GROUP_STAGE_ELITE: GroupStageEntry[] = [
-  { name: 'Guillermo Ochoa', nationCode: 'MEX', position: 'GK', pulseScore: 88, trend: 'rising', matchInfo: 'MEX 2-0 RSA (clean sheet)', tier: 'elite' },
+  { name: 'Raúl Rangel', nationCode: 'MEX', position: 'GK', pulseScore: 88, trend: 'rising', matchInfo: 'MEX 2-0 RSA (clean sheet, opener — Rangel started; Ochoa was bench)', tier: 'elite' },
   { name: 'Achraf Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 84, trend: 'rising', matchInfo: 'MAR 1-1 BRA', tier: 'elite' },
   { name: 'Harry Souttar', nationCode: 'AUS', position: 'CB', pulseScore: 83, trend: 'rising', matchInfo: 'AUS 2-0 TUR (clean sheet)', tier: 'elite' },
   { name: 'César Montes', nationCode: 'MEX', position: 'CB', pulseScore: 82, trend: 'rising', matchInfo: 'MEX 2-0 RSA (clean sheet)', tier: 'elite' },

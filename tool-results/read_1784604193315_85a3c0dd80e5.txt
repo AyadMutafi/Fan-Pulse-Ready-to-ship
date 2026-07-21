@@ -1,0 +1,502 @@
+     1→/**
+     2→ * Team of the Tournament Retro — 2026 FIFA World Cup closure content.
+     3→ *
+     4→ * After the tournament ends, this module produces the all-tournament Elite XI
+     5→ * (the heroes) and Crisis XI (the villains) — ranked across the ENTIRE World
+     6→ * Cup, not per stage. It's shareable closure content that gives users a reason
+     7→ * to open the app one more time.
+     8→ *
+     9→ * ANTI-HALLUCINATION CONTRACT (non-negotiable):
+    10→ *   1. The ONLY players eligible for either XI are those drawn from:
+    11→ *        (a) the group-stage Elite/Crisis pools in src/app/api/world-cup/seed/route.ts
+    12→ *            (ELITE_PLAYERS['group-stage'] + CRISIS_PLAYERS['group-stage'])
+    13→ *        (b) the R32 VERIFIED_POOL in src/lib/r32-buzz-ranker.ts
+    14→ *      Every one of those players was web-verified for WC 2026 squad
+    15→ *      participation (see VERIFIED_DATA.md). We NEVER invent a player.
+    16→ *   2. The matchInfo string on each pick cites ONLY the verified match fact
+    17→ *      already attached to that player in the source pool — we copy it verbatim
+    18→ *      and pick the player's BEST fact (for Elite) or WORST fact (for Crisis)
+    19→ *      when a player appears in both stages.
+    20→ *   3. tournamentScore is an APP-INTERNAL composite (group pulse × 0.4 + R32
+    21→ *      buzz × 0.4 + trend bonus × 0.2). It is NOT a real-world statistic and is
+    22→ *      never labelled as "verified". It exists only to rank players relative to
+    23→ *      each other.
+    24→ *   4. If a position group has fewer than the needed players, we fill from the
+    25→ *      next-best available verified player rather than inventing. If the entire
+    26→ *      verified pool is exhausted, that slot shows "N/A" (a null placeholder) —
+    27→ *      we NEVER fabricate a name to fill a slot.
+    28→ */
+    29→
+    30→import { VERIFIED_POOL } from '@/lib/r32-buzz-ranker'
+    31→import type { Trend } from '@/types'
+    32→
+    33→// ── Source pool: group-stage Elite + Crisis (mirrors the seed file) ───────────
+    34→// These arrays are COPIES of ELITE_PLAYERS['group-stage'] and
+    35→// CRISIS_PLAYERS['group-stage'] from src/app/api/world-cup/seed/route.ts. They
+    36→// are reproduced here (not imported) because the seed file is a server-only
+    37→// admin route that wipes the DB on POST — importing it would pull heavy Prisma
+    38→// + admin-auth side effects into a pure ranking module. The values are verified
+    39→// facts (see VERIFIED_DATA.md Part 4); keeping them in sync is a manual
+    40→// responsibility documented in the worklog.
+    41→
+    42→interface GroupStageEntry {
+    43→  name: string
+    44→  nationCode: string
+    45→  position: 'GK' | 'CB' | 'LB' | 'RB' | 'CDM' | 'CM' | 'CAM' | 'LW' | 'RW' | 'ST' | 'CF'
+    46→  pulseScore: number
+    47→  trend: Trend
+    48→  matchInfo: string
+    49→  /** 'elite' = hero performance, 'crisis' = villain performance */
+    50→  tier: 'elite' | 'crisis'
+    51→}
+    52→
+    53→const GROUP_STAGE_ELITE: GroupStageEntry[] = [
+    54→  { name: 'Guillermo Ochoa', nationCode: 'MEX', position: 'GK', pulseScore: 88, trend: 'rising', matchInfo: 'MEX 2-0 RSA (clean sheet)', tier: 'elite' },
+    55→  { name: 'Achraf Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 84, trend: 'rising', matchInfo: 'MAR 1-1 BRA', tier: 'elite' },
+    56→  { name: 'Harry Souttar', nationCode: 'AUS', position: 'CB', pulseScore: 83, trend: 'rising', matchInfo: 'AUS 2-0 TUR (clean sheet)', tier: 'elite' },
+    57→  { name: 'César Montes', nationCode: 'MEX', position: 'CB', pulseScore: 82, trend: 'rising', matchInfo: 'MEX 2-0 RSA (clean sheet)', tier: 'elite' },
+    58→  { name: 'Andrew Robertson', nationCode: 'SCO', position: 'LB', pulseScore: 83, trend: 'rising', matchInfo: 'SCO 1-0 HAI (clean sheet)', tier: 'elite' },
+    59→  { name: 'Jamal Musiala', nationCode: 'GER', position: 'CM', pulseScore: 93, trend: 'rising', matchInfo: "GER 7-1 CUW (Musiala 47')", tier: 'elite' },
+    60→  { name: 'Jude Bellingham', nationCode: 'ENG', position: 'CM', pulseScore: 90, trend: 'rising', matchInfo: "ENG 4-2 CRO (Bellingham 47')", tier: 'elite' },
+    61→  { name: 'Florian Wirtz', nationCode: 'GER', position: 'CAM', pulseScore: 89, trend: 'rising', matchInfo: 'GER 7-1 CUW', tier: 'elite' },
+    62→  { name: 'Lionel Messi', nationCode: 'ARG', position: 'RW', pulseScore: 95, trend: 'rising', matchInfo: "ARG 3-0 ALG (Messi 17', 60', 76' — hat-trick)", tier: 'elite' },
+    63→  { name: 'Vinícius Júnior', nationCode: 'BRA', position: 'LW', pulseScore: 88, trend: 'rising', matchInfo: "BRA 1-1 MAR (Vinícius 32')", tier: 'elite' },
+    64→  { name: 'Alexander Isak', nationCode: 'SWE', position: 'ST', pulseScore: 91, trend: 'rising', matchInfo: "SWE 5-1 TUN (Isak 30')", tier: 'elite' },
+    65→]
+    66→
+    67→const GROUP_STAGE_CRISIS: GroupStageEntry[] = [
+    68→  { name: 'Eloy Room', nationCode: 'CUW', position: 'GK', pulseScore: 16, trend: 'falling', matchInfo: 'CUW 1-7 GER (7 conceded)', tier: 'crisis' },
+    69→  { name: 'Leandro Bacuna', nationCode: 'CUW', position: 'RB', pulseScore: 18, trend: 'falling', matchInfo: 'CUW 1-7 GER', tier: 'crisis' },
+    70→  { name: 'Dylan Bronn', nationCode: 'TUN', position: 'CB', pulseScore: 20, trend: 'falling', matchInfo: 'TUN 1-5 SWE', tier: 'crisis' },
+    71→  { name: 'Gustavo Gómez', nationCode: 'PAR', position: 'CB', pulseScore: 24, trend: 'falling', matchInfo: 'PAR 1-4 USA', tier: 'crisis' },
+    72→  { name: 'Junior Alonso', nationCode: 'PAR', position: 'LB', pulseScore: 26, trend: 'falling', matchInfo: 'PAR 1-4 USA', tier: 'crisis' },
+    73→  { name: 'Hannibal Mejbri', nationCode: 'TUN', position: 'CM', pulseScore: 28, trend: 'falling', matchInfo: 'TUN 1-5 SWE', tier: 'crisis' },
+    74→  { name: 'Ao Tanaka', nationCode: 'JPN', position: 'CM', pulseScore: 32, trend: 'falling', matchInfo: 'JPN 2-2 NED (2-goal lead squandered)', tier: 'crisis' },
+    75→  { name: 'Miguel Almirón', nationCode: 'PAR', position: 'CAM', pulseScore: 30, trend: 'falling', matchInfo: 'PAR 1-4 USA', tier: 'crisis' },
+    76→  { name: 'Luiz Henrique', nationCode: 'BRA', position: 'LW', pulseScore: 28, trend: 'falling', matchInfo: 'BRA 1-1 MAR (held to draw)', tier: 'crisis' },
+    77→  { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 30, trend: 'falling', matchInfo: 'ESP 0-0 CPV (held scoreless)', tier: 'crisis' },
+    78→  { name: 'Wout Weghorst', nationCode: 'NED', position: 'ST', pulseScore: 26, trend: 'falling', matchInfo: 'NED 2-2 JPN (2-goal lead squandered)', tier: 'crisis' },
+    79→]
+    80→
+    81→// ── Knockout heroes (QF / SF / 3rd / Final) — VERIFIED via Tier-1 sources ────
+    82→// These are players who produced decisive hero (or villain) performances in
+    83→// the knockout rounds. Each entry's WC 2026 squad participation AND knockout
+    84→// match outcome was verified against Tier-1 sources (Sofascore, ESPN, FIFA.com,
+    85→// BBC, Guardian, NYT Athletic, DAZN, Yahoo Sports, NBC Sports) on 2026-07-20.
+    86→//
+    87→// ANTI-HALLUCINATION: every player here was in their nation's WC 2026 squad.
+    88→// Players who retired before the tournament (Di María, Griezmann, Carvajal)
+    89→// or were left out by their coach (Walker, Shaw, Foden) are NOT in this list.
+    90→// See /home/z/my-project/research/synthesis-report.md for the full discrepancy
+    91→// table and verification trail.
+    92→
+    93→interface KnockoutHeroEntry {
+    94→  name: string
+    95→  nationCode: string
+    96→  position: GroupStageEntry['position']
+    97→  /** App-internal composite pulse (0-100) reflecting knockout-stage heroism. */
+    98→  pulseScore: number
+    99→  trend: Trend
+   100→  /** Verified knockout-stage match fact (copied from the research reports). */
+   101→  matchInfo: string
+   102→  /** 'elite' = hero performance, 'crisis' = villain performance */
+   103→  tier: 'elite' | 'crisis'
+   104→}
+   105→
+   106→const KNOCKOUT_HEROES: KnockoutHeroEntry[] = [
+   107→  // ── Spain champions — Elite picks (QF/SF/Final) ──────────────────────────
+   108→  { name: 'Unai Simón', nationCode: 'ESP', position: 'GK', pulseScore: 99, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — Golden Glove, record 7 clean sheets, only 1 conceded all tournament, CHAMPIONS!)', tier: 'elite' },
+   109→  { name: 'Pedro Porro', nationCode: 'ESP', position: 'RB', pulseScore: 95, trend: 'rising', matchInfo: 'ESP 2-0 FRA (SF — scored + clean sheet, into the Final) + ESP 1-0 ARG (FINAL — owned the right side, CHAMPIONS!)', tier: 'elite' },
+   110→  { name: 'Pau Cubarsí', nationCode: 'ESP', position: 'CB', pulseScore: 97, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — FIFA Best Young Player, defensive rock, CHAMPIONS!)', tier: 'elite' },
+   111→  { name: 'Aymeric Laporte', nationCode: 'ESP', position: 'CB', pulseScore: 96, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — only 1 goal conceded all tournament, CHAMPIONS!)', tier: 'elite' },
+   112→  { name: 'Marc Cucurella', nationCode: 'ESP', position: 'LB', pulseScore: 94, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — defensive solidity, CHAMPIONS!)', tier: 'elite' },
+   113→  { name: 'Rodri', nationCode: 'ESP', position: 'CM', pulseScore: 99, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — FIFA Golden Ball winner, midfield masterclass, CHAMPIONS!)', tier: 'elite' },
+   114→  { name: 'Fabián Ruiz', nationCode: 'ESP', position: 'CM', pulseScore: 94, trend: 'rising', matchInfo: 'ESP 2-1 BEL (QF — Fabián 30\' opener) + ESP 1-0 ARG (FINAL — controlled tempo, CHAMPIONS!)', tier: 'elite' },
+   115→  { name: 'Dani Olmo', nationCode: 'ESP', position: 'CAM', pulseScore: 93, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — playmaker, CHAMPIONS!)', tier: 'elite' },
+   116→  { name: 'Lamine Yamal', nationCode: 'ESP', position: 'RW', pulseScore: 98, trend: 'rising', matchInfo: 'ESP 2-0 FRA (SF — terrorized France) + ESP 1-0 ARG (FINAL — terrorized Argentina, CHAMPIONS!)', tier: 'elite' },
+   117→  { name: 'Mikel Oyarzabal', nationCode: 'ESP', position: 'LW', pulseScore: 95, trend: 'rising', matchInfo: 'ESP 2-0 FRA (SF — Oyarzabal opener, into the Final)', tier: 'elite' },
+   118→  { name: 'Ferran Torres', nationCode: 'ESP', position: 'ST', pulseScore: 99, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — Ferran Torres 106\' AET WINNER, super-sub, CHAMPIONS!)', tier: 'elite' },
+   119→  { name: 'Mikel Merino', nationCode: 'ESP', position: 'CM', pulseScore: 92, trend: 'rising', matchInfo: 'ESP 2-1 BEL (QF — Merino 88\' winner) + POR 0-1 ESP (R16 — injury-time winner)', tier: 'elite' },
+   120→
+   121→  // ── Argentina runner-up — Elite picks (SF) + Crisis picks (Final) ────────
+   122→  { name: 'Emiliano Martínez', nationCode: 'ARG', position: 'GK', pulseScore: 95, trend: 'rising', matchInfo: 'ESP 1-0 ARG (FINAL — 11-save MOTM, Sofascore 9.6, all-time WC Final save record, runner-up)', tier: 'elite' },
+   123→  { name: 'Lionel Messi', nationCode: 'ARG', position: 'CAM', pulseScore: 92, trend: 'rising', matchInfo: 'ARG 3-0 ALG (group — hat-trick 17\', 60\', 76\', equalled all-time WC scoring record)', tier: 'elite' },
+   124→  { name: 'Enzo Fernández', nationCode: 'ARG', position: 'CM', pulseScore: 88, trend: 'rising', matchInfo: 'ENG 1-2 ARG (SF — Enzo 85\' equalizer, into the Final)', tier: 'elite' },
+   125→  { name: 'Lautaro Martínez', nationCode: 'ARG', position: 'ST', pulseScore: 93, trend: 'rising', matchInfo: 'ENG 1-2 ARG (SF — Lautaro 90+2\' winner off bench, into the Final) + ARG 3-1 SUI (QF — Lautaro 120+1\' AET)', tier: 'elite' },
+   126→  { name: 'Alexis Mac Allister', nationCode: 'ARG', position: 'CM', pulseScore: 86, trend: 'rising', matchInfo: 'ARG 3-1 SUI (QF — Mac Allister 10\' opener)', tier: 'elite' },
+   127→  { name: 'Julián Álvarez', nationCode: 'ARG', position: 'ST', pulseScore: 87, trend: 'rising', matchInfo: 'ARG 3-1 SUI (QF — Álvarez 112\' AET screamer)', tier: 'elite' },
+   128→
+   129→  // ── England 3rd place — Elite picks ──────────────────────────────────────
+   130→  { name: 'Bukayo Saka', nationCode: 'ENG', position: 'RW', pulseScore: 97, trend: 'rising', matchInfo: 'ENG 6-4 FRA (3rd place — HAT-TRICK 37\', 45+1\', 87\' pen, 3rd-place medal)', tier: 'elite' },
+   131→  { name: 'Jude Bellingham', nationCode: 'ENG', position: 'CAM', pulseScore: 92, trend: 'rising', matchInfo: 'NOR 1-2 ENG (QF — Bellingham brace incl. 3\' ET winner) + ENG 6-4 FRA (3rd — 98\' sealer as sub, 3rd-place medal)', tier: 'elite' },
+   132→  { name: 'Anthony Gordon', nationCode: 'ENG', position: 'LW', pulseScore: 84, trend: 'rising', matchInfo: 'ENG 1-2 ARG (SF — Gordon scored England\'s lone goal)', tier: 'elite' },
+   133→
+   134→  // ── France 4th place — Elite (Mbappé record) + Crisis (Maignan 6 conceded) ──
+   135→  { name: 'Kylian Mbappé', nationCode: 'FRA', position: 'ST', pulseScore: 98, trend: 'rising', matchInfo: 'WC 2026 Golden Boot (10 goals) + broke all-time WC scoring record (22 goals, surpassing Messi 21 + Klose 16), despite France finishing 4th', tier: 'elite' },
+   136→  { name: 'Michael Olise', nationCode: 'FRA', position: 'CAM', pulseScore: 86, trend: 'rising', matchInfo: 'FRA 0-2 ESP (SF — France\'s creative hub) + ENG 6-4 FRA (3rd — scored but France lost)', tier: 'elite' },
+   137→  { name: 'Ousmane Dembélé', nationCode: 'FRA', position: 'LW', pulseScore: 84, trend: 'rising', matchInfo: 'FRA 2-0 MAR (QF — Dembélé 66\' clincher) + ENG 6-4 FRA (3rd — 90+6\' goal made it 5-4 but France still lost)', tier: 'elite' },
+   138→
+   139→  // ── Morocco R16 hero ─────────────────────────────────────────────────────
+   140→  // (Achraf Hakimi already in group-stage Elite + R32 pool — no need to duplicate)
+   141→
+   142→  // ── Norway R16 shock ─────────────────────────────────────────────────────
+   143→  { name: 'Erling Haaland', nationCode: 'NOR', position: 'ST', pulseScore: 93, trend: 'rising', matchInfo: 'NOR 2-1 BRA (R16 — Haaland brace, eliminated Brazil)', tier: 'elite' },
+   144→  { name: 'Martin Ødegaard', nationCode: 'NOR', position: 'CAM', pulseScore: 88, trend: 'rising', matchInfo: 'NOR 2-1 BRA (R16 — orchestrated the upset of the tournament)', tier: 'elite' },
+   145→
+   146→  // ── Cape Verde Cinderella ────────────────────────────────────────────────
+   147→  { name: 'Vozinha', nationCode: 'CPV', position: 'GK', pulseScore: 88, trend: 'rising', matchInfo: 'B/R Football writers\' 2026 World Cup Best XI GK — Cape Verde\'s Cinderella run to R16', tier: 'elite' },
+   148→
+   149→  // ── Crisis picks (knockout-stage villains) ───────────────────────────────
+   150→  { name: 'Enzo Fernández', nationCode: 'ARG', position: 'CM', pulseScore: 35, trend: 'falling', matchInfo: 'ESP 1-0 ARG (FINAL — RED CARD 93\', left Argentina with 10 men, runner-up)', tier: 'crisis' },
+   151→  { name: 'Nico González', nationCode: 'ARG', position: 'LW', pulseScore: 38, trend: 'falling', matchInfo: 'ESP 1-0 ARG (FINAL — anonymous, subbed off, runner-up)', tier: 'crisis' },
+   152→  { name: 'Mike Maignan', nationCode: 'FRA', position: 'GK', pulseScore: 28, trend: 'falling', matchInfo: 'ENG 6-4 FRA (3rd place — 6 conceded, 4th-place finish) + FRA 0-2 ESP (SF — 2 conceded, eliminated)', tier: 'crisis' },
+   153→  { name: 'John Stones', nationCode: 'ENG', position: 'CB', pulseScore: 38, trend: 'falling', matchInfo: 'ENG 1-2 ARG (SF — conceded 2 late goals, eliminated from Final)', tier: 'crisis' },
+   154→]
+   155→
+   156→// ── Merged player record ─────────────────────────────────────────────────────
+   157→
+   158→type PosGroup = 'GK' | 'DEF' | 'MID' | 'FWD'
+   159→function posGroup(p: { position: string }): PosGroup {
+   160→  if (p.position === 'GK') return 'GK'
+   161→  if (['CB', 'LB', 'RB'].includes(p.position)) return 'DEF'
+   162→  if (['CM', 'CAM', 'CDM'].includes(p.position)) return 'MID'
+   163→  return 'FWD' // LW, RW, ST, CF
+   164→}
+   165→
+   166→/**
+   167→ * A player merged across all stages where they appeared.
+   168→ *
+   169→ * `eliteScore` aggregates their hero performances (group-stage Elite pulse +
+   170→ * R32 advanced-team buzz). `crisisScore` aggregates their villain performances
+   171→ * (group-stage Crisis pulse + R32 eliminated-team buzz). A player can appear in
+   172→ * BOTH lists (e.g. Weghorst was a Crisis pick in the group stage AND his team
+   173→ * was eliminated in R32) — the two scores are tracked independently so the same
+   174→ * verified player can anchor either XI.
+   175→ */
+   176→interface MergedPlayer {
+   177→  name: string
+   178→  nationCode: string
+   179→  position: GroupStageEntry['position']
+   180→  /** Hero-path composite score, or null if the player never appeared as a hero. */
+   181→  eliteScore: number | null
+   182→  /** Villain-path composite score, or null if the player never appeared as a villain. */
+   183→  crisisScore: number | null
+   184→  /** Best hero fact (for Elite XI matchInfo). */
+   185→  eliteMatchInfo: string | null
+   186→  /** Worst villain fact (for Crisis XI matchInfo). */
+   187→  crisisMatchInfo: string | null
+   188→  /** Most recent trend across stages. */
+   189→  trend: Trend
+   190→}
+   191→
+   192→// Trend bonus: rising = 80, stable = 50, falling = 20.
+   193→function trendBonus(trend: Trend): number {
+   194→  if (trend === 'rising') return 80
+   195→  if (trend === 'stable') return 50
+   196→  return 20
+   197→}
+   198→
+   199→/**
+   200→ * Merge the group-stage pools and the R32 VERIFIED_POOL into one list of
+   201→ * MergedPlayer records, keyed by player name.
+   202→ *
+   203→ * Scoring (per the spec):
+   204→ *   tournamentScore = (groupPulse × 0.4) + (r32Buzz × 0.4) + (trendBonus × 0.2)
+   205→ *
+   206→ * A player who only appeared in one stage gets a neutral 50 for the missing
+   207→ * stage's component, so their composite is still comparable. The `tier` of each
+   208→ * appearance (elite vs crisis) routes the score into `eliteScore` or
+   209→ * `crisisScore` — a player can have both.
+   210→ */
+   211→function mergeAllPlayers(): Map<string, MergedPlayer> {
+   212→  const map = new Map<string, MergedPlayer>()
+   213→
+   214→  const ensure = (name: string, nationCode: string, position: GroupStageEntry['position'], trend: Trend): MergedPlayer => {
+   215→    let p = map.get(name)
+   216→    if (!p) {
+   217→      p = {
+   218→        name, nationCode, position,
+   219→        eliteScore: null, crisisScore: null,
+   220→        eliteMatchInfo: null, crisisMatchInfo: null,
+   221→        trend,
+   222→      }
+   223→      map.set(name, p)
+   224→    }
+   225→    return p
+   226→  }
+   227→
+   228→  // ── Group-stage Elite appearances → eliteScore ──
+   229→  for (const g of GROUP_STAGE_ELITE) {
+   230→    const p = ensure(g.name, g.nationCode, g.position, g.trend)
+   231→    // R32 buzz defaults to 50 (neutral) unless this player also has an R32 record.
+   232→    const r32Buzz = 50
+   233→    const score = Math.round(g.pulseScore * 0.4 + r32Buzz * 0.4 + trendBonus(g.trend) * 0.2)
+   234→    p.eliteScore = score
+   235→    p.eliteMatchInfo = g.matchInfo
+   236→    p.trend = g.trend
+   237→  }
+   238→
+   239→  // ── Group-stage Crisis appearances → crisisScore ──
+   240→  for (const g of GROUP_STAGE_CRISIS) {
+   241→    const p = ensure(g.name, g.nationCode, g.position, g.trend)
+   242→    const r32Buzz = 50
+   243→    const score = Math.round(g.pulseScore * 0.4 + r32Buzz * 0.4 + trendBonus(g.trend) * 0.2)
+   244→    p.crisisScore = score
+   245→    p.crisisMatchInfo = g.matchInfo
+   246→    p.trend = g.trend
+   247→  }
+   248→
+   249→  // ── R32 VERIFIED_POOL appearances ──
+   250→  // Advanced-team players feed eliteScore; eliminated-team players feed crisisScore.
+   251→  // Group-stage pulse defaults to 50 (neutral) unless this player also has a
+   252→  // group-stage record (handled by reading the existing merged entry).
+   253→  for (const r of VERIFIED_POOL) {
+   254→    const position = r.position as GroupStageEntry['position']
+   255→    // Derive an R32 trend: advancing teams trend up, eliminated teams trend down.
+   256→    const r32Trend: Trend = r.teamStatus === 'advanced' ? 'rising' : 'falling'
+   257→    const p = ensure(r.name, r.nationCode, position, r32Trend)
+   258→
+   259→    if (r.teamStatus === 'advanced') {
+   260→      // Group pulse: use the existing elite group-stage pulse if present, else 50.
+   261→      const groupEntry = GROUP_STAGE_ELITE.find(g => g.name === r.name)
+   262→      const groupPulse = groupEntry ? groupEntry.pulseScore : 50
+   263→      const score = Math.round(groupPulse * 0.4 + r.baselineBuzz * 0.4 + trendBonus(r32Trend) * 0.2)
+   264→      // If the player already has an eliteScore from the group stage, prefer the
+   265→      // HIGHER of the two (their best tournament moment). Update matchInfo to
+   266→      // the R32 fact if it's more decisive (R32 facts cite the knockout result).
+   267→      if (p.eliteScore === null || score > p.eliteScore) {
+   268→        p.eliteScore = score
+   269→      }
+   270→      if (!p.eliteMatchInfo) p.eliteMatchInfo = r.r32Fact
+   271→      else if (r.r32Fact && !p.eliteMatchInfo.includes('R32')) p.eliteMatchInfo = r.r32Fact
+   272→    } else if (r.teamStatus === 'eliminated') {
+   273→      const groupEntry = GROUP_STAGE_CRISIS.find(g => g.name === r.name)
+   274→      const groupPulse = groupEntry ? groupEntry.pulseScore : 50
+   275→      const score = Math.round(groupPulse * 0.4 + r.baselineBuzz * 0.4 + trendBonus(r32Trend) * 0.2)
+   276→      // For crisis, prefer the LOWER score (their worst tournament moment).
+   277→      if (p.crisisScore === null || score < p.crisisScore) {
+   278→        p.crisisScore = score
+   279→      }
+   280→      if (!p.crisisMatchInfo) p.crisisMatchInfo = r.r32Fact
+   281→      else if (r.r32Fact && r.r32Fact.includes('ELIMINATED')) p.crisisMatchInfo = r.r32Fact
+   282→    }
+   283→    // 'upcoming' R32 teamStatus is ignored — those players have no result yet.
+   284→  }
+   285→
+   286→  // ── KNOCKOUT_HEROES appearances ──
+   287→  // These are verified QF/SF/3rd/Final hero/villain performances. The pulseScore
+   288→  // here is app-internal (0-100) and reflects the knockout-stage moment only — it
+   289→  // is combined with the existing group/R32 score (if any) using the same
+   290→  // best-moment routing: Elite keeps the HIGHER score, Crisis keeps the LOWER.
+   291→  for (const k of KNOCKOUT_HEROES) {
+   292→    const p = ensure(k.name, k.nationCode, k.position, k.trend)
+   293→    // Knockout buzz: high for heroes (esp. Final winners), low for villains.
+   294→    // Use the entry's pulseScore directly as the "buzz" component.
+   295→    const knockoutBuzz = k.pulseScore
+   296→    // Group-stage pulse: use the SAME-TIER group-stage pulse if present, else 50.
+   297→    // (Don't cross-contaminate — e.g. Lamine Yamal was a Crisis pick in the group
+   298→    // stage but an Elite hero in the knockouts; his eliteScore should NOT inherit
+   299→    // his group-stage crisis pulse of 30.)
+   300→    const groupEliteEntry = GROUP_STAGE_ELITE.find(g => g.name === k.name)
+   301→    const groupCrisisEntry = GROUP_STAGE_CRISIS.find(g => g.name === k.name)
+   302→    const r32Entry = VERIFIED_POOL.find(r => r.name === k.name)
+   303→    let groupPulse: number
+   304→    if (k.tier === 'elite') {
+   305→      groupPulse = groupEliteEntry?.pulseScore ?? (r32Entry && r32Entry.teamStatus === 'advanced' ? 50 : 50)
+   306→    } else {
+   307→      groupPulse = groupCrisisEntry?.pulseScore ?? (r32Entry && r32Entry.teamStatus === 'eliminated' ? 50 : 50)
+   308→    }
+   309→    const score = Math.round(groupPulse * 0.4 + knockoutBuzz * 0.4 + trendBonus(k.trend) * 0.2)
+   310→
+   311→    if (k.tier === 'elite') {
+   312→      // Hero: keep the HIGHER score (their best tournament moment).
+   313→      if (p.eliteScore === null || score > p.eliteScore) {
+   314→        p.eliteScore = score
+   315→      }
+   316→      // Prefer the knockout matchInfo (more decisive) — but only overwrite if the
+   317→      // existing one doesn't already cite the Final/SF.
+   318→      if (!p.eliteMatchInfo) p.eliteMatchInfo = k.matchInfo
+   319→      else if (!p.eliteMatchInfo.includes('FINAL') && !p.eliteMatchInfo.includes('SF') && !p.eliteMatchInfo.includes('3rd')) {
+   320→        p.eliteMatchInfo = k.matchInfo
+   321→      }
+   322→      p.trend = k.trend
+   323→    } else {
+   324→      // Crisis: keep the LOWER score (their worst tournament moment).
+   325→      if (p.crisisScore === null || score < p.crisisScore) {
+   326→        p.crisisScore = score
+   327→      }
+   328→      if (!p.crisisMatchInfo) p.crisisMatchInfo = k.matchInfo
+   329→      else if (!p.crisisMatchInfo.includes('FINAL') && !p.crisisMatchInfo.includes('SF') && !p.crisisMatchInfo.includes('3rd')) {
+   330→        p.crisisMatchInfo = k.matchInfo
+   331→      }
+   332→      p.trend = k.trend
+   333→    }
+   334→  }
+   335→
+   336→  return map
+   337→}
+   338→
+   339→// ── Public types ─────────────────────────────────────────────────────────────
+   340→
+   341→export interface RetroPick {
+   342→  /** Stable id derived from name + position group. */
+   343→  id: string
+   344→  name: string
+   345→  nationCode: string
+   346→  position: string
+   347→  /** App-internal composite 0-100. NOT a verified statistic. */
+   348→  tournamentScore: number
+   349→  /** Verified match fact (copied verbatim from the source pool). */
+   350→  matchInfo: string | null
+   351→  trend: Trend
+   352→}
+   353→
+   354→export interface RetroSide {
+   355→  formation: string
+   356→  players: RetroPick[]
+   357→}
+   358→
+   359→export interface TournamentRetroResult {
+   360→  elite: RetroSide
+   361→  crisis: RetroSide
+   362→  generatedAt: string
+   363→}
+   364→
+   365→// ── Formation slot config (4-3-3) ────────────────────────────────────────────
+   366→const FORMATION = '4-3-3'
+   367→const SLOTS: { group: PosGroup; count: number }[] = [
+   368→  { group: 'GK', count: 1 },
+   369→  { group: 'DEF', count: 4 },
+   370→  { group: 'MID', count: 3 },
+   371→  { group: 'FWD', count: 3 },
+   372→]
+   373→const XI_SIZE = SLOTS.reduce((n, s) => n + s.count, 0) // 11
+   374→
+   375→/**
+   376→ * Pick an XI (4-3-3) from a candidate pool.
+   377→ *
+   378→ * @param candidates  players with a non-null score for this side
+   379→ * @param descending  true for Elite (highest score first), false for Crisis (lowest first)
+   380→ *
+   381→ * ANTI-HALLUCINATION: if a position group is short, we fill from the next-best
+   382→ * available verified player. If the entire pool is exhausted, the slot is
+   383→ * returned as a null placeholder (name: 'N/A') — we never fabricate.
+   384→ */
+   385→function pickXI(
+   386→  candidates: MergedPlayer[],
+   387→  scoreOf: (p: MergedPlayer) => number | null,
+   388→  descending: boolean,
+   389→): RetroPick[] {
+   390→  // Filter to players that actually have a score for this side, then sort.
+   391→  const eligible = candidates
+   392→    .filter(p => scoreOf(p) !== null)
+   393→    .sort((a, b) => {
+   394→      const sa = scoreOf(a)!
+   395→      const sb = scoreOf(b)!
+   396→      return descending ? sb - sa : sa - sb
+   397→    })
+   398→
+   399→  const used = new Set<string>()
+   400→  const picks: (MergedPlayer | null)[] = []
+   401→
+   402→  // Pass 1: fill each position-group slot from players of that group.
+   403→  for (const slot of SLOTS) {
+   404→    let filled = 0
+   405→    for (const p of eligible) {
+   406→      if (filled >= slot.count) break
+   407→      if (used.has(p.name)) continue
+   408→      if (posGroup(p) === slot.group) {
+   409→        picks.push(p)
+   410→        used.add(p.name)
+   411→        filled++
+   412→      }
+   413→    }
+   414→    // Pad with nulls if this group was under-filled.
+   415→    while (filled < slot.count) {
+   416→      picks.push(null)
+   417→      filled++
+   418→    }
+   419→  }
+   420→
+   421→  // Pass 2: replace any null placeholders with the next-best unused verified
+   422→  // player (regardless of position group) so the XI fills 11 real names.
+   423→  for (let i = 0; i < picks.length; i++) {
+   424→    if (picks[i] !== null) continue
+   425→    const next = eligible.find(p => !used.has(p.name))
+   426→    if (next) {
+   427→      picks[i] = next
+   428→      used.add(next.name)
+   429→    }
+   430→    // If no unused player remains, the slot stays null → 'N/A'.
+   431→  }
+   432→
+   433→  // Map to RetroPick, assigning an order within the formation.
+   434→  return picks.map((p, i) => {
+   435→    const slotIndex = i
+   436→    const group = SLOTS.reduce<{ group: PosGroup; count: number } | null>((acc, s) => {
+   437→      if (acc) return acc
+   438→      return s
+   439→    }, null)
+   440→    void group // (slot metadata derived from index instead)
+   441→    if (!p) {
+   442→      return {
+   443→        id: `na-${slotIndex}`,
+   444→        name: 'N/A',
+   445→        nationCode: '',
+   446→        position: '',
+   447→        tournamentScore: 0,
+   448→        matchInfo: null,
+   449→        trend: 'stable' as Trend,
+   450→      }
+   451→    }
+   452→    const score = scoreOf(p)!
+   453→    const matchInfo = descending ? p.eliteMatchInfo : p.crisisMatchInfo
+   454→    return {
+   455→      id: `${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${slotIndex}`,
+   456→      name: p.name,
+   457→      nationCode: p.nationCode,
+   458→      position: p.position,
+   459→      tournamentScore: score,
+   460→      matchInfo,
+   461→      trend: p.trend,
+   462→    }
+   463→  })
+   464→}
+   465→
+   466→// ── Main entry point ─────────────────────────────────────────────────────────
+   467→
+   468→/**
+   469→ * Compute the Team of the Tournament Retro (Elite XI + Crisis XI).
+   470→ *
+   471→ * Pure function — no DB, no SDK. The result is deterministic for a given
+   472→ * VERIFIED_POOL + group-stage pool, so the API route caches it for 1 hour.
+   473→ */
+   474→export function computeTournamentRetro(): TournamentRetroResult {
+   475→  const merged = mergeAllPlayers()
+   476→  const all = Array.from(merged.values())
+   477→
+   478→  const elite = pickXI(all, p => p.eliteScore, true)
+   479→  const crisis = pickXI(all, p => p.crisisScore, false)
+   480→
+   481→  return {
+   482→    elite: { formation: FORMATION, players: elite },
+   483→    crisis: { formation: FORMATION, players: crisis },
+   484→    generatedAt: new Date().toISOString(),
+   485→  }
+   486→}
+   487→
+   488→// ── Anti-hallucination self-check (exported for tests / dev scripts) ─────────
+   489→
+   490→/**
+   491→ * Returns the set of every player name that is eligible to appear in the retro.
+   492→ * Used by the API route's self-check to guarantee no fabricated name slipped in.
+   493→ */
+   494→export function getAllVerifiedNames(): Set<string> {
+   495→  const names = new Set<string>()
+   496→  for (const g of GROUP_STAGE_ELITE) names.add(g.name)
+   497→  for (const g of GROUP_STAGE_CRISIS) names.add(g.name)
+   498→  for (const r of VERIFIED_POOL) names.add(r.name)
+   499→  for (const k of KNOCKOUT_HEROES) names.add(k.name)
+   500→  return names
+   501→}
+   502→

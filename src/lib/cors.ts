@@ -95,11 +95,19 @@ export function setCorsHeaders(
 /**
  * Handles OPTIONS preflight requests. Returns a 204 response with CORS headers
  * if the origin is allowed, or a 403 response with no CORS headers if not.
- * Returns null for non-OPTIONS requests (caller should handle normally).
+ *
+ * For non-OPTIONS requests, returns a 405 Method Not Allowed. (This branch is
+ * defensive — in practice Next.js only routes OPTIONS-method requests to the
+ * `OPTIONS` route handler, so `request.method` is always `'OPTIONS'` here.)
+ *
+ * NOTE: this function MUST return a `Response` (never `null`). Next.js 16's
+ * route handler type constraint requires `void | Response | Promise<void |
+ * Response>` — returning `null` fails `next build` with a TS2344 error in the
+ * generated `.next/types/validator.ts`.
  */
-export function handleOptions(request: Request): Response | null {
+export function handleOptions(request: Request): Response {
   if (request.method !== 'OPTIONS') {
-    return null
+    return new NextResponse(null, { status: 405, headers: { Allow: 'OPTIONS' } })
   }
 
   const res = new NextResponse(null, { status: 204 })

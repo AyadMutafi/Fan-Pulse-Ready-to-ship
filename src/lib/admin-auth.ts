@@ -92,3 +92,84 @@ export function unauthorizedResponse() {
     { status: 401 },
   )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backward-compatible export aliases
+//
+// The module was originally refactored down to just `isAdminAuthorized` +
+// `unauthorizedResponse`, but several route handlers still import the older,
+// richer API surface (`requireAdmin`, `getAdminFromRequest`,
+// `verifyAdminPassword`, `createAdminToken`, `ADMIN_COOKIE`, `ADMIN_ID`,
+// `adminCookieAttributes`, `isAdminAuthed`).
+//
+// `next dev` tolerates the dangling imports via lazy compilation, but
+// `next build` (used by the deploy platform) fails the build on missing named
+// exports. These wrappers restore compatibility without changing the security
+// model: the cookie value IS the admin password (compared timing-safely inside
+// `isAdminAuthorized`), and `ADMIN_PASSWORD` remains the single source of
+// truth with no hardcoded fallback.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Cookie name used for browser-based admin sessions. */
+export const ADMIN_COOKIE = 'fp_admin'
+
+/** Stable admin identity string returned to authenticated callers. */
+export const ADMIN_ID = 'admin'
+
+/**
+ * Verify a plaintext password against the ADMIN_PASSWORD env var.
+ * Fail-closed: returns false if the env var is not set.
+ */
+export function verifyAdminPassword(password: string): boolean {
+  if (!ADMIN_PASSWORD || !password) return false
+  return timingSafeEqualStr(password, ADMIN_PASSWORD)
+}
+
+/**
+ * Create a session token for the given admin id.
+ *
+ * In this implementation the cookie value IS the admin password (the same
+ * value `isAdminAuthorized` compares against). This keeps a single source of
+ * truth and avoids introducing a separate signing key. Returns an empty
+ * string when ADMIN_PASSWORD is unset so the cookie is effectively invalid.
+ */
+export function createAdminToken(_adminId: string): string {
+  return ADMIN_PASSWORD ?? ''
+}
+
+/** Standard cookie attributes for the admin session cookie (24h lifetime). */
+export function adminCookieAttributes(): string {
+  return 'Path=/; HttpOnly; SameSite=Strict; Max-Age=86400'
+}
+
+/**
+ * Return the admin id if the request is authenticated, otherwise null.
+ * Used by route handlers that want to attribute actions to a specific admin.
+ */
+export function getAdminFromRequest(
+  request: NextRequest | Request,
+): string | null {
+  return isAdminAuthorized(request) ? ADMIN_ID : null
+}
+
+/**
+ * Guard helper for route handlers.
+ *
+ * Returns `null` when the request is authorized (caller proceeds), or a 401
+ * `Response` when not (caller returns it immediately).
+ *
+ * Usage:
+ *   const guard = requireAdmin(req)
+ *   if (guard) return guard
+ */
+export function requireAdmin(
+  request: NextRequest | Request,
+): Response | null {
+  if (isAdminAuthorized(request)) return null
+  return unauthorizedResponse()
+}
+
+/** Alias for `isAdminAuthorized` (older route handlers use this name). */
+export function isAdminAuthed(request: NextRequest | Request): boolean {
+  return isAdminAuthorized(request)
+}

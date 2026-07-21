@@ -174,8 +174,13 @@ type PlayerData = {
 // NEVER include Morata, Depay, Rodrygo (user-confirmed non-participants).
 const ELITE_PLAYERS: Record<string, PlayerData[]> = {
   'group-stage': [
-    // ── GK (1) ── established Mexico GK, clean sheet vs South Africa
-    { name: 'Guillermo Ochoa', nationCode: 'MEX', position: 'GK', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 RSA (clean sheet)', order: 0 },
+    // ── GK (1) ── Raúl Rangel — Mexico #1 GK, started opener vs RSA (clean sheet).
+    // Ochoa was REMOVED 2026-07-21: named to WC 2026 squad (record 6th WC) but
+    // did NOT play the opener (Rangel started — Sporting News / El Paso Times /
+    // Squawka / Sky Sports lineup pages). Ochoa's only WC 2026 appearance was
+    // vs Czechia (group stage). See src/lib/appearance-tracker.ts for the
+    // eligibility formula that gates on actually having played.
+    { name: 'Raúl Rangel', nationCode: 'MEX', position: 'GK', pulseScore: 88, sentiment: 86, trend: 'rising', isLive: true, matchInfo: 'MEX 2-0 RSA (clean sheet, opener — Rangel started)', order: 0 },
     // ── DEF (4) ── established defenders from clean-sheet/draw teams
     { name: 'Achraf Hakimi', nationCode: 'MAR', position: 'RB', pulseScore: 84, sentiment: 82, trend: 'rising', isLive: true, matchInfo: 'MAR 1-1 BRA', order: 2 },
     { name: 'Harry Souttar', nationCode: 'AUS', position: 'CB', pulseScore: 83, sentiment: 81, trend: 'rising', isLive: true, matchInfo: 'AUS 2-0 TUR (clean sheet)', order: 3 },
