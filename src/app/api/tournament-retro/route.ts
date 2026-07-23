@@ -1,31 +1,74 @@
 import { NextResponse } from 'next/server'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import {
-  computeTournamentRetro,
-  getAllVerifiedNames,
-  type TournamentRetroResult,
-} from '@/lib/tournament-retro'
+  VERIFIED_ELITE_XI,
+  VERIFIED_CRISIS_XI,
+  VERIFIED_TOURNAMENT_FACTS,
+  type VerifiedPick,
+} from '@/lib/verified-team-of-tournament'
 
 /**
  * GET /api/tournament-retro
  *
- * Returns the all-tournament Elite XI + Crisis XI (Team of the Tournament
- * retro). This is closure content — the retro doesn't change after generation,
- * so the result is cached in-memory for 1 hour.
+ * Returns the MANUALLY VERIFIED Team of the Tournament (Elite XI + Crisis XI)
+ * for the 2026 FIFA World Cup.
  *
- * Rate-limited to 20 requests / minute / IP (same budget as the other public
- * read-only endpoints).
+ * The lineup is NOT computed from partial pools — it was hand-verified against
+ * 6 independent Team of the Tournament selections + the official FIFA awards
+ * on 2026-07-21. See src/lib/verified-team-of-tournament.ts for the full
+ * anti-hallucination contract and source list.
  *
- * Anti-hallucination self-check: every player name in the response MUST trace
- * to the verified pool. If a fabricated name somehow appears, the route returns
- * a 500 with the offending names rather than serving bad data.
+ * The result is static and deterministic, so it is cached in-memory for 1 hour.
+ * Rate-limited to 20 requests / minute / IP.
  */
 
+export interface VerifiedRetroPick extends VerifiedPick {
+  id: string
+  tournamentScore: number
+}
+
+export interface VerifiedRetroSide {
+  formation: string
+  players: VerifiedRetroPick[]
+}
+
+export interface VerifiedTournamentRetroResult {
+  elite: VerifiedRetroSide
+  crisis: VerifiedRetroSide
+  tournamentFacts: typeof VERIFIED_TOURNAMENT_FACTS
+  disclaimer: string
+  generatedAt: string
+}
+
+const FORMATION = '4-3-3'
+
+// Stable id from name + position.
+function makeId(name: string, position: string): string {
+  return `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${position.toLowerCase()}`
+}
+
+function toRetroPick(p: VerifiedPick): VerifiedRetroPick {
+  return {
+    ...p,
+    id: makeId(p.name, p.position),
+    // Expose pulseScore under tournamentScore too so the existing UI type
+    // (RetroPick.tournamentScore) renders the rating without a refactor.
+    tournamentScore: p.pulseScore,
+  }
+}
+
+function buildSide(players: VerifiedPick[]): VerifiedRetroSide {
+  // Sort by the formation order so the UI can render GK → DEF → MID → FWD.
+  const ordered = [...players].sort((a, b) => a.order - b.order)
+  return {
+    formation: FORMATION,
+    players: ordered.map(toRetroPick),
+  }
+}
+
 // ── 1-hour in-memory cache ───────────────────────────────────────────────────
-// The retro is deterministic given the verified pools, so one cached copy serves
-// every request for an hour. The cache is process-local (single-instance deploy).
 const CACHE_TTL_MS = 60 * 60 * 1000
-let cached: { result: TournamentRetroResult; expiresAt: number } | null = null
+let cached: { result: VerifiedTournamentRetroResult; expiresAt: number } | null = null
 
 export async function GET(request: Request) {
   // ── Rate limit: 20 / min / IP ──
@@ -34,7 +77,10 @@ export async function GET(request: Request) {
   if (!rl.ok) {
     return NextResponse.json(
       { error: 'Rate limited', resetAt: rl.resetAt },
-      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) },
+      },
     )
   }
 
@@ -49,31 +95,16 @@ export async function GET(request: Request) {
     })
   }
 
-  // ── Compute + self-check ──
-  const result = computeTournamentRetro()
-
-  // Anti-hallucination gate: every non-"N/A" player name must be in the
-  // verified pool. If this ever fires, it means the ranking logic fabricated a
-  // name — refuse to serve it and surface the bug.
-  const verified = getAllVerifiedNames()
-  const offenders = [
-    ...result.elite.players,
-    ...result.crisis.players,
-  ]
-    .filter(p => p.name !== 'N/A' && !verified.has(p.name))
-    .map(p => p.name)
-  if (offenders.length > 0) {
-    console.error(
-      '[tournament-retro] ANTI-HALLUCINATION GATE FAILED. Offending names:',
-      offenders,
-    )
-    return NextResponse.json(
-      { error: 'Internal integrity check failed', offenders },
-      { status: 500 },
-    )
+  // ── Build verified response ──
+  const result: VerifiedTournamentRetroResult = {
+    elite: buildSide(VERIFIED_ELITE_XI),
+    crisis: buildSide(VERIFIED_CRISIS_XI),
+    tournamentFacts: VERIFIED_TOURNAMENT_FACTS,
+    disclaimer:
+      'Manually verified against 6 independent Team of the Tournament selections + official FIFA awards. See sources in tournamentFacts.sources.',
+    generatedAt: new Date().toISOString(),
   }
 
-  // ── Cache + respond ──
   cached = { result, expiresAt: now + CACHE_TTL_MS }
   return NextResponse.json(result, {
     headers: {

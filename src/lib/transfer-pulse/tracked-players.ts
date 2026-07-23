@@ -14,6 +14,18 @@
  * NOTE: If a player has already moved (e.g. Trent Alexander-Arnold to Real
  * Madrid), discovery will still find the Tier 1 posts and register the saga
  * with status "completed" if a journalist confirmed it.
+ *
+ * ENTITY-RESOLUTION SAFETY (added 2026-07-22):
+ *   The "Ederson" incident taught us that two Brazilian players can share a
+ *   single-name identity and produce ambiguous Tier 1 posts:
+ *     - Ederson (GK, Man City)
+ *     - Ederson (MF, Atalanta)  ← the one Romano reported linked to Man United
+ *   To prevent the discovery pipeline from conflating them, we now:
+ *     1. Disambiguate any ambiguous single-name player by including a
+ *        second identifier in `name` (e.g. "Ederson (Atalanta MF)").
+ *     2. Add an entity-resolution step in discovery.ts that asks the LLM to
+ *        verify the player's CURRENT club matches `fromClubName` before
+ *        accepting a Tier 1 post — see verifyPlayerCurrentClub().
  */
 
 export interface TrackedPlayer {
@@ -29,6 +41,19 @@ export interface TrackedPlayer {
 }
 
 export const TRACKED_PLAYERS: readonly TrackedPlayer[] = [
+  // ── GLOBAL SUPERSTARS (the names every fan knows) ──────────────────────
+  { name: 'Kylian Mbappé', nationCode: 'FRA', fromClubCode: 'RMA', fromClubName: 'Real Madrid', position: 'ST' },
+  { name: 'Erling Haaland', nationCode: 'NOR', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'ST' },
+  { name: 'Vinícius Júnior', nationCode: 'BRA', fromClubCode: 'RMA', fromClubName: 'Real Madrid', position: 'LW' },
+  { name: 'Jude Bellingham', nationCode: 'ENG', fromClubCode: 'RMA', fromClubName: 'Real Madrid', position: 'CAM' },
+  { name: 'Lamine Yamal', nationCode: 'ESP', fromClubCode: 'FCB', fromClubName: 'Barcelona', position: 'RW' },
+  { name: 'Bukayo Saka', nationCode: 'ENG', fromClubCode: 'ARS', fromClubName: 'Arsenal', position: 'RW' },
+  { name: 'Pedri', nationCode: 'ESP', fromClubCode: 'FCB', fromClubName: 'Barcelona', position: 'CM' },
+  { name: 'Jamal Musiala', nationCode: 'GER', fromClubCode: 'BAY', fromClubName: 'Bayern Munich', position: 'CAM' },
+  { name: 'Florian Wirtz', nationCode: 'GER', fromClubCode: 'LEV', fromClubName: 'Bayer Leverkusen', position: 'CAM' },
+  { name: 'Rodri', nationCode: 'ESP', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'CDM' },
+  { name: 'Federico Valverde', nationCode: 'URU', fromClubCode: 'RMA', fromClubName: 'Real Madrid', position: 'CM' },
+
   // ── Premier League stars rumored to move ────────────────────────────────
   { name: 'Mohamed Salah', nationCode: 'EGY', fromClubCode: 'LIV', fromClubName: 'Liverpool', position: 'RW' },
   { name: 'Alexander Isak', nationCode: 'SWE', fromClubCode: 'NEW', fromClubName: 'Newcastle', position: 'ST' },
@@ -45,22 +70,28 @@ export const TRACKED_PLAYERS: readonly TrackedPlayer[] = [
   { name: 'Leandro Trossard', nationCode: 'BEL', fromClubCode: 'ARS', fromClubName: 'Arsenal', position: 'LW' },
   { name: 'Federico Chiesa', nationCode: 'ITA', fromClubCode: 'LIV', fromClubName: 'Liverpool', position: 'RW' },
   { name: 'Wilfried Gnonto', nationCode: 'ITA', fromClubCode: 'LEE', fromClubName: 'Leeds', position: 'RW' },
+  { name: 'Alexis Mac Allister', nationCode: 'ARG', fromClubCode: 'LIV', fromClubName: 'Liverpool', position: 'CM' },
+  { name: 'Martin Zubimendi', nationCode: 'ESP', fromClubCode: 'RSO', fromClubName: 'Real Sociedad', position: 'CDM' },
 
   // ── Man City shake-up ───────────────────────────────────────────────────
   { name: 'Kevin De Bruyne', nationCode: 'BEL', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'CAM' },
   { name: 'Jack Grealish', nationCode: 'ENG', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'LW' },
   { name: 'Bernardo Silva', nationCode: 'POR', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'CM' },
-  { name: 'Ederson', nationCode: 'BRA', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'GK' },
+  { name: 'Kyle Walker', nationCode: 'ENG', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'RB' },
+  // NOTE: Ederson the Man City GK is intentionally OMITTED from this list.
+  // Romano's "Ederson" reports in summer 2026 refer to the Atalanta MF
+  // (also Brazilian, also "Ederson"), not the Man City GK. Tracking the
+  // GK here caused the discovery pipeline to fabricate a "Man City →
+  // Atalanta" saga from posts about the OTHER Ederson. The Atalanta MF
+  // is tracked separately below with a disambiguated name.
 
   // ── La Liga ─────────────────────────────────────────────────────────────
-  { name: 'Vinícius Júnior', nationCode: 'BRA', fromClubCode: 'RMA', fromClubName: 'Real Madrid', position: 'LW' },
   { name: 'Nico Williams', nationCode: 'ESP', fromClubCode: 'ATH', fromClubName: 'Athletic Bilbao', position: 'LW' },
   { name: 'Takefusa Kubo', nationCode: 'JPN', fromClubCode: 'RSO', fromClubName: 'Real Sociedad', position: 'RW' },
-  { name: 'Martin Zubimendi', nationCode: 'ESP', fromClubCode: 'RSO', fromClubName: 'Real Sociedad', position: 'CDM' },
+  { name: 'Gavi', nationCode: 'ESP', fromClubCode: 'FCB', fromClubName: 'Barcelona', position: 'CM' },
+  { name: 'Ronald Araújo', nationCode: 'URU', fromClubCode: 'FCB', fromClubName: 'Barcelona', position: 'CB' },
 
   // ── Bundesliga ──────────────────────────────────────────────────────────
-  { name: 'Florian Wirtz', nationCode: 'GER', fromClubCode: 'LEV', fromClubName: 'Bayer Leverkusen', position: 'CAM' },
-  { name: 'Jamal Musiala', nationCode: 'GER', fromClubCode: 'BAY', fromClubName: 'Bayern Munich', position: 'CAM' },
   { name: 'Michael Olise', nationCode: 'FRA', fromClubCode: 'BAY', fromClubName: 'Bayern Munich', position: 'RW' },
   { name: 'Leroy Sané', nationCode: 'GER', fromClubCode: 'BAY', fromClubName: 'Bayern Munich', position: 'RW' },
   { name: 'Karim Adeyemi', nationCode: 'GER', fromClubCode: 'BVB', fromClubName: 'Borussia Dortmund', position: 'LW' },
@@ -68,6 +99,7 @@ export const TRACKED_PLAYERS: readonly TrackedPlayer[] = [
   { name: 'Benjamin Šeško', nationCode: 'SVN', fromClubCode: 'RBL', fromClubName: 'RB Leipzig', position: 'ST' },
 
   // ── Serie A ─────────────────────────────────────────────────────────────
+  { name: 'Ederson (Atalanta MF)', nationCode: 'BRA', fromClubCode: 'ATA', fromClubName: 'Atalanta', position: 'CM' },
   { name: 'Victor Osimhen', nationCode: 'NGA', fromClubCode: 'NAP', fromClubName: 'Napoli', position: 'ST' },
   { name: 'Lautaro Martínez', nationCode: 'ARG', fromClubCode: 'INT', fromClubName: 'Inter', position: 'ST' },
   { name: 'Rafael Leão', nationCode: 'POR', fromClubCode: 'MIL', fromClubName: 'AC Milan', position: 'LW' },
@@ -78,6 +110,7 @@ export const TRACKED_PLAYERS: readonly TrackedPlayer[] = [
   { name: 'Randal Kolo Muani', nationCode: 'FRA', fromClubCode: 'PSG', fromClubName: 'Paris Saint-Germain', position: 'ST' },
   { name: 'Bradley Barcola', nationCode: 'FRA', fromClubCode: 'PSG', fromClubName: 'Paris Saint-Germain', position: 'LW' },
   { name: 'Jonathan David', nationCode: 'CAN', fromClubCode: 'LIL', fromClubName: 'Lille', position: 'ST' },
+  { name: 'João Neves', nationCode: 'POR', fromClubCode: 'PSG', fromClubName: 'Paris Saint-Germain', position: 'CM' },
 
   // ── Other European notables ─────────────────────────────────────────────
   { name: 'Viktor Gyökeres', nationCode: 'SWE', fromClubCode: 'SCP', fromClubName: 'Sporting CP', position: 'ST' },
@@ -88,10 +121,8 @@ export const TRACKED_PLAYERS: readonly TrackedPlayer[] = [
   { name: 'Dean Huijsen', nationCode: 'NED', fromClubCode: 'BOU', fromClubName: 'Bournemouth', position: 'CB' },
   { name: 'Mathys Tel', nationCode: 'FRA', fromClubCode: 'BAY', fromClubName: 'Bayern Munich', position: 'ST' },
   { name: 'Kenan Yıldız', nationCode: 'TUR', fromClubCode: 'JUV', fromClubName: 'Juventus', position: 'CAM' },
-  { name: 'Kyle Walker', nationCode: 'ENG', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'RB' },
   { name: 'Trent Alexander-Arnold', nationCode: 'ENG', fromClubCode: 'LIV', fromClubName: 'Liverpool', position: 'RB' },
   { name: 'Georginio Rutter', nationCode: 'FRA', fromClubCode: 'BHA', fromClubName: 'Brighton', position: 'CAM' },
-  { name: 'João Neves', nationCode: 'POR', fromClubCode: 'PSG', fromClubName: 'Paris Saint-Germain', position: 'CM' },
 ]
 
 /**

@@ -72,6 +72,7 @@ export async function GET(
         firstReportedAt: saga.firstReportedAt,
         lastUpdatedAt: saga.lastUpdatedAt,
         resolvedAt: saga.resolvedAt,
+        resolutionUrl: saga.resolutionUrl,
       },
       sources: saga.sources.map((s) => ({
         id: s.id,

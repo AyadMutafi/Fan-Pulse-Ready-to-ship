@@ -37,8 +37,9 @@ export default function TransfersTab() {
       else setLoading(true)
       setError(null)
       try {
-        const apiStatus = status === 'all' ? '' : `?status=${status}`
-        const res = await fetch(`/api/transfers${apiStatus}`, {
+        // Always pass the status param explicitly. The API treats 'all' as
+        // "return every saga regardless of status" — see /api/transfers/route.ts.
+        const res = await fetch(`/api/transfers?status=${status}`, {
           cache: 'no-store',
         })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)

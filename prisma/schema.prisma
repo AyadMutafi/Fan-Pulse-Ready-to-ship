@@ -312,6 +312,11 @@ model TransferSaga {
   firstReportedAt     DateTime @default(now())
   lastUpdatedAt       DateTime @default(now())
   resolvedAt          DateTime?
+  /// When a saga is resolved (completed/debunked), this is the official
+  /// confirmation URL — typically a Tier 1 journalist's "Here We Go" tweet.
+  /// NULL for active sagas. Surfaced in the detail modal so users can click
+  /// through to the source that resolved the rumor.
+  resolutionUrl       String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

@@ -34,14 +34,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const url = new URL(request.url)
-    const status = url.searchParams.get('status') || 'active'
+    const statusParam = url.searchParams.get('status') || 'active'
     const limit = Math.min(
       50,
       Math.max(1, parseInt(url.searchParams.get('limit') || '30', 10)),
     )
 
+    // When status is 'all' (or omitted on the "All" filter), return sagas of
+    // every status. Otherwise filter to the requested status.
+    const where =
+      statusParam === 'all' ? {} : { status: statusParam }
+
     const sagas = await db.transferSaga.findMany({
-      where: { status },
+      where,
       orderBy: [{ buzzVolume: 'desc' }, { lastUpdatedAt: 'desc' }],
       take: limit,
       include: {
@@ -74,6 +79,7 @@ export async function GET(request: NextRequest) {
         firstReportedAt: s.firstReportedAt,
         lastUpdatedAt: s.lastUpdatedAt,
         resolvedAt: s.resolvedAt,
+        resolutionUrl: s.resolutionUrl,
         topSources: s.sources.map((src) => ({
           journalistName: src.journalistName,
           journalistHandle: src.journalistHandle,

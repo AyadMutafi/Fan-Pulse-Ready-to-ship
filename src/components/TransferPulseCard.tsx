@@ -23,6 +23,7 @@ export interface TransferSagaSummary {
   firstReportedAt: string
   lastUpdatedAt: string
   resolvedAt: string | null
+  resolutionUrl: string | null
   topSources: {
     journalistName: string
     journalistHandle: string
@@ -65,6 +66,12 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
 
   // Stacked sentiment bar widths (excited / skeptical / dreading / neutral)
   const neutralPct = Math.max(0, 100 - saga.excitedPct - saga.skepticalPct - saga.dreadingPct)
+
+  // ANTI-MISLEADING-DATA: when there are 0 fan posts, we must NOT render the
+  // 0% / 0% / 0% sentiment bar — that presents empty data as zero-sentiment.
+  // Instead show an honest "No fan posts yet" placeholder. The sentiment bar
+  // only renders once ingestSagaPosts has analyzed at least one real post.
+  const hasFanPosts = saga.buzzVolume > 0
 
   return (
     <button
@@ -113,37 +120,60 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
         </span>
       </div>
 
-      {/* Sentiment stacked bar */}
-      <div className="mt-3">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-[#999] dark:text-gray-500">
-            Fan Sentiment
-          </span>
-          <span className="text-[9px] text-[#999] dark:text-gray-500">
-            {saga.buzzVolume} {saga.buzzVolume === 1 ? 'post' : 'posts'}
-          </span>
+      {/* Sentiment stacked bar — OR honest empty placeholder when 0 posts */}
+      {hasFanPosts ? (
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-[#999] dark:text-gray-500">
+              Fan Sentiment
+            </span>
+            <span className="text-[9px] text-[#999] dark:text-gray-500">
+              {saga.buzzVolume} {saga.buzzVolume === 1 ? 'post' : 'posts'}
+            </span>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden flex bg-[#F0F0F0] dark:bg-white/5">
+            <div className="bg-[#10B981]" style={{ width: `${saga.excitedPct}%` }} title={`Excited ${saga.excitedPct}%`} />
+            <div className="bg-[#F59E0B]" style={{ width: `${saga.skepticalPct}%` }} title={`Skeptical ${saga.skepticalPct}%`} />
+            <div className="bg-[#EF4444]" style={{ width: `${saga.dreadingPct}%` }} title={`Dreading ${saga.dreadingPct}%`} />
+            <div className="bg-[#999]/40" style={{ width: `${neutralPct}%` }} title={`Neutral ${neutralPct.toFixed(0)}%`} />
+          </div>
+          {/* ANTI-MISLEADING-DATA: when all 3 sentiment labels are 0%, the bar
+              is 100% neutral. Show "Neutral X%" instead of "0% 0% 0%" which
+              looks like empty data even though there are real posts. */}
+          {saga.excitedPct === 0 && saga.skepticalPct === 0 && saga.dreadingPct === 0 ? (
+            <div className="flex items-center gap-2 mt-1.5 text-[9px]">
+              <span className="flex items-center gap-1 text-[#999] dark:text-gray-400">
+                <span className="size-1.5 rounded-full bg-[#999]/60" />
+                Neutral {neutralPct.toFixed(0)}%
+              </span>
+              <span className="text-[#999] dark:text-gray-500 italic">
+                · fans haven't taken a strong stance
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2.5 mt-1.5 text-[9px]">
+              <span className="flex items-center gap-1 text-[#10B981]">
+                <span className="size-1.5 rounded-full bg-[#10B981]" />
+                {saga.excitedPct.toFixed(0)}%
+              </span>
+              <span className="flex items-center gap-1 text-[#F59E0B]">
+                <span className="size-1.5 rounded-full bg-[#F59E0B]" />
+                {saga.skepticalPct.toFixed(0)}%
+              </span>
+              <span className="flex items-center gap-1 text-[#EF4444]">
+                <span className="size-1.5 rounded-full bg-[#EF4444]" />
+                {saga.dreadingPct.toFixed(0)}%
+              </span>
+            </div>
+          )}
         </div>
-        <div className="h-2 rounded-full overflow-hidden flex bg-[#F0F0F0] dark:bg-white/5">
-          <div className="bg-[#10B981]" style={{ width: `${saga.excitedPct}%` }} title={`Excited ${saga.excitedPct}%`} />
-          <div className="bg-[#F59E0B]" style={{ width: `${saga.skepticalPct}%` }} title={`Skeptical ${saga.skepticalPct}%`} />
-          <div className="bg-[#EF4444]" style={{ width: `${saga.dreadingPct}%` }} title={`Dreading ${saga.dreadingPct}%`} />
-          <div className="bg-[#999]/40" style={{ width: `${neutralPct}%` }} title={`Neutral ${neutralPct.toFixed(0)}%`} />
+      ) : (
+        <div className="mt-3 rounded-lg border border-dashed border-[#E0E0E0] dark:border-white/10 bg-[#F8F9FA]/50 dark:bg-white/[0.02] px-3 py-2">
+          <p className="text-[10px] text-[#999] dark:text-gray-500 leading-snug">
+            No fan posts yet — sentiment will appear when fans react
+          </p>
         </div>
-        <div className="flex items-center gap-2.5 mt-1.5 text-[9px]">
-          <span className="flex items-center gap-1 text-[#10B981]">
-            <span className="size-1.5 rounded-full bg-[#10B981]" />
-            {saga.excitedPct.toFixed(0)}%
-          </span>
-          <span className="flex items-center gap-1 text-[#F59E0B]">
-            <span className="size-1.5 rounded-full bg-[#F59E0B]" />
-            {saga.skepticalPct.toFixed(0)}%
-          </span>
-          <span className="flex items-center gap-1 text-[#EF4444]">
-            <span className="size-1.5 rounded-full bg-[#EF4444]" />
-            {saga.dreadingPct.toFixed(0)}%
-          </span>
-        </div>
-      </div>
+      )}
 
       {/* Footer: buzz trend + fan-read likelihood */}
       <div className="mt-3 pt-3 border-t border-[#E0E0E0]/60 dark:border-white/5 flex items-center justify-between">

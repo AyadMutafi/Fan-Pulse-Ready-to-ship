@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Trophy, X, Share2, Check, Lock, TrendingUp, TrendingDown } from 'lucide-react'
+import { Trophy, X, Share2, Check, Lock, TrendingUp, TrendingDown, Award, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -20,24 +20,44 @@ import { useFlagMode } from '@/lib/flag-mode'
 import { getPulseFaceEmoji, type Trend } from '@/types'
 import { toast } from 'sonner'
 
-// ── Types (mirrors src/lib/tournament-retro.ts) ──────────────────────────────
+// ── Types (mirrors src/app/api/tournament-retro/route.ts verified response) ───
 
 interface RetroPick {
   id: string
   name: string
   nationCode: string
+  nationName?: string
   position: string
   tournamentScore: number
+  pulseScore?: number
+  sentiment?: number
   matchInfo: string | null
   trend: Trend
+  isAwardWinner?: boolean
+  awardName?: string
 }
 interface RetroSide {
   formation: string
   players: RetroPick[]
 }
+interface TournamentFacts {
+  winner: string
+  runnerUp: string
+  finalScore: string
+  finalScorer: string
+  goldenBall: string
+  goldenBoot: string
+  goldenGlove: string
+  silverBoot: string
+  bestYoungPlayer: string
+  sources: string[]
+  verifiedAt: string
+}
 interface TournamentRetroResult {
   elite: RetroSide
   crisis: RetroSide
+  tournamentFacts: TournamentFacts
+  disclaimer: string
   generatedAt: string
 }
 
@@ -55,6 +75,7 @@ export function TournamentRetroModal({ open, onOpenChange }: TournamentRetroModa
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { mode: flagMode } = useFlagMode()
+  const [showSources, setShowSources] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -82,11 +103,9 @@ export function TournamentRetroModal({ open, onOpenChange }: TournamentRetroModa
 
   // Share text — branded, summarises the retro for the share sheet.
   const shareText = data
-    ? `🏆 Team of the Tournament — 2026 FIFA World Cup\n\nElite XI: ${data.elite.players
-        .filter(p => p.name !== 'N/A')
-        .map(p => p.name)
+    ? `🏆 Team of the Tournament — 2026 FIFA World Cup\n${data.tournamentFacts.winner} won · ${data.tournamentFacts.finalScore}\n\nElite XI: ${data.elite.players
+        .map(p => p.name + (p.isAwardWinner ? ' 🏆' : ''))
         .join(', ')}\n\nCrisis XI: ${data.crisis.players
-        .filter(p => p.name !== 'N/A')
         .map(p => p.name)
         .join(', ')}\n\nSee the full breakdown on Fan Pulse:`
     : '🏆 Team of the Tournament — 2026 FIFA World Cup on Fan Pulse'
@@ -138,6 +157,9 @@ export function TournamentRetroModal({ open, onOpenChange }: TournamentRetroModa
 
           {data && !loading && !error && (
             <>
+              {/* Tournament facts banner */}
+              <TournamentFactsBanner facts={data.tournamentFacts} />
+
               <RetroFormationCard side={data.elite} variant="elite" flagMode={flagMode} />
               <RetroFormationCard side={data.crisis} variant="crisis" flagMode={flagMode} />
 
@@ -150,14 +172,103 @@ export function TournamentRetroModal({ open, onOpenChange }: TournamentRetroModa
                 />
                 <ShareAsImageButton text={shareText} />
               </div>
-              <p className="text-center text-[10px] text-[#999] dark:text-[#666] pt-1">
-                Based on verified match data + real fan sentiment. See VERIFIED_DATA.md for sources.
-              </p>
+
+              {/* Disclaimer + sources */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-start gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2">
+                  <ShieldCheck className="size-3.5 shrink-0 mt-0.5 text-[#F59E0B]" />
+                  <p className="text-[10px] leading-relaxed text-[#666] dark:text-[#CCCCCC]">
+                    <span className="font-bold text-[#1A1A1A] dark:text-white">Verified lineup.</span>{' '}
+                    {data.disclaimer}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSources(v => !v)}
+                  className="flex w-full items-center justify-between rounded-lg border border-[#E0E0E0]/60 dark:border-white/10 bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2 text-left hover:bg-[#F0F1F2] dark:hover:bg-[#333] transition-colors"
+                  aria-expanded={showSources}
+                >
+                  <span className="text-[10px] font-bold text-[#666] dark:text-[#CCCCCC] uppercase tracking-wide">
+                    Sources ({data.tournamentFacts.sources.length}) · verified {data.tournamentFacts.verifiedAt}
+                  </span>
+                  {showSources
+                    ? <ChevronUp className="size-3.5 text-[#666] dark:text-[#CCCCCC]" />
+                    : <ChevronDown className="size-3.5 text-[#666] dark:text-[#CCCCCC]" />}
+                </button>
+                <AnimatePresence>
+                  {showSources && (
+                    <motion.ul
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden rounded-lg border border-[#E0E0E0]/60 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 space-y-1"
+                    >
+                      {data.tournamentFacts.sources.map((s, i) => (
+                        <li key={i} className="flex items-start gap-2 text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                          <span className="shrink-0 mt-0.5 size-1 rounded-full bg-[#F59E0B]" />
+                          {s}
+                        </li>
+                      ))}
+                    </motion.ul>
+                  )}
+                </AnimatePresence>
+              </div>
             </>
           )}
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ── Tournament facts banner ───────────────────────────────────────────────────
+
+function TournamentFactsBanner({ facts }: { facts: TournamentFacts }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="rounded-2xl overflow-hidden border-2 border-[#F59E0B]/40 shadow-sm"
+    >
+      <div
+        className="h-1 w-full"
+        style={{ background: 'linear-gradient(to right, #F59E0B, #FBBF24, #F59E0B)' }}
+      />
+      <div className="px-4 py-3 bg-gradient-to-br from-[#F59E0B]/10 to-[#FBBF24]/5">
+        <div className="flex items-center gap-2 mb-2">
+          <Trophy className="size-4 text-[#F59E0B]" />
+          <p className="text-sm font-black text-[#1A1A1A] dark:text-white">
+            {facts.winner} won the 2026 World Cup
+          </p>
+          <Badge className="bg-[#F59E0B] text-white border-0 text-[9px] font-bold px-1.5 py-0">
+            {facts.finalScore}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <FactPill icon={<Award className="size-3" />} label="Golden Ball" value={facts.goldenBall} />
+          <FactPill icon={<Award className="size-3" />} label="Golden Boot" value={facts.goldenBoot} />
+          <FactPill icon={<Award className="size-3" />} label="Golden Glove" value={facts.goldenGlove} />
+          <FactPill icon={<Award className="size-3" />} label="Best Young" value={facts.bestYoungPlayer} />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+function FactPill({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-white/70 dark:bg-white/5 border border-[#F59E0B]/20 px-2 py-1.5">
+      <div className="flex items-center gap-1 text-[#F59E0B]">
+        {icon}
+        <span className="text-[8px] font-bold uppercase tracking-wide">{label}</span>
+      </div>
+      <p className="mt-0.5 text-[9px] sm:text-[10px] font-bold text-[#1A1A1A] dark:text-white leading-tight">
+        {value}
+      </p>
+    </div>
   )
 }
 
@@ -270,7 +381,17 @@ function RetroFormationCard({
                 className="shrink-0 mt-0.5 size-1.5 rounded-full"
                 style={{ background: accent }}
               />
-              <span className="font-bold text-[#1A1A1A] dark:text-white min-w-[90px] shrink-0">{p.name}</span>
+              <span className="font-bold text-[#1A1A1A] dark:text-white min-w-[90px] shrink-0 flex items-center gap-1">
+                {p.name}
+                {p.isAwardWinner && (
+                  <span
+                    title={p.awardName ?? 'Award winner'}
+                    className="inline-flex items-center gap-0.5 rounded-full bg-[#F59E0B] text-white px-1 py-0 text-[7px] font-black leading-none"
+                  >
+                    <Trophy className="size-2" />{p.awardName ?? 'AWARD'}
+                  </span>
+                )}
+              </span>
               <span className="text-[#666] dark:text-[#CCCCCC] text-[11px]">{p.matchInfo ?? '—'}</span>
             </div>
           ))}
@@ -326,6 +447,15 @@ function RetroPlayerChip({
             className="absolute -right-0.5 -top-0.5 size-2.5"
             style={{ color: accent }}
           />
+        )}
+        {/* Award winner crown badge */}
+        {player.isAwardWinner && !isNA && (
+          <span
+            title={player.awardName ?? 'Award winner'}
+            className="absolute -left-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-[#F59E0B] text-white shadow-sm border border-white"
+          >
+            <Trophy className="size-2" />
+          </span>
         )}
       </div>
       <p className="mt-px max-w-[52px] truncate text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">

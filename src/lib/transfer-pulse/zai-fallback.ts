@@ -254,6 +254,38 @@ export async function fetchTier1PostsViaZai(
         }
         if (text.length < 15) continue
 
+        // ── TRANSFER-KEYWORD GATE (added 2026-07-22) ─────────────────────
+        // Search engines often return tweets that mention the player's name
+        // but aren't transfer rumors (e.g. World Cup stat tweets). Reject
+        // any post whose text doesn't contain at least one transfer-related
+        // keyword. This prevents non-transfer tweets from anchoring sagas.
+        // Also strip the "Missing: X | Show results with: X" Google
+        // annotation that web_search appends to snippets — that's a search-
+        // engine hint, not part of the tweet text.
+        const cleanedText = text
+          .replace(/Missing:\s*[^|]+\|\s*Show results with:[^"]*/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+        const lowerText = cleanedText.toLowerCase()
+        const TRANSFER_KEYWORDS = [
+          'transfer', 'deal', 'move', 'signing', 'signs', 'signed',
+          'agrees', 'agreed', 'bid', 'offer', 'medical', 'contract',
+          'here we go', 'launch', 'approach', 'talks', 'negotiat',
+          'joining', 'joins', 'completed', 'confirmed', 'close to',
+          'reaches', 'verbal', 'personal terms', 'fee',
+        ]
+        const hasTransferKeyword = TRANSFER_KEYWORDS.some((kw) =>
+          lowerText.includes(kw),
+        )
+        if (!hasTransferKeyword) {
+          console.log(
+            `[transfer-pulse/zai-fallback] rejecting non-transfer post for ${player.name}: ` +
+              `no transfer keyword in "${cleanedText.slice(0, 80)}..."`,
+          )
+          continue
+        }
+        text = cleanedText
+
         seenUrls.add(url)
         collected.push({
           url,

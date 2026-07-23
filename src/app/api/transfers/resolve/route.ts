@@ -1,7 +1,13 @@
 /**
  * POST /api/transfers/resolve — admin marks a saga as completed or debunked.
  *
- * Body: { sagaId: string, status: "completed" | "debunked" }
+ * Body: {
+ *   sagaId: string,
+ *   status: "completed" | "debunked",
+ *   resolutionUrl?: string  — the official confirmation URL (typically a
+ *                             Tier 1 journalist's "Here We Go" tweet). Stored
+ *                             on the saga so the detail modal can surface it.
+ * }
  *
  * Debunked sagas are ARCHIVED (status="debunked"), never deleted — the audit
  * trail of who reported what is always preserved (anti-hallucination contract).
@@ -26,7 +32,7 @@ export async function POST(request: NextRequest) {
     return res
   }
 
-  let body: { sagaId?: string; status?: string }
+  let body: { sagaId?: string; status?: string; resolutionUrl?: string }
   try {
     body = await request.json()
   } catch {
@@ -38,7 +44,7 @@ export async function POST(request: NextRequest) {
     return res
   }
 
-  const { sagaId, status } = body
+  const { sagaId, status, resolutionUrl } = body
   if (!sagaId || (status !== 'completed' && status !== 'debunked')) {
     const res = NextResponse.json(
       { error: 'Required: { sagaId, status: "completed" | "debunked" }' },
@@ -46,6 +52,23 @@ export async function POST(request: NextRequest) {
     )
     setCorsHeaders(res, request)
     return res
+  }
+
+  // If a resolutionUrl is provided, basic shape validation. Empty/null is OK
+  // (the field is optional — some sagas resolve via aggregated reporting,
+  // not a single confirmation tweet).
+  let cleanResolutionUrl: string | null = null
+  if (typeof resolutionUrl === 'string' && resolutionUrl.trim()) {
+    const trimmed = resolutionUrl.trim()
+    if (!/^https?:\/\//i.test(trimmed)) {
+      const res = NextResponse.json(
+        { error: 'resolutionUrl must be a valid http(s) URL' },
+        { status: 400 },
+      )
+      setCorsHeaders(res, request)
+      return res
+    }
+    cleanResolutionUrl = trimmed.slice(0, 2000)
   }
 
   try {
@@ -62,6 +85,9 @@ export async function POST(request: NextRequest) {
         status,
         resolvedAt: new Date(),
         lastUpdatedAt: new Date(),
+        // Only overwrite resolutionUrl when a new one is provided — preserves
+        // an existing URL if the admin re-resolves without specifying one.
+        ...(cleanResolutionUrl ? { resolutionUrl: cleanResolutionUrl } : {}),
       },
     })
 
@@ -73,6 +99,7 @@ export async function POST(request: NextRequest) {
         toClubName: updated.toClubName,
         status: updated.status,
         resolvedAt: updated.resolvedAt,
+        resolutionUrl: updated.resolutionUrl,
       },
     })
     setCorsHeaders(res, request)

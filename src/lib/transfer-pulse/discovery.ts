@@ -11,6 +11,12 @@
  *   - The destination club is extracted from the journalist's post text by an
  *     LLM. If the LLM cannot confidently determine a destination, the post is
  *     discarded — we never guess.
+ *   - ENTITY RESOLUTION (added 2026-07-22): before a saga is created, an LLM
+ *     verifies that the player's current club matches `fromClubName`. This
+ *     prevents the "Ederson" entity-confusion incident where Tier 1 posts
+ *     about the Atalanta MF Ederson were misattributed to the Man City GK
+ *     Ederson, fabricating a "Man City → Atalanta" transfer that doesn't
+ *     exist. If verification fails, the post is rejected.
  *   - The journalist's real X post URL becomes the TransferSource.url. The
  *     URL must match the real X post pattern (enforced in grok-x-search).
  *   - Duplicate sources (same URL) are never double-counted (@unique).
@@ -210,6 +216,44 @@ async function discoverForPlayer(
     return out
   }
 
+  // ── ENTITY-RESOLUTION GATE (added 2026-07-22) ──────────────────────────────
+  // Verify ONCE per player that the Tier 1 posts are actually about THIS
+  // tracked player (current club = fromClubName). Without this gate, posts
+  // about the Atalanta MF "Ederson" can be misattributed to the Man City GK
+  // "Ederson", fabricating a "Man City → Atalanta" saga that doesn't exist.
+  //
+  // We pass ALL the Tier 1 posts in one LLM call (concatenated) so we only
+  // make one verification request per player, not one per post — important
+  // for staying under Z.ai's rate limit. If verification fails, ALL posts
+  // for this player are rejected.
+  //
+  // Skip the gate if the player already has any existing saga in the DB —
+  // we trust prior verification and only need to add new Tier 1 sources.
+  const hasExistingSaga = await db.transferSaga.findFirst({
+    where: { playerName: player.name },
+    select: { id: true },
+  })
+  if (!hasExistingSaga) {
+    const combinedPostText = tier1Posts
+      .slice(0, 5)
+      .map((p, i) => `POST ${i + 1} (@${p.handle}):\n${p.text.slice(0, 400)}`)
+      .join('\n\n')
+    const verification = await verifyPlayerCurrentClub(
+      combinedPostText,
+      player.name,
+      player.fromClubName,
+    )
+    if (!verification.verified) {
+      console.log(
+        `[transfer-pulse/discovery] rejecting ALL Tier 1 posts for ${player.name}: ` +
+          `posts are about "${verification.actualClub ?? 'unknown'}", not "${player.fromClubName}" — ` +
+          `likely a same-name-different-player confusion (e.g. Ederson GK vs Ederson MF)`,
+      )
+      out.skipped = 1
+      return out
+    }
+  }
+
   // 3. For each Tier 1 post, extract destination club + upsert saga + source
   for (const post of tier1Posts) {
     const source = getTier1Source(post.handle)
@@ -373,9 +417,11 @@ async function extractTransferFields(
 
   let raw = ''
   try {
-    // Retry once on 429 with backoff (Z.ai free-tier rate limits)
+    // Retry up to 3 times on 429 with progressively longer backoff
+    // (Z.ai free-tier rate limits are tight — 8s often isn't enough).
     let attempts = 0
-    while (attempts < 2) {
+    const backoffMs = [10_000, 20_000, 30_000]
+    while (attempts <= backoffMs.length) {
       try {
         const completion = await zai.chat.completions.create({
           messages: [
@@ -388,9 +434,9 @@ async function extractTransferFields(
         break
       } catch (innerErr) {
         const innerMsg = String(innerErr)
-        if (innerMsg.includes('429') && attempts === 0) {
-          console.log('[transfer-pulse/discovery] LLM 429, backing off 8s')
-          await new Promise((r) => setTimeout(r, 8000))
+        if (innerMsg.includes('429') && attempts < backoffMs.length) {
+          console.log(`[transfer-pulse/discovery] LLM 429, backing off ${backoffMs[attempts] / 1000}s (attempt ${attempts + 1}/${backoffMs.length})`)
+          await new Promise((r) => setTimeout(r, backoffMs[attempts]))
           attempts++
           continue
         }
@@ -433,6 +479,116 @@ function parseExtractedTransfer(raw: string): ExtractedTransfer | null {
     return { toClubName, toClubCode, fee, headline, isCompleted }
   } catch {
     return null
+  }
+}
+
+// ── Entity-resolution gate ───────────────────────────────────────────────────
+
+/**
+ * ENTITY RESOLUTION — verify that a Tier 1 post is actually about THIS
+ * tracked player (the one currently at `expectedFromClub`), not a same-name
+ * different-player.
+ *
+ * BACKGROUND:
+ *   In July 2026, Romano posted reports about "Ederson" being linked with
+ *   Manchester United. Our tracked-players list had "Ederson" as the Man City
+ *   GK. The discovery pipeline extracted "Manchester United" as the
+ *   destination and fabricated a "Man City → Manchester United" saga — but
+ *   Romano was actually reporting on the Atalanta MF Ederson (also Brazilian,
+ *   also "Ederson"). The same-name confusion produced a fabricated saga.
+ *
+ * GATE:
+ *   Before creating a new saga, we ask the LLM: "Given this post and this
+ *   player's expected current club, is the post actually about THIS player?"
+ *   The LLM returns {verified: bool, actualClub: string | null}. If
+ *   verified=false, the post is rejected and no saga is created.
+ *
+ * FALLBACK:
+ *   If the LLM call fails entirely, we FAIL OPEN (verified=true) to avoid
+ *   blocking all discovery — but log a warning. The same-club guard and
+ *   Tier 1 handle gate still apply as secondary defenses.
+ */
+async function verifyPlayerCurrentClub(
+  postText: string,
+  playerName: string,
+  expectedFromClub: string,
+): Promise<{ verified: boolean; actualClub: string | null }> {
+  let zai: any
+  try {
+    zai = await ZAI.create()
+  } catch (err) {
+    console.warn(
+      '[transfer-pulse/discovery] verifyPlayerCurrentClub: Z.ai SDK init failed, failing OPEN:',
+      String(err).slice(0, 100),
+    )
+    return { verified: true, actualClub: null }
+  }
+
+  const systemPrompt =
+    `You are an entity-resolution gate for a football transfer pipeline.\n` +
+    `A Tier 1 journalist's X post is being considered for a saga about ${playerName} ` +
+    `(expected current club: ${expectedFromClub}).\n\n` +
+    `Read the post and answer ONE question: is this post about ${playerName} ` +
+    `(the footballer who currently plays for ${expectedFromClub}), or is it about ` +
+    `a DIFFERENT footballer who happens to share the name?\n\n` +
+    `IMPORTANT CONTEXT:\n` +
+    `- Transfer rumor posts naturally mention the DESTINATION club (where the player ` +
+    `  might move TO). The destination is NOT the player's current club. So a post ` +
+    `  saying "${playerName} to Al-Hilal?" is consistent with the player being at ` +
+    `  ${expectedFromClub} — Al-Hilal is the rumored destination, not the current club.\n` +
+    `- This gate exists ONLY to catch same-name confusion (e.g. two different Brazilian ` +
+    `  players both named "Ederson" — one a GK at Man City, the other a MF at Atalanta).\n` +
+    `- For unique names like "Mohamed Salah", "Kylian Mbappé", "Erling Haaland", ` +
+    `  "Lamine Yamal", "Vinícius Júnior", "Jude Bellingham" — there is only ONE ` +
+    `  famous footballer by that name. The gate should ALMOST ALWAYS return verified=true.\n\n` +
+    `Return a JSON object with these fields:\n` +
+    `  "verified": boolean    — true if the post is about ${playerName} (the footballer at ${expectedFromClub})\n` +
+    `  "actualClub": string | null — only set if verified=false AND you can identify the other player's actual club\n` +
+    `  "reason": string       — a 1-sentence explanation\n\n` +
+    `RULES:\n` +
+    `- Default to verified=true UNLESS the post explicitly mentions a DIFFERENT club as ` +
+    `  the player's current team (e.g. "Ederson from Atalanta" when we expected Man City).\n` +
+    `- Mentioning a destination club (rumored move) does NOT count as a different current club.\n` +
+    `- If unsure, return verified=true (be permissive — other gates handle same-club and bad extractions).\n` +
+    `- Output ONLY the JSON object, no commentary.`
+
+  let raw = ''
+  try {
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: 'assistant', content: systemPrompt },
+        { role: 'user', content: postText.slice(0, 2000) },
+      ],
+      thinking: { type: 'disabled' },
+    })
+    raw = completion?.choices?.[0]?.message?.content || ''
+  } catch (err) {
+    console.warn(
+      '[transfer-pulse/discovery] verifyPlayerCurrentClub LLM call failed, failing OPEN:',
+      String(err).slice(0, 100),
+    )
+    return { verified: true, actualClub: null }
+  }
+
+  // Parse the JSON response
+  let cleaned = raw.trim()
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '')
+  const start = cleaned.indexOf('{')
+  const end = cleaned.lastIndexOf('}')
+  if (start === -1 || end === -1 || end <= start) {
+    // Unparseable → fail open (other gates still apply)
+    return { verified: true, actualClub: null }
+  }
+  try {
+    const obj = JSON.parse(cleaned.slice(start, end + 1))
+    const verified = obj.verified === true
+    const actualClub =
+      typeof obj.actualClub === 'string' && obj.actualClub.trim()
+        ? obj.actualClub.trim()
+        : null
+    return { verified, actualClub }
+  } catch {
+    return { verified: true, actualClub: null }
   }
 }
 

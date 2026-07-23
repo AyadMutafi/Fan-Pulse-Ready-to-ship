@@ -37,6 +37,7 @@ interface SagaDetail {
     avgSentiment: number
     postCount: number
   }[]
+  resolutionUrl?: string | null
 }
 
 interface TransferSagaDetailProps {
@@ -182,20 +183,46 @@ function TransferSagaDetailContent({
       {saga.status === 'debunked' && (
         <div className="mx-5 mt-3 rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/20 p-3 text-[11px] text-[#EF4444] flex items-start gap-2">
           <XCircle className="size-4 shrink-0 mt-0.5" />
-          <span>
-            This rumor was <strong>debunked</strong> and archived. The Tier 1
-            reports and fan posts below are preserved as an audit trail —
-            nothing is deleted.
-          </span>
+          <div className="flex-1">
+            <span>
+              This rumor was <strong>debunked</strong> and archived. The Tier 1
+              reports and fan posts below are preserved as an audit trail —
+              nothing is deleted.
+            </span>
+            {detail?.saga?.resolutionUrl && (
+              <a
+                href={detail.saga.resolutionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold underline hover:no-underline"
+              >
+                <ExternalLink className="size-3" />
+                View debunk source
+              </a>
+            )}
+          </div>
         </div>
       )}
       {saga.status === 'completed' && (
         <div className="mx-5 mt-3 rounded-xl bg-[#10B981]/10 border border-[#10B981]/20 p-3 text-[11px] text-[#10B981] flex items-start gap-2">
           <CheckCircle2 className="size-4 shrink-0 mt-0.5" />
-          <span>
-            This transfer was <strong>confirmed</strong> by a Tier 1
-            journalist. The saga is now archived.
-          </span>
+          <div className="flex-1">
+            <span>
+              This transfer was <strong>confirmed</strong> by a Tier 1
+              journalist. The saga is now archived.
+            </span>
+            {detail?.saga?.resolutionUrl && (
+              <a
+                href={detail.saga.resolutionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold underline hover:no-underline"
+              >
+                <ExternalLink className="size-3" />
+                View official confirmation
+              </a>
+            )}
+          </div>
         </div>
       )}
 
@@ -296,8 +323,9 @@ function TransferSagaDetailContent({
               </h3>
               {detail.posts.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-[#E0E0E0] dark:border-white/10 p-4 text-center text-[11px] text-[#999] dark:text-gray-500">
-                  No fan posts analyzed yet. Ingestion runs when the xAI key
-                  is configured — we never show fabricated posts.
+                  No fan posts yet — sentiment will appear when fans react.
+                  Ingestion runs on the cron, or on-demand from the admin
+                  dashboard. We never show fabricated posts.
                 </div>
               ) : (
                 <div className="space-y-2">
