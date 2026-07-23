@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Activity, TrendingUp, TrendingDown, Minus, Play, Star, AlertTriangle,
   Lock, Clock, Zap, Shield, ShieldCheck, CircleDot,
-  Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X, ChevronRight, Check, ArrowLeft
+  Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X, ChevronRight, Check, ArrowLeft,
+  MessageCircle, ExternalLink, BadgeCheck
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { FanCardButton } from '@/components/common/FanCardButton'
@@ -225,6 +226,42 @@ interface FanVoteAgg {
   count: number
 }
 
+// ── Types for the new Home dashboard sections ────────────────────────────────
+interface BallonDorContender {
+  name: string
+  nationCode: string
+  position: string
+  clubName: string
+  clubCode: string
+  ballonDorScore: number
+  trend: 'rising' | 'stable' | 'falling'
+  reason: string
+  awardWon?: string
+  verifiedMatchFact: string
+}
+interface BallonDorData {
+  contenders: BallonDorContender[]
+  movers: { biggestRiser: BallonDorContender | null; biggestFaller: BallonDorContender | null }
+  framing: {
+    title: string
+    subtitle: string
+    tagline: string
+    disclaimer: string
+    lastUpdated: string
+    ceremonyDate: string
+  }
+}
+interface TransferTweet {
+  author: string
+  authorHandle: string
+  outlet: string
+  content: string
+  url: string
+  postedAt: string | null
+  sentimentScore: number
+  sentimentLabel: 'positive' | 'neutral' | 'negative'
+}
+
 function HomeTab() {
   const { t } = useLanguage()
   const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('WC')
@@ -233,6 +270,13 @@ function HomeTab() {
     score: string; homeSentiment: number; awaySentiment: number; live: boolean; league: string
     status: string; group: string; matchDate: string
   }>>([])
+
+  // ── NEW: Ballon d'Or + Transfer Tweets state ──
+  const [ballonDor, setBallonDor] = useState<BallonDorData | null>(null)
+  const [ballonDorLoading, setBallonDorLoading] = useState(true)
+  const [showAllBallonDor, setShowAllBallonDor] = useState(false)
+  const [transferTweets, setTransferTweets] = useState<TransferTweet[]>([])
+  const [tweetsLoading, setTweetsLoading] = useState(true)
 
   // Fan vote state
   const [sessionId, setSessionId] = useState<string>('')
@@ -328,6 +372,52 @@ function HomeTab() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedVoteTeam, submitting])
 
+  // ── NEW: Fetch Ballon d'Or data (cached 1h server-side) ──
+  useEffect(() => {
+    let cancelled = false
+    async function loadBallonDor() {
+      setBallonDorLoading(true)
+      try {
+        const res = await fetch('/api/ballon-dor')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        if (data && Array.isArray(data.contenders)) {
+          setBallonDor(data as BallonDorData)
+        }
+      } catch (err) {
+        console.error('Failed to fetch Ballon d\'Or:', err)
+      } finally {
+        if (!cancelled) setBallonDorLoading(false)
+      }
+    }
+    loadBallonDor()
+    return () => { cancelled = true }
+  }, [])
+
+  // ── NEW: Fetch Latest Transfer Tweets (cached 10min server-side) ──
+  useEffect(() => {
+    let cancelled = false
+    async function loadTweets() {
+      setTweetsLoading(true)
+      try {
+        const res = await fetch('/api/transfer-tweets?limit=6')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        if (data && Array.isArray(data.tweets)) {
+          setTransferTweets(data.tweets as TransferTweet[])
+        }
+      } catch (err) {
+        console.error('Failed to fetch transfer tweets:', err)
+      } finally {
+        if (!cancelled) setTweetsLoading(false)
+      }
+    }
+    loadTweets()
+    return () => { cancelled = true }
+  }, [])
+
   const totalVoteCount = fanVotes.reduce((sum, v) => sum + (v.count || 0), 0)
 
   const handleVote = async (teamCode: string, score: number) => {
@@ -390,245 +480,44 @@ function HomeTab() {
     : apiMatches.filter(m => m.league.startsWith('WC'))
   ).slice(0, 24) // Limit to 24 cards max for performance
 
-  const fanVoteIntelText = totalVoteCount === 0
-    ? 'Be the first to vote in the Fan Mood section below'
-    : `${totalVoteCount.toLocaleString()} fan votes tallied for World Cup 2026 Group Stage`
+  // ── Ballon d'Or: derived display values ──
+  const ballonDorVisible = ballonDor
+    ? showAllBallonDor
+      ? ballonDor.contenders
+      : ballonDor.contenders.slice(0, 8)
+    : []
+  const ballonDorHiddenCount = ballonDor
+    ? Math.max(0, ballonDor.contenders.length - 8)
+    : 0
 
-  // ── Arena Intelligence: VERIFIED insights only ──────────────────────────
-  // Every insight below is a historical fact sourced from VERIFIED_DATA.md
-  // (the project's single source of truth, cross-checked against Wikipedia,
-  // ESPN, Olympics.com, FIFA.com on 2026-07-02). We deliberately do NOT
-  // auto-generate insights from apiMatches because that approach produced two
-  // verifiable hallucinations in production:
-  //   (1) "World Cup 2026 kicked off with ESP 0-0 AUT in the opener" — FALSE.
-  //       The old code used parsed[0] (first array element) as "the opener",
-  //       but the first row happened to be an UPCOMING R32 match (ESP vs AUT,
-  //       scheduled Jul 3, not yet played). The real opener was MEX 2-0 RSA
-  //       on Jun 11 (the earliest matchDate among completed matches).
-  //   (2) "Shock in Group Stage: ESP 0-0 AUT" — FALSE. The old code used
-  //       league.includes('WC') to label the stage as "Group Stage", but ALL
-  //       WC matches (including R32) match that check. ESP vs AUT is an R32
-  //       match, not a group-stage match. The real group-stage shock was
-  //       ESP 0-0 CPV (Spain held scoreless by Cape Verde).
-  //
-  // Fix: hardcode the verified insight set with explicit VERIFIED_DATA.md
-  // citations. Only the fan-vote count stays dynamic (it is live data).
-  // This guarantees we never describe an upcoming match as played, never
-  // mislabel a knockout match as a group-stage match, and never invent stats.
-  const arenaIntel = useMemo<Array<{ icon: typeof Sparkles; text: string; color: string; stage: string }>>(() => {
-    const items: Array<{ icon: typeof Sparkles; text: string; color: string; stage: string }> = []
+  // ── Transfer Tweets: relative-time formatter ──
+  function formatRelativeTime(iso: string | null): string {
+    if (!iso) return 'recently'
+    const then = new Date(iso).getTime()
+    if (Number.isNaN(then)) return 'recently'
+    const diffMs = Date.now() - then
+    const mins = Math.floor(diffMs / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    const days = Math.floor(hrs / 24)
+    if (days < 7) return `${days}d ago`
+    const weeks = Math.floor(days / 7)
+    return `${weeks}w ago`
+  }
 
-    // 1. Tournament opener — VERIFIED_DATA.md Part 1, Group A, match 1
-    //    "Mexico 2-0 South Africa — Jun 11, Mexico City. Scorers: Quiñones 9', Jiménez 67'."
-    //    This is the earliest completed match in the DB (matchDate 2026-06-11).
-    items.push({
-      icon: Trophy,
-      text: 'Mexico 2-0 South Africa opened the 2026 World Cup on Jun 11 (Quiñones 9\', Jiménez 67\')',
-      color: 'text-[#FF6B35]',
-      stage: 'Group Stage',
-    })
+  function sentimentEmoji(label: 'positive' | 'neutral' | 'negative'): string {
+    if (label === 'positive') return '🟢'
+    if (label === 'negative') return '🔴'
+    return '🟡'
+  }
 
-    // 2. Biggest win — VERIFIED_DATA.md Part 1, Group E, match 9
-    //    "Germany 7-1 Curaçao — Jun 14, Houston." 6-goal margin = largest of Matchday 1.
-    items.push({
-      icon: Flame,
-      text: "Germany's 7-1 win over Curaçao is the largest victory margin of Matchday 1",
-      color: 'text-[#FF6B35]',
-      stage: 'Group Stage',
-    })
-
-    // 3. Hat-trick — VERIFIED_DATA.md Part 1, Group J, match 19
-    //    "Argentina 3-0 Algeria — Jun 16. Scorer: Messi 17', 60', 76' (hat-trick)."
-    items.push({
-      icon: Sparkles,
-      text: "Argentina's Messi scored a hat-trick vs Algeria (17', 60', 76')",
-      color: 'text-[#6C2BD9]',
-      stage: 'Group Stage',
-    })
-
-    // 4. Highest-scoring group match — VERIFIED_DATA.md Part 1, Group L, match 23
-    //    "England 4-2 Croatia — Jun 17." 6 goals = highest-scoring group match.
-    items.push({
-      icon: Activity,
-      text: 'England beat Croatia 4-2 in the highest-scoring group-stage match',
-      color: 'text-[#6C2BD9]',
-      stage: 'Group Stage',
-    })
-
-    // 5. Shock — VERIFIED_DATA.md Part 1, Group H, match 15
-    //    "Spain 0-0 Cape Verde — Jun 15, Atlanta. No scorers."
-    //    Spain (pre-tournament favorite) held scoreless by Cape Verde (debutants).
-    items.push({
-      icon: BarChart3,
-      text: 'Spain were held 0-0 by Cape Verde — the shock of Matchday 1',
-      color: 'text-[#EF4444]',
-      stage: 'Group Stage',
-    })
-
-    // 6. Mbappé brace — VERIFIED_DATA.md Part 1, Group I, match 17
-    //    "France 3-1 Senegal — Jun 16. Scorers: Mbappé 66', 90+6', Barcola 82' | Mbaye 90+5'."
-    items.push({
-      icon: Zap,
-      text: 'France beat Senegal 3-1 with a Mbappé brace (66\', 90+6\')',
-      color: 'text-[#6C2BD9]',
-      stage: 'Group Stage',
-    })
-
-    // 7. Highest-scoring draw — VERIFIED_DATA.md Part 1, Group G, match 14 + Group F, match 11
-    //    "Iran 2-2 New Zealand — Jun 16" and "Netherlands 2-2 Japan — Jun 14"
-    //    Both 2-2 (4 goals) — tied for highest-scoring draw of Matchday 1.
-    items.push({
-      icon: Activity,
-      text: 'Iran and New Zealand drew 2-2 — tied with NED 2-2 JPN as the highest-scoring draws of Matchday 1',
-      color: 'text-[#6C2BD9]',
-      stage: 'Group Stage',
-    })
-
-    // 8. R16 shock — Norway eliminated Brazil 2-1 (Haaland brace)
-    //    Verified: ESPN/BBC Sport, Jul 5, 2026. Brazil eliminated in R16.
-    items.push({
-      icon: Flame,
-      text: 'Norway shocked Brazil 2-1 in R16 (Haaland brace) — Brazil eliminated',
-      color: 'text-[#FF6B35]',
-      stage: 'Round of 16',
-    })
-
-    // 9. R16 drama — Switzerland beat Colombia 4-3 on pens after 0-0 (Jul 7)
-    //    Verified: Wikipedia/EPSN, Jul 7, 2026.
-    items.push({
-      icon: Activity,
-      text: 'Switzerland beat Colombia 4-3 on penalties after 0-0 in R16 (Jul 7)',
-      color: 'text-[#6C2BD9]',
-      stage: 'Round of 16',
-    })
-
-    // 10. R16 thriller — Argentina beat Egypt 3-2 (Enzo 90+2' winner, Jul 7)
-    //     Verified: ESPN/Aljazeera, Jul 7, 2026. Messi + Romero + Enzo winner.
-    items.push({
-      icon: Zap,
-      text: 'Argentina beat Egypt 3-2 in R16 (Enzo Fernández 90+2\' winner — Jul 7)',
-      color: 'text-[#6C2BD9]',
-      stage: 'Round of 16',
-    })
-
-    // 11. QF result — France beat Morocco 2-0 (Mbappé 60', Dembélé 66', Jul 9)
-    //     Verified: FIFA.com/NYT Athletic, Jul 9, 2026. France into Semi Finals.
-    items.push({
-      icon: Trophy,
-      text: 'France beat Morocco 2-0 in QF (Mbappé 60\', Dembélé 66\') — into Semi Finals',
-      color: 'text-[#FF6B35]',
-      stage: 'Quarter Finals',
-    })
-
-    // 12. QF result — Spain beat Belgium 2-1 (Merino 88' winner, Jul 10)
-    //     Verified: BBC Sport/ESPN, Jul 10, 2026. Spain into Semi Finals vs France.
-    items.push({
-      icon: Sparkles,
-      text: 'Spain beat Belgium 2-1 in QF (Merino 88\' winner) — into SF vs France (Jul 14)',
-      color: 'text-[#6C2BD9]',
-      stage: 'Quarter Finals',
-    })
-
-    // 13. Mbappé record — 19th WC goal vs Paraguay in R16 (Jul 4)
-    //     Verified: FIFA.com/Reuters, Jul 4, 2026.
-    items.push({
-      icon: Zap,
-      text: 'Mbappé scored his 19th WC goal vs Paraguay in R16 — closing on the all-time record',
-      color: 'text-[#6C2BD9]',
-      stage: 'Round of 16',
-    })
-
-    // 15. SF1 result — Spain 2-0 France (Oyarzabal, Porro, Jul 14)
-    //     Verified: ESPN/FIFA, Jul 14, 2026. Spain into the Final.
-    items.push({
-      icon: Trophy,
-      text: 'Spain beat France 2-0 in the SF (Oyarzabal, Porro) — Spain into the Final (Jul 14)',
-      color: 'text-[#FF6B35]',
-      stage: 'Semi Finals',
-    })
-
-    // 16. SF2 result — Argentina 2-1 England (late comeback, Jul 15)
-    //     Verified: ESPN/FIFA, Jul 15, 2026. Argentina into the Final.
-    items.push({
-      icon: Flame,
-      text: 'Argentina came from behind to beat England 2-1 in the SF — Argentina into the Final (Jul 15)',
-      color: 'text-[#6C2BD9]',
-      stage: 'Semi Finals',
-    })
-
-    // 16b. SF2 scorers — verified Enzo 85' + Lautaro 90+2' (Jul 15)
-    items.push({
-      icon: Zap,
-      text: 'Argentina SF2 scorers: Enzo Fernández 85\' + Lautaro Martínez 90+2\' — late comeback vs England',
-      color: 'text-[#6C2BD9]',
-      stage: 'Semi Finals',
-    })
-
-    // 17. 3rd Place — England 6-4 France (Saka hat-trick, 10-goal thriller, Jul 18)
-    //     Verified: BBC/Euronews/ESPN, Jul 18, 2026. England take 3rd.
-    items.push({
-      icon: Activity,
-      text: 'England beat France 6-4 in a 10-goal 3rd-place thriller (Saka hat-trick) — England take 3rd (Jul 18)',
-      color: 'text-[#6C2BD9]',
-      stage: 'Third Place',
-    })
-
-    // 18. FINAL — Spain 1-0 Argentina AET (Ferran Torres 106', Jul 19)
-    //     SPAIN ARE THE 2026 WORLD CUP CHAMPIONS!
-    items.push({
-      icon: Trophy,
-      text: '🏆 SPAIN ARE THE 2026 WORLD CUP CHAMPIONS! Beat Argentina 1-0 AET (Ferran Torres 106\') — Jul 19',
-      color: 'text-[#FF6B35]',
-      stage: 'Final',
-    })
-
-    // 19. FIFA awards — Rodri Golden Ball, Unai Simón Golden Glove, Mbappé Golden Boot, Cubarsí Best Young Player
-    //     Verified: FIFA.com / Kalshi Sports tweet, Jul 18-19 2026.
-    items.push({
-      icon: Trophy,
-      text: 'FIFA awards: Rodri (Golden Ball), Unai Simón (Golden Glove, 7 clean sheets), Mbappé (Golden Boot, 10 goals), Pau Cubarsí (Best Young Player)',
-      color: 'text-[#FF6B35]',
-      stage: 'Final',
-    })
-
-    // 20. Mbappé all-time WC scoring record (22 goals)
-    //     Verified: AP / NYT / Sofascore, Jul 18-19 2026.
-    items.push({
-      icon: Zap,
-      text: 'Mbappé broke the all-time World Cup scoring record (22 goals, surpassing Messi 21 + Klose 16) — despite France finishing 4th',
-      color: 'text-[#6C2BD9]',
-      stage: 'Final',
-    })
-
-    // 21. Emi Martínez 11-save Final MOTM
-    //     Verified: Sofascore / ESPN / SI.com, Jul 19 2026.
-    items.push({
-      icon: Activity,
-      text: 'Emiliano Martínez posted an 11-save Final MOTM (9.6 Sofascore) — the highest individual Final rating of the tournament — but Argentina fell 0-1 AET',
-      color: 'text-[#6C2BD9]',
-      stage: 'Final',
-    })
-
-    // 22. B/R Football Best XI tweet (Jul 20) — Spain-heavy XI
-    //     Verified: @brfootball x.com post + B/R Football article, Jul 20 2026.
-    items.push({
-      icon: Sparkles,
-      text: 'B/R Football writers\' Best XI (Jul 20): Vozinha (CPV); Porro, Cubarsí, Laporte, Cucurella; Olise, Rodri; Messi; Yamal, Mbappé +1 — Spain back 4 dominates',
-      color: 'text-[#6C2BD9]',
-      stage: 'Final',
-    })
-
-    // 14. Fan vote count (DYNAMIC — the only non-hardcoded insight)
-    //     Derived from the live /api/fan-vote response, not a verified fact.
-    items.push({
-      icon: Users,
-      text: fanVoteIntelText,
-      color: 'text-[#10B981]',
-      stage: 'Live',
-    })
-
-    return items
-  }, [fanVoteIntelText])
+  function sentimentBorder(label: 'positive' | 'neutral' | 'negative'): string {
+    if (label === 'positive') return 'border-l-[#10B981]'
+    if (label === 'negative') return 'border-l-[#EF4444]'
+    return 'border-l-[#F59E0B]'
+  }
 
   const moodTeamEntries = FAN_MOOD_TEAM_CODES.map(code => {
     const team = NATIONAL_TEAMS.find(t => t.code === code)
@@ -645,47 +534,33 @@ function HomeTab() {
   })
 
   return (
-    <div className="space-y-6">
-      {/* Hero */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#6C2BD9]/8 via-white dark:via-[#1A1A1A] to-[#FF6B35]/5 p-6 border border-[#6C2BD9]/10 dark:border-[#6C2BD9]/20"
-      >
-        <div className="absolute -right-8 -top-8 size-32 rounded-full bg-[#6C2BD9]/5 blur-3xl" />
-        <div className="absolute -bottom-8 -left-8 size-32 rounded-full bg-[#FF6B35]/5 blur-3xl" />
-        <h2 className="relative text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
-          {t('home.your_pulse')} <span className="text-[#6C2BD9]">⚡</span>
-        </h2>
-        <p className="relative mt-2 text-sm text-[#666] dark:text-[#CCCCCC]">
-          {t('home.mood_desc')}
-        </p>
-        <div className="relative mt-4 flex items-center gap-3">
-          <div className="flex items-center gap-1.5 rounded-full bg-[#10B981]/10 px-3 py-1.5 text-xs font-semibold text-[#10B981]">
-            <Zap className="size-3.5" />
-            78% {t('home.positive')}
+    <div className="space-y-8">
+      {/* ════════════════════════════════════════════════════════════════════
+          SECTION A — MATCH SENTIMENTS
+          Horizontal scrollable row of match cards (mobile) / grid (desktop).
+          ════════════════════════════════════════════════════════════════════ */}
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-[#6C2BD9]/10 dark:bg-[#8B5CF6]/15">
+              <Activity className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+                Match Sentiments
+              </h2>
+              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+                Fan reactions from recent matches
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 rounded-full bg-[#EF4444]/10 px-3 py-1.5 text-xs font-semibold text-[#EF4444]">
-            <Activity className="size-3.5" />
-            {apiMatches.filter(m => m.live).length} {t('home.live')}
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Featured Matches */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
-            {t('home.featured')}
-          </h3>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 shrink-0">
             {(['WC', 'ALL'] as const).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setMatchFilter(filter)}
                 className={`
-                  rounded-full px-3 py-1 text-[10px] font-bold transition-all duration-200
+                  rounded-full px-3 py-1.5 text-[10px] font-bold transition-all duration-200
                   ${matchFilter === filter
                     ? 'bg-[#6C2BD9] text-white shadow-sm'
                     : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10'
@@ -697,79 +572,88 @@ function HomeTab() {
             ))}
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {filteredMatches.map((match, i) => (
-            <motion.div
-              key={match.id}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: i * 0.05 }}
-            >
-              <Card className="card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FlagImage nationCode={match.home} size={26} fallbackEmoji={match.homeFlag} />
-                      <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.home}</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-lg font-black tracking-wider text-[#1A1A1A] dark:text-white">{match.score}</span>
-                      {match.live && <LiveBadge />}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.away}</span>
-                      <FlagImage nationCode={match.away} size={26} fallbackEmoji={match.awayFlag} />
-                    </div>
-                  </div>
-                  {/* League badge */}
-                  <div className="mt-2">
-                    <Badge variant="outline" className={`text-[8px] font-bold px-1.5 py-0 ${
-                      match.league === 'Friendly'
-                        ? 'border-[#FF6B35]/30 text-[#FF6B35]'
-                        : 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]'
-                    }`}>
-                      {match.league}
-                    </Badge>
-                  </div>
-                  {/* Fan Mood — Emoji Only with team flags */}
-                  <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2.5">
-                    <div className="flex items-center gap-1.5" title={`${match.home} fan mood`}>
-                      <FlagImage nationCode={match.home} size={20} fallbackEmoji={match.homeFlag} />
-                      <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.homeSentiment)}`}>
-                        {getFanMoodEmoji(match.homeSentiment)}
-                      </span>
-                    </div>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-[#999] dark:text-gray-500">
-                      {t('home.fan_mood')}
-                    </span>
-                    <div className="flex items-center gap-1.5" title={`${match.away} fan mood`}>
-                      <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.awaySentiment)}`}>
-                        {getFanMoodEmoji(match.awaySentiment)}
-                      </span>
-                      <FlagImage nationCode={match.away} size={20} fallbackEmoji={match.awayFlag} />
-                    </div>
-                  </div>
-                  {/* What Fans Are Saying — collapsible real-time fan posts panel.
-                      matchId scopes the post feed to THIS match only, so two
-                      cards that share a team code (e.g. ESP vs ARG and ESP vs
-                      FRA) no longer show the same ESP posts. */}
-                  <FanTalkPanel
-                    teamCodes={[match.home, match.away]}
-                    matchLabel={`${match.home} vs ${match.away}`}
-                    matchId={match.id}
-                  />
-                  <div className="mt-3 flex items-center">
-                    <SharePulseButton className="flex-1" />
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      </div>
 
-      {/* Fan Mood — interactive voting section (horizontal side-scrolling carousel) */}
-      <div>
+        {/* Horizontal scroll on mobile, grid on desktop. Cards ~280px wide. */}
+        {filteredMatches.length === 0 ? (
+          <Card className="border-[#E0E0E0]/50 dark:border-white/5">
+            <CardContent className="py-10 text-center">
+              <Clock className="mx-auto size-7 text-[#666]/30 dark:text-[#CCCCCC]/30 mb-2" />
+              <p className="text-sm text-[#666] dark:text-[#CCCCCC]">No matches available — check back soon.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="flex gap-3 overflow-x-auto scrollbar-none snap-x snap-mandatory pb-2 -mx-1 px-1 md:grid md:grid-cols-2 md:overflow-visible md:snap-none lg:grid-cols-3">
+            {filteredMatches.slice(0, 9).map((match, i) => (
+              <motion.div
+                key={match.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: i * 0.05 }}
+                className="shrink-0 snap-start w-[280px] md:w-auto"
+              >
+                <Card className="card-hover h-full border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FlagImage nationCode={match.home} size={26} fallbackEmoji={match.homeFlag} />
+                        <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.home}</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-lg font-black tracking-wider text-[#1A1A1A] dark:text-white">{match.score}</span>
+                        {match.live && <LiveBadge />}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.away}</span>
+                        <FlagImage nationCode={match.away} size={26} fallbackEmoji={match.awayFlag} />
+                      </div>
+                    </div>
+                    {/* League badge */}
+                    <div className="mt-2">
+                      <Badge variant="outline" className={`text-[8px] font-bold px-1.5 py-0 ${
+                        match.league === 'Friendly'
+                          ? 'border-[#FF6B35]/30 text-[#FF6B35]'
+                          : 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]'
+                      }`}>
+                        {match.league}
+                      </Badge>
+                    </div>
+                    {/* Fan Mood — Emoji Only with team flags */}
+                    <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2.5">
+                      <div className="flex items-center gap-1.5" title={`${match.home} fan mood`}>
+                        <FlagImage nationCode={match.home} size={20} fallbackEmoji={match.homeFlag} />
+                        <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.homeSentiment)}`}>
+                          {getFanMoodEmoji(match.homeSentiment)}
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-[#999] dark:text-gray-500">
+                        {t('home.fan_mood')}
+                      </span>
+                      <div className="flex items-center gap-1.5" title={`${match.away} fan mood`}>
+                        <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.awaySentiment)}`}>
+                          {getFanMoodEmoji(match.awaySentiment)}
+                        </span>
+                        <FlagImage nationCode={match.away} size={20} fallbackEmoji={match.awayFlag} />
+                      </div>
+                    </div>
+                    {/* What Fans Are Saying — collapsible real-time fan posts panel */}
+                    <FanTalkPanel
+                      teamCodes={[match.home, match.away]}
+                      matchLabel={`${match.home} vs ${match.away}`}
+                      matchId={match.id}
+                    />
+                    <div className="mt-3 flex items-center">
+                      <SharePulseButton className="flex-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ═══ Fan Mood sub-section (moved below Match Sentiments) ═══ */}
+      <section>
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
@@ -875,32 +759,211 @@ function HomeTab() {
             </p>
           </CardContent>
         </Card>
-      </div>
+      </section>
 
-      {/* Arena Intelligence */}
-      <div>
-        <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
-          {t('home.arena_intel')}
-        </h3>
-        <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
-          <CardContent className="p-4 space-y-3">
-            {arenaIntel.map((item, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: i * 0.1 }}
-                className="flex items-start gap-3 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] p-3"
-              >
-                <item.icon className={`mt-0.5 size-4 shrink-0 ${item.color}`} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs leading-relaxed text-[#1A1A1A]/80 dark:text-white/80">{item.text}</p>
-                  <p className="mt-0.5 text-[10px] text-[#666] dark:text-[#CCCCCC]">{item.stage}</p>
+      {/* ════════════════════════════════════════════════════════════════════
+          SECTIONS B + C — side-by-side on desktop (lg:grid-cols-2)
+          ════════════════════════════════════════════════════════════════════ */}
+      <div className="grid gap-6 lg:grid-cols-2">
+
+        {/* ═══ SECTION B — BALLON D'OR RACE ═══ */}
+        <section>
+          <div className="mb-4 flex items-center gap-2">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-[#F59E0B]/15">
+              <Trophy className="size-4 text-[#F59E0B]" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+                {ballonDor?.framing.title ?? "Ballon d'Or Race"}
+              </h2>
+              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+                {ballonDor?.framing.subtitle ?? 'Who fans think should win — not a forecast of the actual award'}
+              </p>
+            </div>
+          </div>
+
+          <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+            <CardContent className="p-4">
+              {/* Movement highlights */}
+              {ballonDor && (ballonDor.movers.biggestRiser || ballonDor.movers.biggestFaller) && (
+                <div className="mb-3 flex flex-wrap gap-2 text-[10px] font-semibold">
+                  {ballonDor.movers.biggestRiser && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#10B981]/10 px-2 py-1 text-[#10B981]">
+                      📈 Biggest riser: {ballonDor.movers.biggestRiser.name} ↑
+                    </span>
+                  )}
+                  {ballonDor.movers.biggestFaller && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#EF4444]/10 px-2 py-1 text-[#EF4444]">
+                      📉 Biggest faller: {ballonDor.movers.biggestFaller.name} ↓
+                    </span>
+                  )}
                 </div>
-              </motion.div>
-            ))}
-          </CardContent>
-        </Card>
+              )}
+
+              {/* Ranked table */}
+              {ballonDorLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="h-10 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                  ))}
+                </div>
+              ) : ballonDorVisible.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
+                  Ballon d'Or data unavailable — check back soon.
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {ballonDorVisible.map((c, i) => {
+                    const rank = i + 1
+                    const isTop3 = rank <= 3
+                    return (
+                      <motion.div
+                        key={c.name}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.25, delay: i * 0.04 }}
+                        title={c.verifiedMatchFact}
+                        className={`
+                          flex items-center gap-2 rounded-lg px-2 py-2 transition-colors
+                          ${isTop3 ? 'bg-[#F59E0B]/5 dark:bg-[#F59E0B]/10' : 'hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D]'}
+                        `}
+                      >
+                        {/* Rank */}
+                        <span className={`w-5 text-center text-xs font-black ${isTop3 ? 'text-[#F59E0B]' : 'text-[#999] dark:text-gray-500'}`}>
+                          {rank}
+                        </span>
+                        {/* Flag */}
+                        <FlagImage nationCode={c.nationCode} size={18} fallbackEmoji="" />
+                        {/* Name + club */}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold text-[#1A1A1A] dark:text-white">
+                            {c.name}
+                          </p>
+                          <p className="truncate text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                            {c.clubName} · {c.position}
+                          </p>
+                        </div>
+                        {/* Score */}
+                        <span className="text-sm font-black text-[#6C2BD9] dark:text-[#8B5CF6]">
+                          {c.ballonDorScore}
+                        </span>
+                        {/* Trend */}
+                        <span className="w-4 text-center">
+                          {c.trend === 'rising' && <TrendingUp className="size-3.5 text-[#10B981]" />}
+                          {c.trend === 'falling' && <TrendingDown className="size-3.5 text-[#EF4444]" />}
+                          {c.trend === 'stable' && <Minus className="size-3.5 text-[#FF6B35]" />}
+                        </span>
+                      </motion.div>
+                    )
+                  })}
+
+                  {/* See full rankings toggle */}
+                  {ballonDorHiddenCount > 0 && (
+                    <button
+                      onClick={() => setShowAllBallonDor(!showAllBallonDor)}
+                      className="mt-2 w-full rounded-lg border border-[#E0E0E0]/50 dark:border-white/10 py-1.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/5 dark:hover:bg-[#8B5CF6]/10 transition-colors"
+                    >
+                      {showAllBallonDor ? '▲ Show top 8' : `▼ See full rankings (+${ballonDorHiddenCount} more)`}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Tagline footer */}
+              {ballonDor && (
+                <div className="mt-3 border-t border-[#E0E0E0]/50 dark:border-white/5 pt-3">
+                  <p className="text-[10px] italic text-[#666] dark:text-[#CCCCCC]">
+                    {ballonDor.framing.tagline}
+                  </p>
+                  <p className="mt-1 text-[9px] text-[#999] dark:text-gray-500">
+                    Updated {ballonDor.framing.lastUpdated} · Ceremony in {ballonDor.framing.ceremonyDate}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* ═══ SECTION C — LATEST TRANSFER TWEETS ═══ */}
+        <section>
+          <div className="mb-4 flex items-center gap-2">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-[#FF6B35]/15">
+              <MessageCircle className="size-4 text-[#FF6B35]" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+                Latest Transfer Tweets
+              </h2>
+              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+                Real-time from Tier 1 journalists
+              </p>
+            </div>
+          </div>
+
+          <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+            <CardContent className="p-4">
+              {tweetsLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-16 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                  ))}
+                </div>
+              ) : transferTweets.length === 0 ? (
+                <p className="py-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
+                  No recent Tier 1 transfer tweets — check back soon.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {transferTweets.map((tweet, i) => (
+                    <motion.a
+                      key={tweet.url + i}
+                      href={tweet.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.25, delay: i * 0.05 }}
+                      className={`
+                        block rounded-lg border-l-4 ${sentimentBorder(tweet.sentimentLabel)}
+                        bg-[#F8F9FA] dark:bg-[#2D2D2D] p-3 transition-all hover:translate-x-0.5 hover:bg-[#F8F9FA]/80 dark:hover:bg-[#2D2D2D]/80
+                      `}
+                    >
+                      {/* Author row */}
+                      <div className="mb-1 flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-[#1A1A1A] dark:text-white">{tweet.author}</span>
+                        <BadgeCheck className="size-3.5 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+                        <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">@{tweet.authorHandle}</span>
+                        <span className="ml-auto text-[9px] text-[#999] dark:text-gray-500">
+                          {formatRelativeTime(tweet.postedAt)}
+                        </span>
+                      </div>
+                      {/* Content (truncated ~200 chars) */}
+                      <p className="text-[11px] leading-relaxed text-[#1A1A1A]/80 dark:text-white/80 line-clamp-3">
+                        {tweet.content}
+                      </p>
+                      {/* Footer: sentiment + source link */}
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-[10px] font-semibold" title={`Sentiment: ${tweet.sentimentScore}/100`}>
+                          {sentimentEmoji(tweet.sentimentLabel)} {tweet.sentimentLabel}
+                        </span>
+                        <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">
+                          Source <ExternalLink className="size-3" />
+                        </span>
+                      </div>
+                    </motion.a>
+                  ))}
+                </div>
+              )}
+
+              {/* Footer */}
+              <div className="mt-3 border-t border-[#E0E0E0]/50 dark:border-white/5 pt-3">
+                <p className="text-[9px] text-[#999] dark:text-gray-500">
+                  Powered by Tier 1 journalists — Romano, Ornstein, Plettenberg, Moretto, and others. No fabricated tweets.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
       </div>
 
       {/* Vote popup */}
