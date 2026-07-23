@@ -3509,3 +3509,43 @@ Stage Summary:
 - Anti-hallucination audit passed: no fabricated contenders, no fabricated tweets, Ballon d'Or framed as fan sentiment not prediction.
 - All regression tabs (Sentiments, World Cup, Transfers, Fan Talk) work without error.
 - Lint clean, dev server healthy.
+
+---
+Task ID: home-restructure-phase-5
+Agent: Main Agent
+Task: Fix hallucination in transfer tweets sources — user reported "still many hallucination in the tweets sources"
+
+Work Log:
+- Read worklog.md (phases 1-4 complete; prior phases INCORRECTLY claimed tweets were "real" — they were seeded synthetic data)
+- Hit /api/transfer-tweets?limit=8 and inspected the response: ALL 8 tweets had source:"db", URLs sharing prefix "205900000012..." (e.g. 2059000000129807827, 2059000000128224027), postedAt timestamps within milliseconds of each other (2026-07-22T14:17:14.121Z, .077Z, .048Z — batch-seeded), and sentimentScore:null (a SECOND bug)
+- Root cause #1 (HALLUCINATION): fetchLatestTransferTweets() in src/lib/latest-transfer-tweets.ts had a DB fallback (fetchDbTweets) that read from the TransferSource Prisma table. That table is populated by scripts/seed-realistic-transfers.ts which inserts INVENTED transfer headlines with synthetic X URLs and batch timestamps. The "anti-hallucination contract" comment claimed DB rows "were ingested by the Tier-1-gated discovery pipeline" — FALSE. They're seeded fake data. The DB fallback was serving these as "real tweets".
+- Root cause #2 (sentimentScore:null): fetchLiveTweets/fetchDbTweets read `a.score` from SentimentAnalysis, but src/lib/groq-sentiment.ts SentimentAnalysis uses field name `sentiment` (NOT `score`). So `a.score` was undefined, Math.round(undefined)=NaN, JSON.stringify(NaN)=null. This is why the API returned sentimentScore:null, violating the TransferTweet interface (which declares sentimentScore:number).
+- Fix applied to src/lib/latest-transfer-tweets.ts (full rewrite):
+  • REMOVED fetchDbTweets() entirely. No DB fallback. Live X search (ai.searchXPosts) is the ONLY source.
+  • Fixed sentiment field reference: a.score → a.sentiment, with Number.isFinite() guard and clamp to 0-100.
+  • Added 5 validation layers (L1-L5):
+      L1: URL shape regex /^https:\/\/(x\.com|twitter\.com)\/[^/]+\/status\/\d+/i
+      L2: handle MUST be in TIER1_HANDLES
+      L3: URL <handle> segment MUST match claimed authorHandle (case-insensitive) — catches model fabrications where handle and URL disagree
+      L4: synthetic-ID rejection — if >50% of posts share a 10-char status-ID prefix, reject whole batch (the seed data shared "205900000012...")
+      L5: timestamp-clustering rejection — if >50% of posts share postedAt to the second, reject whole batch (real posts don't all land in same second)
+  • Updated anti-hallucination contract docs to explicitly state NO DB FALLBACK and explain WHY (TransferSource table has seeded synthetic data)
+  • source field is now always 'live' (kept for API shape compatibility)
+- Ran bun run lint → 0 errors
+- Tested /api/transfer-tweets?limit=8 → returns {"tweets":[],"lastUpdated":null,"error":"Transfer tweets temporarily unavailable"} (honest empty state). XAI_API_KEY is NOT configured in this env, so live search returns 0 posts — correct behavior, no fabrication.
+- Verified via agent-browser (desktop):
+  • "Latest Transfer Tweets" heading still renders ✓
+  • Honest empty state "No recent Tier 1 transfer tweets — check back soon." shown ✓
+  • Fabricated content GONE: "Isak open to Arsenal"=false, "Wirtz prefers Man City"=false, "Salah talks"=false ✓
+  • xLinkCount=0, tweetLinkCount=0 (no fake X links rendered) ✓
+  • Other Home sections intact: Match Sentiments ✓, Ballon d'Or Race ✓, Mbappé ✓, Rodri ✓, Messi ✓, "100 journalists" tagline ✓
+- Regression check: World Cup tab loads ✓, Transfers tab loads ✓ (uses DB directly for saga tracker — different feature, unaffected)
+- Screenshot saved: /home/z/my-project/home-tweets-fixed.png
+
+Stage Summary:
+- Hallucination ELIMINATED: the "Latest Transfer Tweets" section no longer serves fabricated DB seed data. It now returns EITHER real live X posts (via xAI x_search, when XAI_API_KEY is configured) OR an honest empty state. Never fabricated.
+- Two bugs fixed: (1) removed untrustworthy DB fallback, (2) sentiment field mismatch (a.score → a.sentiment) that caused sentimentScore:null.
+- 5 validation layers (L1-L5) now guard against fabricated URLs, handle mismatches, synthetic ID-prefix clustering, and timestamp clustering — defense in depth so even if the model fabricates a URL that matches the regex, batch-level fabrication signals trigger whole-batch rejection.
+- Anti-hallucination contract docs updated to make the no-DB-fallback policy explicit and explain WHY the TransferSource table cannot be trusted for this feature.
+- Lint clean (0 errors). All tabs regress cleanly. Home tab shows honest empty state for tweets; other sections unchanged.
+- NOTE: When XAI_API_KEY is configured, real Tier 1 tweets will flow through the same 5-layer validation. Until then, the honest empty state is the correct behavior — not a bug.
