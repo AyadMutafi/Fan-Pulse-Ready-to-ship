@@ -219,6 +219,11 @@ model FeedMonitor {
   id              String   @id @default(cuid())
   matchLabel      String   // human-readable, e.g. "ESP vs KSA — Matchday 2"
   stageId         String?  // optional link to WCStage (Group Stage, R32, etc.)
+  /// The Match.id this monitor was created for. When set, the fan-talk API
+  /// filters monitors by EXACT matchId — not just team-code overlap. This
+  /// prevents posts from one match bleeding into another match that shares
+  /// a team code (e.g. ESP vs ARG posts showing on the ESP vs FRA card).
+  matchId         String?  // optional link to Match (exact per-match scoping)
   teamCodes       String   @default("[]") // JSON array of team codes, e.g. ["ESP","KSA"]
   playerIds       String   @default("[]") // JSON array of WCSelectionPlayer IDs to track
   hashtags        String   @default("[]") // JSON array of hashtags, e.g. ["#ESP","#LamineYamal"]

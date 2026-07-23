@@ -757,10 +757,14 @@ function HomeTab() {
                       <FlagImage nationCode={match.away} size={20} fallbackEmoji={match.awayFlag} />
                     </div>
                   </div>
-                  {/* What Fans Are Saying — collapsible real-time fan posts panel */}
+                  {/* What Fans Are Saying — collapsible real-time fan posts panel.
+                      matchId scopes the post feed to THIS match only, so two
+                      cards that share a team code (e.g. ESP vs ARG and ESP vs
+                      FRA) no longer show the same ESP posts. */}
                   <FanTalkPanel
                     teamCodes={[match.home, match.away]}
                     matchLabel={`${match.home} vs ${match.away}`}
+                    matchId={match.id}
                   />
                   <div className="mt-3 flex items-center">
                     <SharePulseButton className="flex-1" />

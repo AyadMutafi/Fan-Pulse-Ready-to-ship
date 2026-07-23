@@ -35,6 +35,10 @@ interface FanTalkData {
 interface FanTalkPanelProps {
   teamCodes: string[]
   matchLabel?: string
+  /** The Match.id this panel belongs to. When provided, the API scopes posts
+   *  to THIS match only — preventing posts from a different match (that
+   *  shares a team code) from bleeding in. */
+  matchId?: string
 }
 
 // ── Platform icons ───────────────────────────────────────────────────────────
@@ -106,7 +110,7 @@ function SentimentBadge({ label, score }: { label: string; score: number }) {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
-export function FanTalkPanel({ teamCodes, matchLabel }: FanTalkPanelProps) {
+export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelProps) {
   const [expanded, setExpanded] = useState(false)
   const [tab, setTab] = useState<'popular' | 'latest'>('popular')
   const [data, setData] = useState<FanTalkData | null>(null)
@@ -117,8 +121,12 @@ export function FanTalkPanel({ teamCodes, matchLabel }: FanTalkPanelProps) {
   const fetchFanTalk = useCallback(async () => {
     setLoading(true)
     try {
+      // matchId is passed so the API can scope posts to THIS match only.
+      // Without it, matches sharing a team code (e.g. ESP vs ARG and ESP vs
+      // FRA) would show the same ESP-related posts — the per-match bleed bug.
+      const matchIdParam = matchId ? `&matchId=${encodeURIComponent(matchId)}` : ''
       const res = await fetch(
-        `/api/fan-talk?teamCodes=${encodeURIComponent(teamCodesParam)}&tab=${tab}`,
+        `/api/fan-talk?teamCodes=${encodeURIComponent(teamCodesParam)}&tab=${tab}${matchIdParam}`,
       )
       if (res.ok) {
         const json = await res.json()
@@ -129,7 +137,7 @@ export function FanTalkPanel({ teamCodes, matchLabel }: FanTalkPanelProps) {
     } finally {
       setLoading(false)
     }
-  }, [teamCodesParam, tab])
+  }, [teamCodesParam, tab, matchId])
 
   // Fetch when expanded or tab changes
   useEffect(() => {
