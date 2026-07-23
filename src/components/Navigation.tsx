@@ -1,7 +1,7 @@
 'use client'
 
 import { useLanguage } from '@/context/LanguageContext'
-import { Home, Activity, Globe, Zap, Radio, ArrowLeftRight } from 'lucide-react'
+import { Home, Activity, Globe, Zap, ArrowLeftRight, Trophy } from 'lucide-react'
 
 export type TabId = 'home' | 'sentiments' | 'rate' | 'goals' | 'totw' | 'worldcup' | 'transfers'
 
@@ -76,18 +76,42 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
 
           {/* Bottom cards */}
           <div className="px-3 pb-4 space-y-3">
-            {/* Arena Live */}
+            {/* Tournament Status — WC 2026 completed Jul 19 */}
             <div className="rounded-xl bg-white dark:bg-[#2D2D2D] p-3.5 border border-[#E0E0E0] dark:border-white/10">
               <div className="flex items-center gap-2.5">
-                <div className="relative">
-                  <Radio className="size-5 text-[#6C2BD9] dark:text-[#8B5CF6]" />
-                  <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-[#10B981] shadow-lg shadow-[#10B981]/50">
-                    <span className="absolute inset-0 rounded-full bg-[#10B981] animate-live-pulse" />
-                  </span>
+                <div className="relative shrink-0">
+                  <div className="flex items-center justify-center size-5 rounded-md bg-[#F59E0B]/15">
+                    <Trophy className="size-3.5 text-[#F59E0B]" />
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-[#1A1A1A] dark:text-white">Arena Live</p>
-                  <p className="text-[10px] text-[#10B981] font-medium">AI sync active</p>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-[#1A1A1A] dark:text-white">WC 2026 Complete</p>
+                  <p className="text-[10px] text-[#666] dark:text-gray-400 font-medium truncate">
+                    🇪🇸 Spain 1-0 Argentina 🇦🇷
+                  </p>
+                </div>
+              </div>
+              {/* Individual awards strip */}
+              <div className="mt-2.5 grid grid-cols-2 gap-1 text-[9px]">
+                <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
+                  <span className="shrink-0">🥇</span>
+                  <span className="font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Rodri</span>
+                  <span className="text-[#999] dark:text-gray-500 truncate">Ball</span>
+                </div>
+                <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
+                  <span className="shrink-0">⚽</span>
+                  <span className="font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Mbappé</span>
+                  <span className="text-[#999] dark:text-gray-500 truncate">Boot</span>
+                </div>
+                <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
+                  <span className="shrink-0">🧤</span>
+                  <span className="font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">U. Simón</span>
+                  <span className="text-[#999] dark:text-gray-500 truncate">Glove</span>
+                </div>
+                <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
+                  <span className="shrink-0">🌱</span>
+                  <span className="font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Cubarsí</span>
+                  <span className="text-[#999] dark:text-gray-500 truncate">Young</span>
                 </div>
               </div>
             </div>

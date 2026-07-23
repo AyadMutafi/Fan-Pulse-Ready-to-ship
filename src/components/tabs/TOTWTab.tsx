@@ -39,11 +39,16 @@ export default function TOTWTab() {
   const { t } = useLanguage()
   const { data: stages } = useWCStages()
 
-  // Auto-select first LIVE stage, fallback to first stage
+  // Auto-select stage: prefer LIVE > latest COMPLETED > first stage.
+  // Once the tournament is over, this defaults to the Final stage so the
+  // Team of the Tournament (Best XI) is shown rather than the Group Stage XI.
   const stageId = useMemo(() => {
     if (!stages || stages.length === 0) return null
     const liveStage = stages.find(s => s.status === 'live')
-    return (liveStage ?? stages[0]).id
+    if (liveStage) return liveStage.id
+    const completedStages = stages.filter(s => s.status === 'completed')
+    const latestCompleted = completedStages[completedStages.length - 1]
+    return (latestCompleted ?? stages[0]).id
   }, [stages])
 
   const { data: eliteCrisisData, isLoading } = useEliteCrisis(stageId)
@@ -112,6 +117,7 @@ export default function TOTWTab() {
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.3, delay: ri * 0.1 + ci * 0.05 }}
                         className="flex flex-col items-center"
+                        title={player ? `${player.name} · ${player.nationCode} · ${player.position} · Rating ${(player.pulseScore / 10).toFixed(1)}` : slot.pos}
                       >
                         <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-[#6C2BD9]/30 dark:border-[#8B5CF6]/30 bg-white dark:bg-[#2D2D2D] shadow-md overflow-hidden">
                           {player ? (
@@ -120,17 +126,27 @@ export default function TOTWTab() {
                             <span className="text-lg">👤</span>
                           )}
                         </div>
-                        <p className="mt-1 max-w-[60px] truncate text-[10px] font-bold text-[#1A1A1A] dark:text-white text-center">
+                        {/* Player name — full name (no truncation), word-break keeps long names visible */}
+                        <p
+                          className="mt-1 max-w-[72px] sm:max-w-[88px] text-[10px] font-bold text-[#1A1A1A] dark:text-white text-center leading-tight"
+                          style={{ wordBreak: 'keep-all', overflowWrap: 'anywhere' }}
+                        >
                           {player?.name ?? slot.pos}
                         </p>
-                        <Badge variant="outline" className="mt-0.5 text-[8px] font-bold px-1 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
-                          {slot.pos}
-                        </Badge>
-                        {player && (
-                          <Badge className="mt-0.5 bg-[#6C2BD9] dark:bg-[#8B5CF6] text-white text-[9px] font-bold px-1.5 py-0 h-4">
-                            {Math.round(player.pulseScore / 10)}
+                        {/* Position badge — clearly labelled "POS" pill, visually distinct from rating */}
+                        <div className="mt-0.5 flex flex-col items-center gap-0.5">
+                          <Badge variant="outline" className="text-[8px] font-bold px-1 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                            {slot.pos}
                           </Badge>
-                        )}
+                          {player && (
+                            <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#6C2BD9] dark:bg-[#8B5CF6]">
+                              <span className="text-[9px] font-black text-white leading-none">
+                                {(player.pulseScore / 10).toFixed(1)}
+                              </span>
+                              <span className="text-[6px] font-semibold text-white/70 uppercase tracking-wide leading-none">rtg</span>
+                            </div>
+                          )}
+                        </div>
                       </motion.div>
                     )
                   })}

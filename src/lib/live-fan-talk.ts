@@ -143,6 +143,9 @@ function safeParseDate(s: string): Date {
  *
  * Flow:
  *   1. Find or create a FeedMonitor for these teamCodes (status=active).
+ *      When `matchId` is provided, the monitor is scoped to THAT match
+ *      only — preventing posts from a different match (sharing a team
+ *      code) from bleeding in.
  *   2. If the monitor was refreshed less than MIN_REFRESH_INTERVAL_MS ago,
  *      short-circuit and return { newPosts: 0 } — the cached DB posts are
  *      still fresh.
@@ -168,13 +171,18 @@ function safeParseDate(s: string): Date {
  *
  * @param database  PrismaClient (from getDb() in API routes)
  * @param teamCodes e.g. ["ESP","AUT"]
+ * @param options.matchId  Optional Match.id — when set, the FeedMonitor is
+ *   scoped to this match so posts don't bleed across matches sharing a
+ *   team code.
  */
 export async function fetchLiveFanTalk(
   database: PrismaClient,
   teamCodes: string[],
+  options?: { matchId?: string },
 ): Promise<FetchLiveFanTalkResult> {
   const startedAt = Date.now()
   const codes = teamCodes.map((c) => c.toUpperCase()).filter(Boolean)
+  const matchId = options?.matchId
   if (codes.length === 0) {
     return {
       monitorId: '',
@@ -187,16 +195,20 @@ export async function fetchLiveFanTalk(
   }
 
   // ── 1. Find or create a FeedMonitor for these team codes ───────────────
-  // We look for an existing monitor whose teamCodes JSON array contains the
-  // same set (order-independent). If none, create one on the fly.
+  // When matchId is provided, look for an existing monitor scoped to that
+  // matchId first. Only if none exists do we fall back to a team-code-only
+  // match (and then create a new matchId-scoped monitor if still none).
   const matchLabel = `${codes.join(' vs ')} — WC 2026`
   const teamCodesJson = JSON.stringify(codes)
 
-  let monitor = await findMonitorForCodes(database, codes)
+  let monitor = matchId
+    ? await findMonitorForCodes(database, codes, matchId)
+    : await findMonitorForCodes(database, codes)
   if (!monitor) {
     monitor = await database.feedMonitor.create({
       data: {
         matchLabel,
+        matchId: matchId ?? null,
         teamCodes: teamCodesJson,
         playerIds: JSON.stringify([]),
         hashtags: JSON.stringify(codes.map((c) => `#${c}`).concat(['#WorldCup2026'])),
@@ -207,7 +219,7 @@ export async function fetchLiveFanTalk(
         endsAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     })
-    console.log(`[live-fan-talk] Created monitor ${monitor.id} for ${matchLabel}`)
+    console.log(`[live-fan-talk] Created monitor ${monitor.id} for ${matchLabel} (matchId=${matchId ?? 'none'})`)
   }
 
   // ── 2. Short-circuit if refreshed too recently ─────────────────────────
@@ -502,20 +514,57 @@ export async function fetchLiveFanTalk(
 /**
  * Find a FeedMonitor whose teamCodes JSON array contains exactly the same
  * set of codes (order-independent). Returns null if none found.
+ *
+ * When `matchId` is provided, the search PREFERS monitors scoped to that
+ * exact matchId. If a matchId-scoped monitor exists, it's returned. Only
+ * if no matchId-scoped monitor exists do we return a team-code-only match
+ * (so the caller can later create a properly-scoped monitor).
  */
 async function findMonitorForCodes(
   database: PrismaClient,
   codes: string[],
+  matchId?: string,
 ): Promise<{ id: string; lastRefreshedAt: Date | null } | null> {
   // Look at monitors created in the last 7 days to bound the scan.
   const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   const candidates = await database.feedMonitor.findMany({
     where: { createdAt: { gte: cutoff } },
-    select: { id: true, teamCodes: true, lastRefreshedAt: true },
+    select: { id: true, teamCodes: true, lastRefreshedAt: true, matchId: true },
     take: 50,
     orderBy: { createdAt: 'desc' },
   })
   const targetSet = new Set(codes.map((c) => c.toUpperCase()))
+
+  // Pass 1: when matchId is set, prefer monitors scoped to that matchId.
+  if (matchId) {
+    for (const m of candidates) {
+      if (m.matchId !== matchId) continue
+      try {
+        const arr = JSON.parse(m.teamCodes) as string[]
+        if (Array.isArray(arr) && arr.length === targetSet.size) {
+          const arrSet = new Set(arr.map((c) => String(c).toUpperCase()))
+          let match = true
+          for (const c of targetSet) {
+            if (!arrSet.has(c)) {
+              match = false
+              break
+            }
+          }
+          if (match) {
+            return { id: m.id, lastRefreshedAt: m.lastRefreshedAt }
+          }
+        }
+      } catch {
+        // malformed JSON — skip
+      }
+    }
+    // No matchId-scoped monitor found — fall through to team-code-only match
+    // so the caller can still find a legacy monitor (and create a scoped one
+    // for next time). Return null to force creation of a scoped monitor.
+    return null
+  }
+
+  // Pass 2 (no matchId): original team-code-only matching.
   for (const m of candidates) {
     try {
       const arr = JSON.parse(m.teamCodes) as string[]

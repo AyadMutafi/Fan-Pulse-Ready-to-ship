@@ -174,14 +174,6 @@ function getFanMoodEmojiSize(score: number): string {
   return 'text-xl'
 }
 
-function getRatingColor(rating: number): string {
-  if (rating >= 9) return '#10B981'
-  if (rating >= 7) return '#6C2BD9'
-  if (rating >= 5) return '#FF6B35'
-  if (rating >= 3) return '#EF4444'
-  return '#DC2626'
-}
-
 // ── Formation Layout 4-3-3 ──────────────────────────────────
 
 const FORMATION_ROWS = [
@@ -1594,24 +1586,36 @@ function TOTWTab() {
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ duration: 0.3, delay: ri * 0.1 + ci * 0.05 }}
                       className="flex flex-col items-center"
+                      title={player ? `${player.name} · ${player.nationCode} · ${slot.pos} · Rating ${player.rating}` : slot.pos}
                     >
-                      <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-white/60 bg-white/90 dark:bg-white/80 shadow-md shadow-black/20 overflow-hidden">
+                      <div className="flex size-12 sm:size-14 items-center justify-center rounded-full border-2 border-[#6C2BD9]/30 dark:border-[#8B5CF6]/30 bg-white dark:bg-[#2D2D2D] shadow-md overflow-hidden">
                         {player ? (
                           <FlagImage nationCode={player.nationCode} size={32} fallbackEmoji={getFlag(player.nationCode)} />
                         ) : (
                           <span className="text-lg">👤</span>
                         )}
                       </div>
-                      <p className="mt-1 max-w-[60px] truncate text-[10px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                      {/* Player name — full name (no truncation), word-break keeps long names visible */}
+                      <p
+                        className="mt-1 max-w-[72px] sm:max-w-[88px] text-[10px] font-bold text-[#1A1A1A] dark:text-white text-center leading-tight"
+                        style={{ wordBreak: 'keep-all', overflowWrap: 'anywhere' }}
+                      >
                         {player?.name ?? slot.pos}
                       </p>
-                      <Badge variant="outline" className="mt-0.5 text-[8px] font-bold px-1 bg-white/90 backdrop-blur-sm border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
-                        {slot.pos}
-                      </Badge>
-                      {player && (
-                        <Badge className="mt-0.5 bg-[#6C2BD9] dark:bg-[#8B5CF6] text-white text-[9px] font-bold px-1.5 py-0 h-4">
-                          {player.rating}
+                      {/* Position pill — clearly labelled jersey slot, visually distinct from rating */}
+                      <div className="mt-0.5">
+                        <Badge variant="outline" className="text-[8px] font-bold px-1 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                          {slot.pos}
                         </Badge>
+                      </div>
+                      {/* Match Rating — labelled chip, visually separated from position */}
+                      {player && (
+                        <div className="mt-0.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#6C2BD9] dark:bg-[#8B5CF6]">
+                          <span className="text-[9px] font-black text-white leading-none">
+                            {player.rating}
+                          </span>
+                          <span className="text-[6px] font-semibold text-white/70 uppercase tracking-wide leading-none">rtg</span>
+                        </div>
                       )}
                     </motion.div>
                   )
@@ -1645,9 +1649,7 @@ function FormationPlayerCard({
   const isElite = type === 'elite'
   const isLive = player.isLive && stageStatus === 'live'
   const isCompleted = stageStatus === 'completed'
-  const accentColor = isElite ? '#6C2BD9' : '#EF4444'
   const rating = player.pulseScore / 10
-  const ratingColor = getRatingColor(rating)
   const clickable = !!onPlayerClick
 
   return (
@@ -1685,36 +1687,42 @@ function FormationPlayerCard({
           <Lock className="absolute -right-0.5 -top-0.5 size-2 text-[#666] dark:text-[#CCCCCC]" />
         )}
       </div>
-      {/* Player Name */}
-      <p className="mt-px max-w-[48px] truncate text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+      {/* Player Name — full name (no truncation); word-break keeps long names visible on the pitch */}
+      <p
+        className="mt-px max-w-[52px] sm:max-w-[64px] text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] leading-tight"
+        style={{ wordBreak: 'keep-all', overflowWrap: 'anywhere' }}
+      >
         {player.name}
       </p>
-      {/* Position + Trend */}
-      <div className="flex items-center gap-px">
+      {/* Position pill — clearly labelled jersey slot, visually distinct from rating */}
+      <div className="mt-0.5">
         <Badge
           variant="outline"
-          className={`text-[5px] sm:text-[6px] font-bold px-0.5 py-0 bg-white/90 backdrop-blur-sm leading-tight ${
+          className={`text-[6px] sm:text-[7px] font-bold px-1 py-0 bg-white/95 backdrop-blur-sm leading-tight ${
             isElite ? 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]' : 'border-[#EF4444]/30 text-[#EF4444] dark:border-[#F87171]/30 dark:text-[#F87171]'
           }`}
         >
           {player.position}
         </Badge>
-        {getTrendIcon(player.trend)}
       </div>
-      {/* Rating + Flag next to score */}
-      <div className="flex items-center gap-0.5">
+      {/* Match Rating — labelled chip, visually separated from position */}
+      <div className="mt-0.5 flex items-center gap-0.5 px-1 py-px rounded bg-black/45 backdrop-blur-sm">
         {flagMode === 'flag' ? (
           <FlagImage nationCode={player.nationCode} size={12} fallbackEmoji={flagEmoji} />
         ) : (
-          <span className="text-[10px] leading-none">{flagEmoji}</span>
+          <span className="text-[8px] leading-none">{flagEmoji}</span>
         )}
         <span
           className="text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
-          style={{ color: ratingColor }}
         >
           {rating.toFixed(1)}
         </span>
+        <span className="text-[5px] sm:text-[6px] font-semibold text-white/70 uppercase tracking-wide leading-none">rtg</span>
       </div>
+      {/* Trend indicator — separate row so it never collides with rating */}
+      {getTrendIcon(player.trend) && (
+        <div className="mt-0.5">{getTrendIcon(player.trend)}</div>
+      )}
       {/* R32 movement chip — stock-ticker feel. Only for live R32 stage. */}
       {typeof player.scoreDelta === 'number' && Math.abs(player.scoreDelta) > 1 && (
         <motion.span

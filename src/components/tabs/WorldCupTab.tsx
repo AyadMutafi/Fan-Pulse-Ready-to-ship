@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { LiveBadge } from '@/components/common/LiveBadge'
-import { TrendIcon } from '@/components/common/TrendIcon'
 import PulseScoreRing from '@/components/pulse/PulseScoreRing'
 import { useLanguage } from '@/context/LanguageContext'
 import { useEliteCrisis } from '@/hooks/queries/use-elite-crisis'
@@ -31,11 +30,21 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
   const [activeView, setActiveView] = useState<SelectionType>('elite')
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
 
-  // Auto-select first LIVE stage
+  // Auto-select stage: prefer LIVE > latest COMPLETED > first stage.
+  // Once the tournament is over, this defaults to the Final stage so users
+  // land on the official tournament Best XI rather than the Group Stage.
   useEffect(() => {
     if (stages.length > 0 && !selectedStageId) {
       const liveStage = stages.find(s => s.status === 'live')
-      setSelectedStageId((liveStage ?? stages[0]).id)
+      if (liveStage) {
+        setSelectedStageId(liveStage.id)
+      } else {
+        // No live stage — pick the latest completed stage (highest order).
+        // stages are ordered by `order` asc, so the last completed is Final.
+        const completedStages = stages.filter(s => s.status === 'completed')
+        const latestCompleted = completedStages[completedStages.length - 1]
+        setSelectedStageId((latestCompleted ?? stages[0]).id)
+      }
     }
   }, [stages, selectedStageId])
 
@@ -315,7 +324,10 @@ function FormationPlayerCardInline({
   const isCompleted = stageStatus === 'completed'
 
   return (
-    <div className="flex flex-col items-center">
+    <div
+      className="flex flex-col items-center"
+      title={`${player.name} · ${team?.name ?? player.nationCode} · ${player.position} · Rating ${ratingValue}`}
+    >
       {/* Player Circle - always shows face emoji */}
       <div
         className={`
@@ -334,34 +346,37 @@ function FormationPlayerCardInline({
           <Lock className="absolute -right-0.5 -top-0.5 size-2 text-[#666] dark:text-[#CCCCCC]" />
         )}
       </div>
-      {/* Player Name */}
-      <p className="mt-px max-w-[48px] truncate text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+      {/* Player Name — full name shown (no truncation), with title tooltip as fallback */}
+      <p
+        className="mt-px max-w-[56px] sm:max-w-[64px] text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] leading-tight"
+        style={{ wordBreak: 'keep-all', overflowWrap: 'anywhere' }}
+      >
         {player.name}
       </p>
-      {/* Position + Trend */}
-      <div className="flex items-center gap-px">
+      {/* Position badge — visually distinct pill (jersey-number slot) */}
+      <div className="mt-0.5">
         <Badge
           variant="outline"
-          className={`text-[5px] sm:text-[6px] font-bold px-0.5 py-0 bg-white/90 backdrop-blur-sm leading-tight ${
+          className={`text-[6px] sm:text-[7px] font-bold px-1 py-0 bg-white/95 backdrop-blur-sm leading-tight ${
             isElite ? 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]' : 'border-[#EF4444]/30 text-[#EF4444] dark:border-[#F87171]/30 dark:text-[#F87171]'
           }`}
         >
           {player.position}
         </Badge>
-        <TrendIcon trend={player.trend} />
       </div>
-      {/* Rating + Flag next to score */}
-      <div className="flex items-center gap-0.5">
+      {/* Match Rating — clearly labelled, separated from position */}
+      <div className="mt-0.5 flex items-center gap-0.5 px-1 py-px rounded bg-black/40 backdrop-blur-sm">
         {flagMode === 'flag' ? (
           <FlagImage nationCode={player.nationCode} size={12} fallbackEmoji={flagEmoji} />
         ) : (
-          <span className="text-[10px] leading-none">{flagEmoji}</span>
+          <span className="text-[8px] leading-none">{flagEmoji}</span>
         )}
         <span
           className="text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
         >
           {ratingValue}
         </span>
+        <span className="text-[5px] sm:text-[6px] font-semibold text-white/70 uppercase tracking-wide">rtg</span>
       </div>
     </div>
   )

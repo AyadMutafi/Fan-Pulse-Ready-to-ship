@@ -69,6 +69,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const teamCodesParam = searchParams.get('teamCodes') || ''
     const tab = (searchParams.get('tab') || 'popular') as 'popular' | 'latest'
+    // matchId is parsed from the query so posts can be scoped to THIS match
+    // only — preventing posts from a different match (that shares a team code)
+    // from bleeding in. e.g. ESP vs ARG and ESP vs FRA would otherwise share
+    // the same ESP-related posts.
+    const matchId = searchParams.get('matchId') || null
     const teamCodes = teamCodesParam
       .split(',')
       .map((c) => c.trim().toUpperCase())
@@ -118,6 +123,12 @@ export async function GET(request: NextRequest) {
     await purgeFakeAuthorPosts(database)
 
     // ── 2. Find matching monitors for these team codes ─────────────────────
+    // When matchId is provided, we scope to monitors with that EXACT matchId
+    // first — this is the per-match filter that prevents posts from a
+    // different match (sharing a team code) from bleeding in. If no
+    // matchId-scoped monitor exists yet, we fall back to the team-code
+    // overlap query (legacy behavior) so the live fetch below can create a
+    // matchId-scoped monitor.
     const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000) // last 48h
     const candidateMonitors = await database.feedMonitor.findMany({
       where: { createdAt: { gte: cutoff } },
@@ -126,6 +137,13 @@ export async function GET(request: NextRequest) {
     })
 
     const matchingMonitors = candidateMonitors.filter((m) => {
+      // ── matchId scoping (preferred when provided) ──────────────────────
+      // If matchId is set, ONLY match monitors that have the SAME matchId
+      // (or null matchId on legacy monitors — those still match by team code
+      // so the live fetch can later create a properly-scoped monitor).
+      if (matchId) {
+        if (m.matchId && m.matchId !== matchId) return false
+      }
       try {
         const codes: string[] = JSON.parse(m.teamCodes)
         return codes.some((c) => teamCodes.includes(c.toUpperCase()))
@@ -134,13 +152,18 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // ── 3. Count current REAL posts for these monitors ─────────────────────
-    let monitorIds = matchingMonitors.map((m) => m.id)
-
-    // If no monitor exists yet for these team codes, we still want to
-    // attempt a live fetch below — fetchLiveFanTalk will create one.
-    if (monitorIds.length === 0) {
-      // Track that we have no monitor yet
+    // ── matchId-scoped filter (strongest guarantee) ───────────────────────
+    // When matchId is provided, prefer monitors that have the EXACT matchId
+    // set. If any exist, use ONLY those (drop legacy null-matchId monitors
+    // so we don't mix in posts from a different match that shares a team code).
+    let monitorIds: string[]
+    if (matchId) {
+      const scoped = matchingMonitors.filter((m) => m.matchId === matchId)
+      monitorIds = scoped.length > 0
+        ? scoped.map((m) => m.id)
+        : matchingMonitors.map((m) => m.id)
+    } else {
+      monitorIds = matchingMonitors.map((m) => m.id)
     }
 
     const realPostCount =
@@ -156,20 +179,32 @@ export async function GET(request: NextRequest) {
     if (realPostCount < MIN_REAL_POSTS_BEFORE_FETCH) {
       liveFetchAttempted = true
       console.log(
-        `[fan-talk] Only ${realPostCount} real posts for ${teamCodes.join(',')} — attempting live fetch`,
+        `[fan-talk] Only ${realPostCount} real posts for ${teamCodes.join(',')} (matchId=${matchId ?? 'none'}) — attempting live fetch`,
       )
       try {
-        const result = await fetchLiveFanTalk(database, teamCodes)
+        // Pass matchId so any newly-created FeedMonitor is scoped to THIS
+        // match — future requests with the same matchId will then read
+        // only this match's posts, not posts from other matches sharing
+        // a team code.
+        const result = await fetchLiveFanTalk(database, teamCodes, { matchId: matchId ?? undefined })
         if (result.error) {
           liveFetchError = result.error
         }
-        // The fetch may have created a new monitor — re-query monitors
+        // The fetch may have created a new monitor — re-query monitors.
+        // If matchId was provided, prefer the matchId-scoped monitor.
         if (result.monitorId) {
           const refreshed = await database.feedMonitor.findUnique({
             where: { id: result.monitorId },
           })
           if (refreshed && !monitorIds.includes(refreshed.id)) {
-            monitorIds.push(refreshed.id)
+            // If we have a matchId and the refreshed monitor is scoped to
+            // it, REPLACE the monitor list with just this one — the per-match
+            // filter is now in effect.
+            if (matchId && refreshed.matchId === matchId) {
+              monitorIds = [refreshed.id]
+            } else {
+              monitorIds.push(refreshed.id)
+            }
           }
         }
         console.log(

@@ -13,7 +13,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SharePulseButton } from '@/components/common/SharePulseButton'
-import { TrendIcon } from '@/components/common/TrendIcon'
 import FlagImage from '@/components/common/FlagImage'
 import { findNationalTeam } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
@@ -419,15 +418,15 @@ function RetroPlayerChip({
   const isNA = player.name === 'N/A'
   const faceEmoji = isNA ? '❓' : getPulseFaceEmoji(player.tournamentScore)
   const ratingValue = isNA ? '—' : (player.tournamentScore / 10).toFixed(1)
-  const trendIcon = isNA ? null : (
-    <TrendIcon trend={player.trend} />
-  )
+  // Trend shown as a colored arrow on the avatar's top-right corner — kept
+  // visually distinct from the position badge and rating pill below.
   const TrendArrow = player.trend === 'rising' ? TrendingUp : player.trend === 'falling' ? TrendingDown : null
 
   return (
     <motion.div
       whileHover={!isNA ? { scale: 1.08 } : undefined}
       className="flex flex-col items-center"
+      title={!isNA ? `${player.name} · ${player.nationName ?? player.nationCode} · ${player.position} · Rating ${ratingValue}` : undefined}
     >
       <div
         className={`
@@ -458,13 +457,18 @@ function RetroPlayerChip({
           </span>
         )}
       </div>
-      <p className="mt-px max-w-[52px] truncate text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+      {/* Player Name — full name shown (no truncation), with title tooltip as fallback */}
+      <p
+        className="mt-px max-w-[64px] sm:max-w-[72px] text-[7px] sm:text-[8px] font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] leading-tight"
+        style={{ wordBreak: 'keep-all', overflowWrap: 'anywhere' }}
+      >
         {player.name}
       </p>
-      <div className="flex items-center gap-px">
+      {/* Position badge — visually distinct pill (jersey-number slot) */}
+      <div className="mt-0.5">
         <Badge
           variant="outline"
-          className="text-[5px] sm:text-[6px] font-bold px-0.5 py-0 bg-white/90 backdrop-blur-sm leading-tight"
+          className="text-[6px] sm:text-[7px] font-bold px-1 py-0 bg-white/95 backdrop-blur-sm leading-tight"
           style={{
             borderColor: `${accent}4D`,
             color: accent,
@@ -472,13 +476,14 @@ function RetroPlayerChip({
         >
           {isNA ? '—' : player.position}
         </Badge>
-        {trendIcon}
       </div>
-      <div className="flex items-center gap-0.5">
-        {flagMode === 'emoji' && !isNA && <span className="text-[10px] leading-none">{flagEmoji}</span>}
+      {/* Match Rating — clearly labelled, separated from position */}
+      <div className="mt-0.5 flex items-center gap-0.5 px-1 py-px rounded bg-black/40 backdrop-blur-sm">
+        {flagMode === 'emoji' && !isNA && <span className="text-[8px] leading-none">{flagEmoji}</span>}
         <span className="text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
           {ratingValue}
         </span>
+        <span className="text-[5px] sm:text-[6px] font-semibold text-white/70 uppercase tracking-wide">rtg</span>
       </div>
     </motion.div>
   )
