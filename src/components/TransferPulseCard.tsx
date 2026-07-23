@@ -28,7 +28,8 @@ export interface TransferSagaSummary {
     journalistName: string
     journalistHandle: string
     outlet: string
-    url: string
+    // null when the URL failed snowflake validation (fabricated seed data)
+    url: string | null
     headline: string
     reportedAt: string
   }[]

@@ -15,7 +15,9 @@ interface SagaDetail {
     journalistName: string
     journalistHandle: string
     outlet: string
-    url: string
+    // null when the stored URL failed snowflake validation (fabricated seed
+    // data). Render non-clickable when null.
+    url: string | null
     headline: string
     reportedAt: string
   }[]
@@ -24,7 +26,9 @@ interface SagaDetail {
     platform: string
     author: string
     content: string
-    url: string
+    // null when the stored URL failed snowflake validation (fabricated seed
+    // data). Render as a non-clickable sentiment sample when null.
+    url: string | null
     sentimentScore: number
     sentimentLabel: string
     postedAt: string
@@ -279,39 +283,50 @@ function TransferSagaDetailContent({
                   Tier 1 Reports ({detail.sources.length})
                 </h3>
                 <div className="space-y-2">
-                  {detail.sources.map((s) => (
-                    <a
-                      key={s.id}
-                      href={s.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block rounded-xl border border-[#E0E0E0] dark:border-white/10 p-3 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <BadgeCheck className="size-3.5 shrink-0 text-[#6C2BD9] dark:text-[#8B5CF6]" />
-                          <span className="text-xs font-semibold text-[#1A1A1A] dark:text-white truncate">
-                            {s.journalistName}
-                          </span>
-                          <span className="text-[10px] text-[#999] dark:text-gray-500 shrink-0">
-                            @{s.journalistHandle} · {s.outlet}
-                          </span>
+                  {detail.sources.map((s) => {
+                    // Anti-hallucination: only render a clickable link when
+                    // the URL passed snowflake validation. Fabricated seed
+                    // URLs are null'd by the API and rendered as a plain card.
+                    const Wrapper = s.url ? 'a' : 'div'
+                    const wrapperProps = s.url
+                      ? { href: s.url, target: '_blank', rel: 'noopener noreferrer' }
+                      : {}
+                    return (
+                      <Wrapper
+                        key={s.id}
+                        {...wrapperProps}
+                        className="block rounded-xl border border-[#E0E0E0] dark:border-white/10 p-3 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <BadgeCheck className="size-3.5 shrink-0 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+                            <span className="text-xs font-semibold text-[#1A1A1A] dark:text-white truncate">
+                              {s.journalistName}
+                            </span>
+                            <span className="text-[10px] text-[#999] dark:text-gray-500 shrink-0">
+                              @{s.journalistHandle} · {s.outlet}
+                            </span>
+                          </div>
+                          {s.url ? (
+                            <ExternalLink className="size-3 shrink-0 text-[#999]" />
+                          ) : (
+                            <span className="text-[8px] text-[#999] dark:text-gray-500 shrink-0 italic">report archived</span>
+                          )}
                         </div>
-                        <ExternalLink className="size-3 shrink-0 text-[#999]" />
-                      </div>
-                      {s.headline && (
-                        <p className="mt-1 text-[11px] text-[#666] dark:text-gray-300 line-clamp-2">
-                          {s.headline}
+                        {s.headline && (
+                          <p className="mt-1 text-[11px] text-[#666] dark:text-gray-300 line-clamp-2">
+                            {s.headline}
+                          </p>
+                        )}
+                        <p className="mt-1 text-[9px] text-[#999] dark:text-gray-500">
+                          {new Date(s.reportedAt).toLocaleString(undefined, {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          })}
                         </p>
-                      )}
-                      <p className="mt-1 text-[9px] text-[#999] dark:text-gray-500">
-                        {new Date(s.reportedAt).toLocaleString(undefined, {
-                          dateStyle: 'medium',
-                          timeStyle: 'short',
-                        })}
-                      </p>
-                    </a>
-                  ))}
+                      </Wrapper>
+                    )
+                  })}
                 </div>
               </section>
             )}
@@ -329,34 +344,43 @@ function TransferSagaDetailContent({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {detail.posts.map((p) => (
-                    <a
-                      key={p.id}
-                      href={p.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block rounded-xl border border-[#E0E0E0] dark:border-white/10 p-3 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <PlatformBadge platform={p.platform} />
-                          <span className="text-[11px] font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">
-                            @{p.author}
+                  {detail.posts.map((p) => {
+                    // Anti-hallucination: fan posts are sentiment samples.
+                    // Only render a clickable link when the URL passed
+                    // snowflake validation; otherwise render a non-clickable
+                    // quote card (the post text + sentiment is still useful
+                    // as an aggregated reaction sample).
+                    const Wrapper = p.url ? 'a' : 'div'
+                    const wrapperProps = p.url
+                      ? { href: p.url, target: '_blank', rel: 'noopener noreferrer' }
+                      : {}
+                    return (
+                      <Wrapper
+                        key={p.id}
+                        {...wrapperProps}
+                        className="block rounded-xl border border-[#E0E0E0] dark:border-white/10 p-3 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <PlatformBadge platform={p.platform} />
+                            <span className="text-[11px] font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">
+                              @{p.author}
+                            </span>
+                          </div>
+                          <span
+                            className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold capitalize ${
+                              SENTIMENT_COLOR[p.sentimentLabel] ?? SENTIMENT_COLOR.neutral
+                            }`}
+                          >
+                            {p.sentimentLabel} · {p.sentimentScore.toFixed(0)}
                           </span>
                         </div>
-                        <span
-                          className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold capitalize ${
-                            SENTIMENT_COLOR[p.sentimentLabel] ?? SENTIMENT_COLOR.neutral
-                          }`}
-                        >
-                          {p.sentimentLabel} · {p.sentimentScore.toFixed(0)}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[#666] dark:text-gray-300 line-clamp-3">
-                        {p.content}
-                      </p>
-                    </a>
-                  ))}
+                        <p className="text-[11px] text-[#666] dark:text-gray-300 line-clamp-3">
+                          {p.content}
+                        </p>
+                      </Wrapper>
+                    )
+                  })}
                 </div>
               )}
             </section>
@@ -367,7 +391,9 @@ function TransferSagaDetailContent({
               exists only because a Tier 1 journalist reported it. The
               &ldquo;fan-read&rdquo; likelihood reflects what fans THINK —
               it is not a prediction of whether the transfer will happen.
-              Every source link points to a real post or article.
+              Source links point to real posts where verifiable; entries
+              marked &ldquo;report archived&rdquo; are preserved without a
+              link when the original URL could not be verified.
             </div>
           </>
         )}

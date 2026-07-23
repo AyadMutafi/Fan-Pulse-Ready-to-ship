@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { setCorsHeaders, handleOptions } from '@/lib/cors'
+import { sanitizeXPostUrl, sanitizeXPostUrlBatch } from '@/lib/validate-x-url'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,6 +51,19 @@ export async function GET(
       return res
     }
 
+    // Anti-hallucination: batch-sanitize source + post URLs. The seed script
+    // generates all journalist source URLs with a shared "2059000000" snowflake
+    // prefix and all fan post URLs with sagaIdHash IDs that decode to 2066
+    // (future). The batch check detects prefix clustering; per-URL validation
+    // catches future-dated/invalid snowflakes. Fabricated URLs become null and
+    // the frontend renders them as non-clickable cards.
+    const safeSourceUrls = sanitizeXPostUrlBatch(
+      saga.sources.map((s) => s.url),
+    )
+    const safePostUrls = sanitizeXPostUrlBatch(
+      saga.posts.map((p) => p.url),
+    )
+
     const res = NextResponse.json({
       saga: {
         id: saga.id,
@@ -72,23 +86,24 @@ export async function GET(
         firstReportedAt: saga.firstReportedAt,
         lastUpdatedAt: saga.lastUpdatedAt,
         resolvedAt: saga.resolvedAt,
-        resolutionUrl: saga.resolutionUrl,
+        // Anti-hallucination: null-out resolutionUrl if it's a fabricated X URL
+        resolutionUrl: sanitizeXPostUrl(saga.resolutionUrl),
       },
-      sources: saga.sources.map((s) => ({
+      sources: saga.sources.map((s, i) => ({
         id: s.id,
         journalistName: s.journalistName,
         journalistHandle: s.journalistHandle,
         outlet: s.outlet,
-        url: s.url,
+        url: safeSourceUrls[i],
         headline: s.headline,
         reportedAt: s.reportedAt,
       })),
-      posts: saga.posts.map((p) => ({
+      posts: saga.posts.map((p, i) => ({
         id: p.id,
         platform: p.platform,
         author: p.author,
         content: p.content,
-        url: p.url,
+        url: safePostUrls[i],
         sentimentScore: p.sentimentScore,
         sentimentLabel: p.sentimentLabel,
         postedAt: p.postedAt,
