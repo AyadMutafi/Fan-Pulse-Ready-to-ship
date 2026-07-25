@@ -23,8 +23,8 @@
  *   - Debunked sagas are never deleted — only their status changes.
  */
 
-import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
+import { ai } from '@/lib/ai'
 import { searchXPostsGeneric, type XPost } from '@/lib/grok-x-search'
 import { TIER1_HANDLES, getTier1Source } from './tier1-sources'
 import { TRACKED_PLAYERS, type TrackedPlayer } from './tracked-players'
@@ -385,22 +385,14 @@ async function countTier1Sources(sagaId: string): Promise<number> {
 // ── LLM extraction of transfer fields ────────────────────────────────────────
 
 /**
- * Ask the Z.ai LLM to extract structured transfer metadata from a Tier 1
- * journalist's X post text. Returns null if the destination cannot be
- * confidently determined — we never guess.
+ * Ask the AI facade (Grok → Cerebras → Groq → Z.ai) to extract structured
+ * transfer metadata from a Tier 1 journalist's X post text. Returns null if
+ * the destination cannot be confidently determined — we never guess.
  */
 async function extractTransferFields(
   postText: string,
   playerName: string,
 ): Promise<ExtractedTransfer | null> {
-  let zai: any
-  try {
-    zai = await ZAI.create()
-  } catch (err) {
-    console.error('[transfer-pulse/discovery] Z.ai SDK init failed:', String(err).slice(0, 150))
-    return null
-  }
-
   const systemPrompt =
     `You extract structured transfer-rumor metadata from a football journalist's ` +
     `X post. The player is ${playerName}. Read the post text and return a JSON ` +
@@ -415,40 +407,22 @@ async function extractTransferFields(
     `- Do NOT invent a club. If unsure, return null.\n` +
     `- Output ONLY the JSON object, no commentary.`
 
-  let raw = ''
-  try {
-    // Retry up to 3 times on 429 with progressively longer backoff
-    // (Z.ai free-tier rate limits are tight — 8s often isn't enough).
-    let attempts = 0
-    const backoffMs = [10_000, 20_000, 30_000]
-    while (attempts <= backoffMs.length) {
-      try {
-        const completion = await zai.chat.completions.create({
-          messages: [
-            { role: 'assistant', content: systemPrompt },
-            { role: 'user', content: postText.slice(0, 1000) },
-          ],
-          thinking: { type: 'disabled' },
-        })
-        raw = completion?.choices?.[0]?.message?.content || ''
-        break
-      } catch (innerErr) {
-        const innerMsg = String(innerErr)
-        if (innerMsg.includes('429') && attempts < backoffMs.length) {
-          console.log(`[transfer-pulse/discovery] LLM 429, backing off ${backoffMs[attempts] / 1000}s (attempt ${attempts + 1}/${backoffMs.length})`)
-          await new Promise((r) => setTimeout(r, backoffMs[attempts]))
-          attempts++
-          continue
-        }
-        throw innerErr
-      }
-    }
-  } catch (err) {
-    console.error('[transfer-pulse/discovery] Z.ai extraction failed:', String(err).slice(0, 150))
+  const result = await ai.chat(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: postText.slice(0, 1000) },
+    ],
+    { temperature: 0.1, maxTokens: 600, json: true },
+  )
+
+  if (!result.ok || !result.content) {
+    console.warn(
+      `[transfer-pulse/discovery] extractTransferFields: ai.chat failed (${result.provider}): ${result.error?.slice(0, 120)}`,
+    )
     return null
   }
 
-  return parseExtractedTransfer(raw)
+  return parseExtractedTransfer(result.content)
 }
 
 function parseExtractedTransfer(raw: string): ExtractedTransfer | null {
@@ -513,17 +487,6 @@ async function verifyPlayerCurrentClub(
   playerName: string,
   expectedFromClub: string,
 ): Promise<{ verified: boolean; actualClub: string | null }> {
-  let zai: any
-  try {
-    zai = await ZAI.create()
-  } catch (err) {
-    console.warn(
-      '[transfer-pulse/discovery] verifyPlayerCurrentClub: Z.ai SDK init failed, failing OPEN:',
-      String(err).slice(0, 100),
-    )
-    return { verified: true, actualClub: null }
-  }
-
   const systemPrompt =
     `You are an entity-resolution gate for a football transfer pipeline.\n` +
     `A Tier 1 journalist's X post is being considered for a saga about ${playerName} ` +
@@ -552,26 +515,24 @@ async function verifyPlayerCurrentClub(
     `- If unsure, return verified=true (be permissive — other gates handle same-club and bad extractions).\n` +
     `- Output ONLY the JSON object, no commentary.`
 
-  let raw = ''
-  try {
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: systemPrompt },
-        { role: 'user', content: postText.slice(0, 2000) },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    raw = completion?.choices?.[0]?.message?.content || ''
-  } catch (err) {
+  const result = await ai.chat(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: postText.slice(0, 2000) },
+    ],
+    { temperature: 0.1, maxTokens: 400, json: true },
+  )
+
+  if (!result.ok || !result.content) {
     console.warn(
-      '[transfer-pulse/discovery] verifyPlayerCurrentClub LLM call failed, failing OPEN:',
-      String(err).slice(0, 100),
+      `[transfer-pulse/discovery] verifyPlayerCurrentClub: ai.chat failed (${result.provider}), failing OPEN:`,
+      result.error?.slice(0, 100),
     )
     return { verified: true, actualClub: null }
   }
 
   // Parse the JSON response
-  let cleaned = raw.trim()
+  let cleaned = result.content.trim()
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '')
   const start = cleaned.indexOf('{')
   const end = cleaned.lastIndexOf('}')

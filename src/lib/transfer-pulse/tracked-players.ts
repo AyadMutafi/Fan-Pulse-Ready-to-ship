@@ -121,7 +121,10 @@ export const TRACKED_PLAYERS: readonly TrackedPlayer[] = [
   { name: 'Dean Huijsen', nationCode: 'NED', fromClubCode: 'BOU', fromClubName: 'Bournemouth', position: 'CB' },
   { name: 'Mathys Tel', nationCode: 'FRA', fromClubCode: 'BAY', fromClubName: 'Bayern Munich', position: 'ST' },
   { name: 'Kenan Yıldız', nationCode: 'TUR', fromClubCode: 'JUV', fromClubName: 'Juventus', position: 'CAM' },
-  { name: 'Trent Alexander-Arnold', nationCode: 'ENG', fromClubCode: 'LIV', fromClubName: 'Liverpool', position: 'RB' },
+  // NOTE: Trent Alexander-Arnold removed 2026-07-25. He completed his move
+  // from Liverpool to Real Madrid in summer 2025 — keeping him in the
+  // watchlist caused the discovery pipeline to keep surfacing his OLD move
+  // as if it were current news. He is now a Real Madrid player.
   { name: 'Georginio Rutter', nationCode: 'FRA', fromClubCode: 'BHA', fromClubName: 'Brighton', position: 'CAM' },
 ]
 
