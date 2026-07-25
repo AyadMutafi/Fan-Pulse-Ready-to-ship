@@ -95,6 +95,17 @@ model Match {
   awaySentiment  Float    @default(50) // 0-100
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  // Hot path: the homepage + World Cup tab constantly query live/upcoming
+  // matches ordered by date. `@@index([status, matchDate])` serves the
+  // `WHERE status IN ('live','upcoming') ORDER BY matchDate` query.
+  // `@@index([league, status, matchDate])` serves EPL matchday queries
+  // (`WHERE league = 'EPL' AND status = 'live' ORDER BY matchDate`) — note
+  // there is no separate LeagueMatch model; EPL matches live here with
+  // `league = 'EPL'`. This index is what makes 7-concurrent-EPL-match loads
+  // fast on Saturday.
+  @@index([status, matchDate])
+  @@index([league, status, matchDate])
 }
 
 // ── Pulse Score Engine Models ────────────────────────────────────────────────
@@ -170,6 +181,12 @@ model FanVote {
   updatedAt DateTime @updatedAt
 
   @@unique([teamCode, sessionId])
+  // Hot path: /api/fan-vote GET aggregates all votes per team, and the admin
+  // dashboard filters by recency. This compound index supports both the
+  // `WHERE teamCode = ? ORDER BY createdAt` and the team-scoped COUNT/SUM
+  // aggregations without a full table scan — important when 7 concurrent EPL
+  // matches generate 70+ votes/min.
+  @@index([teamCode, createdAt])
 }
 
 /// Aggregated fan ratings per player (1-10 scale). For the Rate tab.

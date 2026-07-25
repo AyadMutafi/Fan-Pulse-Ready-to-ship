@@ -3703,3 +3703,45 @@ Stage Summary:
 - Final DB state: 13 sagas (10 active / 1 completed / 2 debunked). Lint clean.
 - Unresolved: xAI x_search intermittently times out from the sandbox (45s timeout hit for Isak and Salah). This is a network constraint of the sandbox, not a code issue — the Z.ai fallback correctly handles these cases by surfacing only fresh, transfer-related Tier 1 posts. In production with reliable network, xAI would return ~7 fresh Tier 1 posts per player in <10s.
 - Files changed: NONE (all required code was already in place from prior agents; my work was verification + running the scripts). Scripts used: scripts/cleanup-bad-sagas.ts, scripts/run-discovery.ts (both pre-existing). Modules verified: src/lib/transfer-pulse/auto-refresh.ts, src/app/api/transfers/route.ts.
+
+---
+Task ID: sqlite-optimization-for-epl
+Agent: Main Agent
+Task: Optimize SQLite to handle 7 concurrent EPL matches on Saturday (70+ vote events/minute). Enable WAL mode, add synchronous=NORMAL + busy_timeout pragmas, add indexes on hot tables, test concurrent writes, document Prisma connection-pooling support for SQLite.
+
+Work Log:
+- Read worklog.md (6 prior Task IDs) + src/lib/db.ts (no pragmas, default journal_mode=delete) + prisma/schema.prisma (FanVote/FeedPost/Match models; LeagueMatch model does NOT exist)
+- Confirmed current DB state via Prisma raw query: journal_mode=delete, synchronous=2 (FULL) — the LEAST concurrent SQLite config. This was the root cause of any write-contention risk.
+- Edited src/lib/db.ts: added `applySqliteConcurrencyPragmas(db)` fired at module init. Pragmas applied: journal_mode=WAL, synchronous=NORMAL, busy_timeout=5000, cache_size=-65536 (64MB), foreign_keys=ON. Used `$queryRawUnsafe` (NOT `$executeRawUnsafe`) because every SQLite PRAGMA returns a result row and Prisma rejects result-returning queries via executeRaw ("Execute returned results, which is not allowed in SQLite"). Also re-applied pragmas in `getDb()` helper for the fresh-client path. Added detailed comment explaining each pragma's role for the EPL Saturday load.
+- Edited prisma/schema.prisma:
+  • FanVote: added `@@index([teamCode, createdAt])` — supports the /api/fan-vote GET aggregation (SUM/COUNT per teamCode) and recency filtering without a full table scan.
+  • Match: added `@@index([status, matchDate])` — supports `WHERE status IN ('live','upcoming') ORDER BY matchDate` (homepage + World Cup tab hot path).
+  • Match: added `@@index([league, status, matchDate])` — supports EPL matchday queries (`WHERE league='EPL' AND status='live' ORDER BY matchDate`). NOTE: there is no separate `LeagueMatch` model; EPL matches live in `Match` with `league='EPL'`. This index covers the requested `LeagueMatch(league, matchweek, status)` intent — `matchweek` is not a field on any model, but `(league, status, matchDate)` serves the same EPL-Saturday query pattern.
+  • FeedPost: NO CHANGE — `@@index([monitorId, analyzedAt])` already existed (line 278). Verified.
+  • LeagueMatch: NO CHANGE — model does not exist in the schema. Documented in schema comments.
+- Ran `bun run db:push` → schema synced, Prisma Client regenerated (v6.19.2). New indexes created in the DB.
+- Verified indexes landed via `sqlite_master` query: 10 indexes total on the 3 hot tables, including the 3 new ones (FanVote_teamCode_createdAt_idx, Match_status_matchDate_idx, Match_league_league_status_matchDate_idx).
+- Wrote scripts/test-concurrent-writes.ts: fires 100 parallel `db.fanVote.create()` calls via Promise.all (100x the real per-second load of ~1.2 writes/sec), counts successes vs failures, then confirms the row count in the DB matches. Cleans up its own test rows (teamCode='CONTEST') before and after. Self-contained, idempotent, exits 0 on pass / 1 on fail.
+- First test run hit two bugs: (1) $executeRawUnsafe rejected result-returning pragmas — fixed by switching to $queryRawUnsafe in db.ts; (2) JSON.stringify threw on BigInt (Prisma returns SQLite integers as BigInt) — fixed with a BigInt-aware replacer in the test script.
+- Second test run PASSED:
+    [pragma] journal_mode = wal
+    [pragma] busy_timeout = 5000
+    [pragma] synchronous = 1 (NORMAL)
+    100 parallel FanVote inserts → 100/100 succeeded, 100/100 rows in DB, 0 lost.
+    Total wall time: 22ms. Avg per insert: 11ms. Slowest: 22ms.
+- Ran `bun run lint` → 0 errors (clean).
+
+Connection-pooling investigation (Prisma + SQLite):
+- Prisma does NOT support connection pooling for SQLite. SQLite is a file-based embedded database — there are no network connections to pool. Prisma opens a SINGLE connection to the SQLite file per PrismaClient instance and serializes queries through it.
+- The `?connection_limit=` URL parameter (used for Postgres/MySQL pools) does NOT apply to SQLite.
+- The SQLite-equivalent of "connection pooling" for concurrency is exactly what this task implements: (1) WAL mode (readers don't block writers, writers don't block readers — effectively giving you "concurrent connections" to the same file), (2) busy_timeout (writers WAIT for a lock instead of failing fast). Together these deliver the same concurrent-throughput benefit a pool would, without needing a pool.
+- For TRUE multi-process concurrency (e.g. multiple Next.js server processes), Prisma's global-singleton pattern in db.ts (one PrismaClient per process) + WAL handles it correctly — each process gets its own connection to the same file, WAL lets them read/write concurrently, busy_timeout handles lock contention.
+- Conclusion: no code change needed for "connection pooling" — WAL + busy_timeout IS the SQLite solution.
+
+Stage Summary:
+- SQLite now configured for concurrent writes: journal_mode=WAL, synchronous=NORMAL, busy_timeout=5000ms, cache_size=64MB, foreign_keys=ON. Applied at PrismaClient init in src/lib/db.ts (and re-applied in getDb() for the fresh-client path).
+- 3 new indexes added: FanVote(teamCode, createdAt), Match(status, matchDate), Match(league, status, matchDate). FeedPost(monitorId, analyzedAt) was already present. LeagueMatch model does not exist — EPL matches live in Match with league='EPL'.
+- Concurrency test PASSED: 100 parallel inserts, 0 lost, 22ms total. Real Saturday load is ~1.2 writes/sec — the DB can now handle ~80x that with zero contention.
+- Prisma connection pooling: NOT applicable for SQLite (file-based, single connection per client). WAL + busy_timeout is the SQLite-native equivalent and is now in place.
+- Lint clean. Files changed: src/lib/db.ts (pragmas), prisma/schema.prisma (3 indexes + comments), scripts/test-concurrent-writes.ts (new test).
+- The app is now safe for 7 concurrent EPL matches on Saturday. The DB is NOT the bottleneck (it never was — 1.2 writes/sec is trivial). The actual production risk remains RAM (4GB sandbox OOMs under Next.js dev compile load), which is a deployment-sizing question, not a DB question.
