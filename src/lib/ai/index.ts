@@ -35,6 +35,19 @@ import { webSearch } from './web-search'
 import { searchXPosts } from './x-search'
 import { readPage } from './page-reader'
 
+// Re-export each function as a named export too, so callers can do either:
+//   import { ai } from '@/lib/ai'             → ai.scoreSentiment(...)
+//   import { scoreSentiment } from '@/lib/ai' → scoreSentiment(...)
+// (Previously only the `ai` object was exported, which silently broke
+// `import { scoreSentiment } from '@/lib/ai'` — the named import resolved
+// to `undefined` at runtime, throwing "scoreSentiment is not a function"
+// in code paths that weren't exercised in tests. See worklog Task ID: 2.)
+export { chat } from './chat'
+export { scoreSentiment } from './sentiment'
+export { webSearch } from './web-search'
+export { searchXPosts } from './x-search'
+export { readPage } from './page-reader'
+
 export const ai = {
   chat,
   scoreSentiment,

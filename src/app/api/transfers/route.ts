@@ -7,12 +7,22 @@
  * Tier-1-gated discovery pipeline. It never invents sagas. If no sagas exist
  * (e.g. XAI_API_KEY not configured yet), it returns an empty list — the
  * frontend renders an honest empty state.
+ *
+ * AUTO-REFRESH (added 2026-07-25):
+ *   Before returning sagas, we check whether the newest active saga's
+ *   `lastUpdatedAt` is older than 30 minutes. If so, we kick off a
+ *   NON-BLOCKING background refresh (discovery + ingest for a small batch)
+ *   via `maybeStartBackgroundRefresh()`. The response returns immediately
+ *   with the current data; the refresh happens in the background for the
+ *   NEXT request to see. Single-flight guarded (only one refresh at a time),
+ *   fully try/catch-wrapped (a refresh failure never breaks the GET).
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { setCorsHeaders, handleOptions } from '@/lib/cors'
 import { sanitizeXPostUrl, sanitizeXPostUrlBatch } from '@/lib/validate-x-url'
+import { isTransferDataStale, maybeStartBackgroundRefresh } from '@/lib/transfer-pulse/auto-refresh'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +41,20 @@ export async function GET(request: NextRequest) {
     )
     setCorsHeaders(res, request)
     return res
+  }
+
+  // ── Auto-refresh backstop ────────────────────────────────────────────────
+  // If the data is stale (>30 min since the newest active saga was updated),
+  // kick off a NON-BLOCKING background refresh. We deliberately do NOT await
+  // this — the response returns immediately with the current data. The
+  // refresh happens for the NEXT request to see. Single-flight guarded +
+  // fully try/catch-wrapped inside the helper, so a refresh failure can never
+  // break the GET response.
+  try {
+    const stale = await isTransferDataStale()
+    if (stale) maybeStartBackgroundRefresh()
+  } catch {
+    // Defensive: staleness check itself failed — swallow and proceed.
   }
 
   try {
