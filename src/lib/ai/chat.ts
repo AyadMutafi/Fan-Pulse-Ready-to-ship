@@ -1,8 +1,9 @@
 /**
  * chat.ts — single LLM completion via the provider fallback chain.
  *
- * Tries Cerebras → Groq → Grok → Z.ai in order; first success wins.
- * If ALL fail, returns { ok: false, error }. NEVER fabricates content.
+ * PRIMARY: Grok (grok-4.3). Tries Grok → Cerebras → Groq → Z.ai in order;
+ * first success wins. If ALL fail, returns { ok: false, error }. NEVER
+ * fabricates content.
  *
  * This module is part of the @/lib/ai facade. App code should call
  * `ai.chat(...)` rather than importing this directly.
@@ -34,10 +35,11 @@ export async function chat(
   messages: ChatMessage[],
   opts: ChatOptions = {},
 ): Promise<ChatResult> {
+  // PRIMARY: Grok. Then Cerebras (if configured), Groq, Z.ai.
   const chain: { name: string; run: () => Promise<ChatResult | null> }[] = [
+    { name: 'grok', run: () => grok.chat(messages, opts) },
     { name: 'cerebras', run: () => cerebras.chat(messages, opts) },
     { name: 'groq', run: () => groq.chat(messages, opts) },
-    { name: 'grok', run: () => grok.chat(messages, opts) },
     { name: 'zai', run: () => zai.chat(messages, opts) },
   ]
 

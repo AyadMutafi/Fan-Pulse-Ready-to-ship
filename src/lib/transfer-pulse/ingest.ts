@@ -20,7 +20,7 @@
 import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
 import { searchXPostsGeneric, type XPost } from '@/lib/grok-x-search'
-import { scorePostBatch } from '@/lib/groq-sentiment'
+import { scoreSentiment, type SentimentProvider } from '@/lib/ai'
 import { fetchFanPostsViaZai } from './zai-fallback'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ export interface IngestResult {
   sagaId: string
   postsFetched: number
   postsAdded: number
-  provider: 'groq' | 'zai' | 'none'
+  provider: SentimentProvider
   error?: string
   durationMs: number
 }
@@ -148,8 +148,8 @@ export async function ingestSagaPosts(
     return out
   }
 
-  // 2. Score sentiment (Groq → Z.ai fallback) for the batch
-  const sentimentRes = await scorePostBatch(
+  // 2. Score sentiment via the AI facade (Grok → Cerebras → Groq → Z.ai)
+  const sentimentRes = await scoreSentiment(
     fanPosts.map((p) => ({ content: p.text })),
   )
   out.provider = sentimentRes.provider
@@ -329,10 +329,10 @@ async function upsertTimelineSnapshot(sagaId: string): Promise<void> {
  * Classify each fan post as excited / skeptical / dreading / neutral via the
  * Z.ai LLM. Falls back to a heuristic if the LLM call fails.
  *
- * This is SEPARATE from scorePostBatch (which returns a 0-100 sentiment
- * number) because the excited/skeptical/dreading labels are transfer-specific
- * and can't be derived from sentiment alone (e.g. "I'll believe it when I see
- * it" is skeptical but mid-sentiment).
+ * This is SEPARATE from scoreSentiment (which returns a 0-100 sentiment
+ * number via the Grok-first AI facade) because the excited/skeptical/dreading
+ * labels are transfer-specific and can't be derived from sentiment alone
+ * (e.g. "I'll believe it when I see it" is skeptical but mid-sentiment).
  */
 async function classifyTransferPosts(
   texts: string[],

@@ -7,9 +7,9 @@
  * facade. **Never call a provider SDK directly from app code.**
  *
  * Provider fallback chain (tried in order, first success wins):
- *   1. Cerebras  — fastest inference (when CEREBRAS_API_KEY is set)
- *   2. Groq      — fast, cheap (when GROQ_API_KEY is valid)
- *   3. Grok/xAI  — X Search + chat (when XAI_API_KEY is set)
+ *   1. Grok/xAI  — PRIMARY. grok-4.3 for chat + sentiment; x_search for X posts
+ *   2. Cerebras  — fastest inference (when CEREBRAS_API_KEY is set)
+ *   3. Groq      — fast, cheap (when GROQ_API_KEY is valid)
  *   4. Z.ai SDK  — always available (bundled), the guaranteed fallback
  *
  * Anti-hallucination contract:
@@ -44,7 +44,7 @@ export const ai = {
 }
 
 export type { ChatMessage, ChatResult } from './chat'
-export type { SentimentAnalysis, SentimentResult } from './sentiment'
+export type { SentimentAnalysis, SentimentProvider, SentimentResult } from './sentiment'
 export type { WebSearchResult, WebSearchItem } from './web-search'
 export type { XPost, XSearchResult } from './x-search'
 export type { PageReadResult } from './page-reader'

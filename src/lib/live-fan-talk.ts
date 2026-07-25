@@ -23,7 +23,7 @@
 import ZAI from 'z-ai-web-dev-sdk'
 import type { PrismaClient } from '@prisma/client'
 import { searchXPosts } from './grok-x-search'
-import { scorePostBatch } from './groq-sentiment'
+import { scoreSentiment } from './ai'
 
 // ── Fake author detection ────────────────────────────────────────────────────
 
@@ -447,10 +447,10 @@ export async function fetchLiveFanTalk(
   })
   const skippedDuplicates = scraped.length - newPosts.length
 
-  // ── 6. Score the new posts via Groq (fast/cheap) with Z.ai SDK fallback ──
+  // ── 6. Score the new posts via the AI facade (Grok → Cerebras → Groq → Z.ai) ──
   let savedCount = 0
   if (newPosts.length > 0) {
-    const { analyses, provider, error: scoreErr } = await scorePostBatch(
+    const { analyses, provider, error: scoreErr } = await scoreSentiment(
       newPosts.map((p) => ({ content: p.content })),
     )
     console.log(

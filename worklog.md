@@ -3605,3 +3605,32 @@ Stage Summary:
 - Journalist names, headlines, fan post text, and sentiment data are all still visible — only the broken clickable links were removed.
 - "report archived" label honestly indicates when a source URL couldn't be verified.
 - Lint clean, all tabs regress cleanly, dev server healthy.
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Make Grok (xAI) the PRIMARY AI provider across the entire app — no bypassing of the facade. Previously sentiment scoring bypassed the chain via groq-sentiment.ts (Groq → Z.ai only); with GROQ region-blocked from the HK sandbox, all sentiment was being answered by Z.ai SDK. User added a valid XAI_API_KEY and requested Grok be made primary.
+
+Work Log:
+- Read all AI facade files: ai/index.ts, ai/chat.ts, ai/sentiment.ts, ai/web-search.ts, ai/page-reader.ts, ai/x-search.ts, and all 4 provider adapters (cerebras.ts, groq.ts, grok.ts, zai.ts)
+- Read groq-sentiment.ts to understand the bypass: sentiment.ts was delegating to scorePostBatch which only walked Groq → Z.ai
+- Identified 3 call sites using sentiment scoring: latest-transfer-tweets.ts (already on facade), live-fan-talk.ts (bypassing via direct import), transfer-pulse/ingest.ts (bypassing via direct import)
+- Rewrote src/lib/ai/sentiment.ts to walk the REAL chain Grok → Cerebras → Groq → Z.ai, with self-contained parseBatch logic (no more delegating to groq-sentiment.ts). Added per-provider console.log so the chain is observable.
+- Reordered src/lib/ai/chat.ts chain: Grok → Cerebras → Groq → Z.ai (was Cerebras → Groq → Grok → Z.ai)
+- Updated src/lib/ai/index.ts barrel to export SentimentProvider type and updated the header doc to reflect Grok-primary ordering
+- Migrated src/lib/live-fan-talk.ts: replaced `import { scorePostBatch } from './groq-sentiment'` with `import { scoreSentiment } from './ai'`; updated the call site at line 453
+- Migrated src/lib/transfer-pulse/ingest.ts: replaced `import { scorePostBatch } from '@/lib/groq-sentiment'` with `import { scoreSentiment, type SentimentProvider } from '@/lib/ai'`; widened IngestResult.provider type from 'groq'|'zai'|'none' to SentimentProvider; updated comment at line 332
+- Left groq-sentiment.ts in place (no callers remain, but kept for backward compat / reference)
+- Updated scripts/test-grok-live.ts to test ai.scoreSentiment() and ai.chat() through the facade (not just the provider directly)
+- Ran `bun run lint` → clean, no errors
+- Ran `bun run scripts/test-grok-live.ts` → confirmed: provider='grok' for both sentiment (4917ms, 3/3 posts scored) and chat (2649ms). Sentiment scores sane: 95/10/60 for positive/negative/neutral test posts.
+- Restarted dev server. Hit /api/transfer-tweets?limit=3 via curl → 200 in 27.5s. dev.log shows: `[sentiment] grok answered in 6000ms — scored 3/3 posts`. Real tweets returned with Grok-scored sentiment (David_Ornstein → 55 neutral, Plettigoal → 50 neutral).
+- Verified homepage renders in Agent Browser (title: "Fan Pulse — Real-Time Fan Sentiment for World Cup 2026", full interactive snapshot taken, no console errors).
+
+Stage Summary:
+- Grok is now PRIMARY for: ai.chat(), ai.scoreSentiment(), and all 3 sentiment call sites (latest-transfer-tweets, live-fan-talk, transfer-pulse/ingest).
+- Fallback chain everywhere: Grok → Cerebras → Groq → Z.ai. With current env (XAI_API_KEY set, GROQ_API_KEY set but region-blocked, CEREBRAS_API_KEY unset), effective runtime order is Grok → Z.ai.
+- The bypass is eliminated: sentiment.ts no longer delegates to groq-sentiment.ts. groq-sentiment.ts is now dead code (kept for reference, no callers).
+- Verified end-to-end through Next.js server: `[sentiment] grok answered in 6000ms — scored 3/3 posts` in dev.log.
+- Known issue (pre-existing, not caused by this change): the 4GB sandbox OOMs when compiling heavy API routes like /api/fan-talk. /api/transfer-tweets works but can trigger OOM on subsequent heavy calls. This is a memory constraint, not a code issue.
+- Files changed: src/lib/ai/sentiment.ts (rewritten), src/lib/ai/chat.ts (chain reordered), src/lib/ai/index.ts (export added, doc updated), src/lib/live-fan-talk.ts (migrated to facade), src/lib/transfer-pulse/ingest.ts (migrated to facade, type widened), scripts/test-grok-live.ts (updated to test facade).
