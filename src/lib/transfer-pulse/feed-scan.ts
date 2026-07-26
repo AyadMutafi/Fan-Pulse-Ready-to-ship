@@ -52,6 +52,7 @@ import { TIER1_SOURCES, TIER1_HANDLES, getTier1Source } from './tier1-sources'
 import { resolveClub } from './clubs'
 import { decodeSnowflakeDate, extractStatusId } from './zai-fallback'
 import { fetchJournalistPostsViaZai } from './zai-fallback'
+import { verifyAndAdjustFromClub } from './verify-club'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -332,26 +333,71 @@ async function scanJournalistFeed(
         sagaId = existing.id
         out.sagasUpdated++
       } else {
+        // ── WEB-VERIFIED FROM-CLUB GATE (added 2026-07-26) ───────────────
+        // Before creating a NEW saga, verify the player's actual current club
+        // via web_search. The LLM extraction above can have stale "current
+        // club" knowledge (e.g. it thinks Isak is at Newcastle when he's
+        // actually at Liverpool since Sep 2025). Web search is always fresher
+        // than LLM training data, so we trust it when the two disagree.
+        //
+        // See src/lib/transfer-pulse/verify-club.ts for the full logic. The
+        // helper returns one of:
+        //   'accept'           — LLM extraction was correct, use as-is.
+        //   'update-from-club' — LLM had stale info; use the web-verified club.
+        //   'mark-completed'   — player already moved to to-club; resolve saga.
+        //   'reject'           — extraction is untrustworthy; skip.
+        let adjustedFromClubCode = fromClubCode
+        let adjustedFromClubName = fromClubName
+        let adjustedIsCompleted = extracted.isCompleted
+
+        try {
+          const decision = await verifyAndAdjustFromClub({
+            playerName,
+            fromClubName,
+            fromClubCode,
+            toClubName,
+            toClubCode,
+          })
+          console.log(
+            `[transfer-pulse/feed-scan] verify-club: ${playerName} → ${decision.decision} ` +
+              `(${decision.reason.slice(0, 100)})`,
+          )
+          if (decision.decision === 'reject') {
+            out.skipped++
+            continue
+          }
+          adjustedFromClubCode = decision.fromClubCode
+          adjustedFromClubName = decision.fromClubName
+          if (decision.decision === 'mark-completed') {
+            adjustedIsCompleted = true
+          }
+        } catch (err) {
+          // Fail open — if verification errors out, trust the LLM extraction.
+          console.warn(
+            `[transfer-pulse/feed-scan] verify-club failed for ${playerName}, failing open: ${String(err).slice(0, 100)}`,
+          )
+        }
+
         const created = await db.transferSaga.create({
           data: {
             playerName,
             playerNationCode: '', // unknown for non-watchlist players
-            fromClubCode,
-            fromClubName,
+            fromClubCode: adjustedFromClubCode,
+            fromClubName: adjustedFromClubName,
             toClubCode,
             toClubName,
-            status: extracted.isCompleted ? 'completed' : 'active',
+            status: adjustedIsCompleted ? 'completed' : 'active',
             feeReported: extracted.fee || '',
             firstReportedAt: reportedAt,
             lastUpdatedAt: new Date(),
-            resolvedAt: extracted.isCompleted ? reportedAt : null,
+            resolvedAt: adjustedIsCompleted ? reportedAt : null,
           },
         })
         sagaId = created.id
         out.sagasCreated++
         console.log(
-          `[transfer-pulse/feed-scan] NEW saga: ${playerName} ${fromClubName} → ${toClubName} ` +
-            `(@${cleanHandle}, ${reportedAt.toISOString().slice(0, 10)})`,
+          `[transfer-pulse/feed-scan] NEW saga: ${playerName} ${adjustedFromClubName} → ${toClubName} ` +
+            `(@${cleanHandle}, ${reportedAt.toISOString().slice(0, 10)}, ${adjustedIsCompleted ? 'completed' : 'active'})`,
         )
       }
 

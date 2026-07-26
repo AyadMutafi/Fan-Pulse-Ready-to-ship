@@ -60,7 +60,13 @@ export const TRACKED_PLAYERS: readonly TrackedPlayer[] = [
 
   // ── Premier League stars rumored to move ────────────────────────────────
   { name: 'Mohamed Salah', nationCode: 'EGY', fromClubCode: 'LIV', fromClubName: 'Liverpool', position: 'RW' },
-  { name: 'Alexander Isak', nationCode: 'SWE', fromClubCode: 'NEW', fromClubName: 'Newcastle', position: 'ST' },
+  // NOTE: Alexander Isak removed 2026-07-26. He completed his move from
+  // Newcastle to Liverpool on 1 Sep 2025 for £125m (British record deal,
+  // per BBC/Sky Sports/Liverpool FC). The discovery pipeline kept surfacing
+  // his pre-move "Arsenal interest" rumors as if they were current news.
+  // The new web-verification gate in discovery.ts will catch any future
+  // stale-saga issues automatically, but removing him from the watchlist is
+  // good hygiene — he's now a Liverpool player, not a transfer target.
   { name: 'Bruno Fernandes', nationCode: 'POR', fromClubCode: 'MUN', fromClubName: 'Man United', position: 'CAM' },
   { name: 'Marcus Rashford', nationCode: 'ENG', fromClubCode: 'MUN', fromClubName: 'Man United', position: 'LW' },
   { name: 'Cole Palmer', nationCode: 'ENG', fromClubCode: 'CHE', fromClubName: 'Chelsea', position: 'CAM' },

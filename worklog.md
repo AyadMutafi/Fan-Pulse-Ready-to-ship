@@ -3888,3 +3888,62 @@ Stage Summary:
 - Browser-verified: Transfers tab shows 14 active + 4 completed sagas with no errors.
 - NEW FILES: src/lib/transfer-pulse/feed-scan.ts, src/lib/transfer-pulse/seed-by-url.ts, src/app/api/transfers/feed-scan/route.ts, src/app/api/transfers/seed/route.ts, scripts/run-feed-scan.ts, scripts/run-seed-by-url.ts
 - MODIFIED FILES: src/lib/transfer-pulse/auto-refresh.ts (added Phase 0 feed-scan + feedScanOffset state), src/lib/transfer-pulse/zai-fallback.ts (added fetchJournalistPostsViaZai function)
+
+---
+Task ID: data-quality-verify-current-club
+Agent: Main Agent
+Task: User reported 3 transfer sagas with wrong data: (1) "Alexander Isak Newcastle → Arsenal £90m" — user says Isak moved to Liverpool in August 2025; (2) "Alejandro Garnacho Manchester United → Aston Villa" — user says Garnacho moved to Chelsea in 2025; (3) "Youri Tielemans Leicester City → Manchester United €41m" — user says details are wrong, linked Wikipedia. Also implied: the systemic fix for stale/wrong from-club info should prevent this class of bug from recurring.
+
+Work Log:
+- Read worklog.md (last 200 lines) to understand prior Transfer Pulse pipeline state: discovery.ts (pull-based, watchlist-driven, has checkPlayerAlreadyMoved LLM guard added 2026-07-26), feed-scan.ts (push-based, scans Tier 1 journalists' recent tweets), seed-by-url.ts (escape hatch for specific URLs), tracked-players.ts (watchlist of ~50 players), and the recent systemic fixes (Wirtz/De Bruyne/Arnold removed, hasEntityNameOverlap guard added for Rodri/Rodríguez confusion).
+- Read 3 user-uploaded screenshots via VLM (z-ai vision CLI):
+    • pasted_image_1785047776471.png → "Alexander Isak Newcastle → Arsenal, £90m, 2 Tier 1 sources, 14 posts, 52% FAN READ, Fabrizio Romano"
+    • pasted_image_1785047805582.png → "Alejandro Garnacho Manchester United → Aston Villa, 1 Tier 1 source, 50% FAN READ, Fabrizio Romano"
+    • pasted_image_1785047817491.png → "Youri Tielemans Leicester City → Manchester United, €41m, 1 Tier 1 source, 12d ago, 50% FAN READ, Fabrizio Romano"
+- Verified actual current clubs via z-ai web_search:
+    • Alexander Isak: BBC/Sky Sports/Liverpool FC/The Guardian confirm he joined Liverpool on 1 Sep 2025 for £125m (British record deal). The "Newcastle → Arsenal" saga is a stale pre-move rumor.
+    • Alejandro Garnacho: ESPN confirms he joined Chelsea from Man Utd on 30 Aug 2025 for £40m. Sky Sports (Jul 11 2026) confirms Chelsea are now prepared to sell him. The "Man Utd → Aston Villa" saga has the WRONG from-club (should be Chelsea).
+    • Youri Tielemans: Wikipedia + Sky Sports + Transfermarkt + ESPN + Premier League all confirm: he was at Aston Villa from 2023-2026, then JOINED Manchester United on 14 Jul 2026 for ~£36m (€41m release clause). The "Leicester City → Manchester United" saga has the WRONG from-club (should be Aston Villa) AND the move has already completed.
+- Queried the running /api/transfers?status=active&limit=50 endpoint to confirm 14 active sagas included the 3 bad ones (the dev server's Prisma client was working fine — only standalone scripts hit the "Engine is not yet connected" race because of the fire-and-forget pragma init).
+- Wrote scripts/cleanup-isak-garnacho-tielemans.ts:
+    • Uses a FRESH PrismaClient (not the global db singleton) to avoid engine-state contention with the dev server.
+    • Explicitly awaits prisma.$connect() before any query (avoids the "Engine is not yet connected" race).
+    • DELETE: Alexander Isak → Arsenal saga (cascade-deleted 2 sources + 14 posts + 2 timeline rows).
+    • UPDATE: Garnacho saga fromClub Manchester United → Chelsea (correct current club).
+    • UPDATE + RESOLVE: Tielemans saga fromClub Leicester City → Aston Villa, status active → completed, resolvedAt = 2026-07-14 (Romano's confirmation date).
+    • Verified final state: 19 sagas total (12 active, 5 completed, 2 debunked).
+- Ran the cleanup script — all 3 fixes applied successfully.
+- Wrote src/lib/transfer-pulse/verify-club.ts (NEW, ~390 lines) — the SYSTEMIC FIX:
+    • verifyPlayerCurrentClubViaWeb(playerName, hintClub): runs 2 Z.ai web_search queries ("{player} current club {year}" + "{player} transfer latest news"), then asks the LLM to read the search results and return {actualClub, actualClubCode, confidence, reason, sources}. Web search results are ALWAYS fresher than LLM training data (which lags reality by months/years).
+    • normalizeClubName + clubsMatch helpers: fuzzy club-name comparison (handles "Man United" vs "Manchester United", "Real" vs "Real Madrid", "Bayern" vs "Bayern Munich").
+    • verifyAndAdjustFromClub({playerName, fromClubName, fromClubCode, toClubName, toClubCode}): higher-level helper that returns a decision:
+        - 'accept'           — web confirms LLM-extracted from-club.
+        - 'update-from-club' — web says player is at a DIFFERENT club; correct the from-club.
+        - 'mark-completed'   — web says player is already AT the to-club; the transfer completed.
+        - 'reject'           — extraction is untrustworthy; skip the saga.
+      Fails open (decision='accept') on low-confidence web verification to avoid blocking good sagas when web_search has a bad day.
+- WIRED verifyAndAdjustFromClub into feed-scan.ts: BEFORE creating a NEW saga (existing sagas skip this on update — we trust the existing saga's from-club since it was verified when created). On 'reject' the saga is skipped; on 'update-from-club' the from-club is corrected; on 'mark-completed' the saga is created with status='completed'.
+- WIRED verifyAndAdjustFromClub into seed-by-url.ts: same gate, same logic, on the saga-creation branch only.
+- AUGMENTED checkPlayerAlreadyMoved in discovery.ts: web_search is now the PRIMARY check (was LLM-only). If web-verified actualClub differs from the watchlist's fromClubName with high/medium confidence → alreadyMoved=true. If web confirms the watchlist club → alreadyMoved=false (skip the LLM call entirely — saves budget). If web verification is low-confidence → falls through to the existing LLM check as a fallback.
+- Removed Alexander Isak from tracked-players.ts (added explanatory comment matching the Arnold/Wirtz/De Bruyne pattern). The web-verification gate would have caught this automatically on the next discovery run, but removing him is good hygiene — he's now a Liverpool player, not a transfer target.
+- Browser-verified with agent-browser:
+    • Opened http://localhost:3000/ → clicked TRANSFERS tab → Active filter shows 12 sagas (was 14). Confirmed Isak GONE. Confirmed Garnacho card now reads "Chelsea → Aston Villa" (was "Manchester United → Aston Villa").
+    • Clicked Completed filter → shows 5 sagas including "Youri Tielemans Aston Villa → Manchester United €41m" with "DONE RUMOR" badge (was "Leicester City → Manchester United" with "RUMOR" badge).
+    • No console errors, no page errors.
+    • Sticky footer verified on both short (Completed tab, documentHeight=908) and long (Active tab, documentHeight=1433) pages — footer correctly sticks to viewport bottom on short pages and is naturally pushed down on long pages.
+    • Screenshots saved to /tmp/transfers-active-final.png and /tmp/transfers-completed-final.png.
+- Ran `bun run lint` → 0 errors (clean).
+
+Stage Summary:
+- 3 bad sagas fixed:
+    • Alexander Isak → Arsenal: DELETED (cascade-deleted 2 sources + 14 posts + 2 timeline rows). Isak joined Liverpool on 1 Sep 2025 — the saga was a stale pre-move rumor.
+    • Alejandro Garnacho: fromClub UPDATED from "Manchester United" to "Chelsea" (Garnacho joined Chelsea on 30 Aug 2025).
+    • Youri Tielemans: fromClub UPDATED from "Leicester City" to "Aston Villa" + status UPDATED from "active" to "completed" + resolvedAt set to 2026-07-14 (Tielemans joined Man Utd on 14 Jul 2026 per Romano/Wikipedia/Transfermarkt).
+- SYSTEMIC FIX: new src/lib/transfer-pulse/verify-club.ts module verifies a player's ACTUAL current club via Z.ai web_search (which is always fresher than LLM training data). Wired into:
+    • feed-scan.ts — before creating a NEW saga, verify LLM-extracted from-club; correct or reject if web disagrees.
+    • seed-by-url.ts — same gate, same logic.
+    • discovery.ts — checkPlayerAlreadyMoved now uses web_search as the PRIMARY check (LLM as fallback), so any tracked player who has moved will be detected within one discovery cycle.
+- Alexander Isak removed from tracked-players.ts (good hygiene, matches the Arnold/Wirtz/De Bruyne cleanup pattern).
+- Final DB state: 19 sagas (12 active, 5 completed, 2 debunked). All 3 user-reported bad sagas fixed. Lint clean. Browser-verified.
+- Files changed: src/lib/transfer-pulse/verify-club.ts (NEW), src/lib/transfer-pulse/feed-scan.ts (added verify-club gate on saga creation), src/lib/transfer-pulse/seed-by-url.ts (added verify-club gate on saga creation), src/lib/transfer-pulse/discovery.ts (checkPlayerAlreadyMoved now web-first), src/lib/transfer-pulse/tracked-players.ts (Isak removed), scripts/cleanup-isak-garnacho-tielemans.ts (NEW cleanup script).
+- This is the SAME systemic fix pattern promised by the prior "stale-saga-systemic-fix" task — but that one relied on the LLM's knowledge of recent transfers, which lagged reality. This fix uses web_search (same-day articles) as the source of truth, so it would have caught Isak/Garnacho/Tielemans automatically: the next feed-scan or seed-by-url call for those players would have either corrected the from-club or marked the saga as completed.

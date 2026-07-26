@@ -39,6 +39,7 @@ import ZAI from 'z-ai-web-dev-sdk'
 import { TIER1_HANDLES, getTier1Source } from './tier1-sources'
 import { resolveClub } from './clubs'
 import { decodeSnowflakeDate, extractStatusId } from './zai-fallback'
+import { verifyAndAdjustFromClub } from './verify-club'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -262,19 +263,62 @@ export async function seedSagaByUrl(url: string): Promise<SeedByUrlResult> {
     sagaId = existing.id
     sagaStatus = 'updated'
   } else {
+    // ── WEB-VERIFIED FROM-CLUB GATE (added 2026-07-26) ─────────────────
+    // Before creating a NEW saga, verify the player's actual current club
+    // via web_search. The LLM extraction above can have stale "current club"
+    // knowledge (e.g. it thinks Tielemans is at Leicester when he's actually
+    // at Aston Villa). See feed-scan.ts for the same gate, and
+    // src/lib/transfer-pulse/verify-club.ts for the full logic.
+    let adjustedFromClubCode = fromClubCode
+    let adjustedFromClubName = fromClubName
+    let adjustedIsCompleted = extracted.isCompleted
+
+    try {
+      const decision = await verifyAndAdjustFromClub({
+        playerName,
+        fromClubName,
+        fromClubCode,
+        toClubName,
+        toClubCode,
+      })
+      console.log(
+        `[transfer-pulse/seed-by-url] verify-club: ${playerName} → ${decision.decision} ` +
+          `(${decision.reason.slice(0, 100)})`,
+      )
+      if (decision.decision === 'reject') {
+        return {
+          ...base,
+          ok: false,
+          handle,
+          postedAt: postDate.toISOString(),
+          error: `web verification rejected: ${decision.reason.slice(0, 160)}`,
+        }
+      }
+      adjustedFromClubCode = decision.fromClubCode
+      adjustedFromClubName = decision.fromClubName
+      if (decision.decision === 'mark-completed') {
+        adjustedIsCompleted = true
+      }
+    } catch (err) {
+      // Fail open — if verification errors out, trust the LLM extraction.
+      console.warn(
+        `[transfer-pulse/seed-by-url] verify-club failed for ${playerName}, failing open: ${String(err).slice(0, 100)}`,
+      )
+    }
+
     const created = await db.transferSaga.create({
       data: {
         playerName,
         playerNationCode: '',
-        fromClubCode,
-        fromClubName,
+        fromClubCode: adjustedFromClubCode,
+        fromClubName: adjustedFromClubName,
         toClubCode,
         toClubName,
-        status: extracted.isCompleted ? 'completed' : 'active',
+        status: adjustedIsCompleted ? 'completed' : 'active',
         feeReported: extracted.fee || '',
         firstReportedAt: postDate,
         lastUpdatedAt: new Date(),
-        resolvedAt: extracted.isCompleted ? postDate : null,
+        resolvedAt: adjustedIsCompleted ? postDate : null,
       },
     })
     sagaId = created.id

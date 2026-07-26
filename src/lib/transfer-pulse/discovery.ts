@@ -29,6 +29,7 @@ import { searchXPostsGeneric, type XPost } from '@/lib/grok-x-search'
 import { TIER1_HANDLES, getTier1Source } from './tier1-sources'
 import { TRACKED_PLAYERS, type TrackedPlayer } from './tracked-players'
 import { fetchTier1PostsViaZai, decodeSnowflakeDate, extractStatusId } from './zai-fallback'
+import { verifyPlayerCurrentClubViaWeb, clubsMatch } from './verify-club'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -643,6 +644,39 @@ async function checkPlayerAlreadyMoved(player: TrackedPlayer): Promise<{
   actualClub: string | null
   confidence: 'high' | 'medium' | 'low'
 }> {
+  // ── PRIMARY: web_search verification (added 2026-07-26) ────────────────
+  // The LLM's training data lags reality — Isak moved to Liverpool on 1 Sep
+  // 2025 but the LLM still thinks "Newcastle" in some prompts. Web search
+  // returns same-day articles so it's always fresher. We ask it what club
+  // the player CURRENTLY plays for and compare to the watchlist's fromClub.
+  try {
+    const web = await verifyPlayerCurrentClubViaWeb(player.name, player.fromClubName)
+    if (web.confidence !== 'low' && web.actualClub) {
+      const matches = clubsMatch(web.actualClub, player.fromClubName)
+      console.log(
+        `[transfer-pulse/discovery] checkPlayerAlreadyMoved: ${player.name} ` +
+          `web-verified=${web.actualClub} (conf=${web.confidence}) matches watchlist ${player.fromClubName}=${matches}`,
+      )
+      if (!matches) {
+        // Web says he's at a DIFFERENT club → already moved.
+        return {
+          alreadyMoved: true,
+          actualClub: web.actualClub,
+          confidence: web.confidence,
+        }
+      }
+      // Web confirms he's still at the watchlist club → not moved.
+      // Skip the LLM call entirely (saves budget; web is more authoritative).
+      return { alreadyMoved: false, actualClub: null, confidence: web.confidence }
+    }
+    // Low-confidence web → fall through to LLM check below.
+  } catch (err) {
+    console.warn(
+      `[transfer-pulse/discovery] checkPlayerAlreadyMoved web-check failed for ${player.name}, falling back to LLM: ${String(err).slice(0, 100)}`,
+    )
+  }
+
+  // ── FALLBACK: LLM-only check (preserved from prior version) ────────────
   const systemPrompt =
     `You are a football transfer fact-checker. Answer ONE question with ` +
     `high precision: has the footballer ${player.name} ALREADY COMPLETED a ` +
