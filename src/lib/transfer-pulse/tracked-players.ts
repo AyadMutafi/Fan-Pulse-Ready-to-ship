@@ -50,7 +50,11 @@ export const TRACKED_PLAYERS: readonly TrackedPlayer[] = [
   { name: 'Bukayo Saka', nationCode: 'ENG', fromClubCode: 'ARS', fromClubName: 'Arsenal', position: 'RW' },
   { name: 'Pedri', nationCode: 'ESP', fromClubCode: 'FCB', fromClubName: 'Barcelona', position: 'CM' },
   { name: 'Jamal Musiala', nationCode: 'GER', fromClubCode: 'BAY', fromClubName: 'Bayern Munich', position: 'CAM' },
-  { name: 'Florian Wirtz', nationCode: 'GER', fromClubCode: 'LEV', fromClubName: 'Bayer Leverkusen', position: 'CAM' },
+  // NOTE: Florian Wirtz removed 2026-07-26. He completed his move from
+  // Bayer Leverkusen to Liverpool in summer 2025 — keeping him in the
+  // watchlist caused the discovery pipeline to keep surfacing OLD pre-move
+  // rumors (e.g. "Wirtz to Man City" from Plettenberg/Falk) as if they
+  // were current news. He is now a Liverpool player.
   { name: 'Rodri', nationCode: 'ESP', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'CDM' },
   { name: 'Federico Valverde', nationCode: 'URU', fromClubCode: 'RMA', fromClubName: 'Real Madrid', position: 'CM' },
 
@@ -74,7 +78,12 @@ export const TRACKED_PLAYERS: readonly TrackedPlayer[] = [
   { name: 'Martin Zubimendi', nationCode: 'ESP', fromClubCode: 'RSO', fromClubName: 'Real Sociedad', position: 'CDM' },
 
   // ── Man City shake-up ───────────────────────────────────────────────────
-  { name: 'Kevin De Bruyne', nationCode: 'BEL', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'CAM' },
+  // NOTE: Kevin De Bruyne removed 2026-07-26. He completed his move from
+  // Man City to Napoli in summer 2025 (free transfer). The saga in the DB
+  // is already marked [completed]. Keeping him in the watchlist caused
+  // discovery to keep re-confirming the completed move instead of focusing
+  // on current rumors. He is now a Napoli player.
+
   { name: 'Jack Grealish', nationCode: 'ENG', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'LW' },
   { name: 'Bernardo Silva', nationCode: 'POR', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'CM' },
   { name: 'Kyle Walker', nationCode: 'ENG', fromClubCode: 'MCI', fromClubName: 'Man City', position: 'RB' },

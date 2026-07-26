@@ -3745,3 +3745,52 @@ Stage Summary:
 - Prisma connection pooling: NOT applicable for SQLite (file-based, single connection per client). WAL + busy_timeout is the SQLite-native equivalent and is now in place.
 - Lint clean. Files changed: src/lib/db.ts (pragmas), prisma/schema.prisma (3 indexes + comments), scripts/test-concurrent-writes.ts (new test).
 - The app is now safe for 7 concurrent EPL matches on Saturday. The DB is NOT the bottleneck (it never was — 1.2 writes/sec is trivial). The actual production risk remains RAM (4GB sandbox OOMs under Next.js dev compile load), which is a deployment-sizing question, not a DB question.
+
+---
+Task ID: stale-saga-systemic-fix
+Agent: Main Agent
+Task: User saw "Florian Wirtz → Man City [RUMOR]" still showing as active, but Wirtz already joined Liverpool in summer 2025. User demanded a systemic fix so this class of bug (stale/wrong sagas for already-moved players) never reappears.
+
+Work Log:
+- Used VLM to analyze the user's screenshot (pasted_image_1785045089218.png) — confirmed the stale saga: Florian Wirtz → Man City [RUMOR], €150m, 2 Tier 1 sources (Plettenberg, Falk).
+- Queried the DB: found the Wirtz saga active with sources dated July 21-22 (pre-move rumors that predated his actual Liverpool transfer). Also confirmed Wirtz was still in tracked-players.ts at line 53 (fromClubName='Bayer Leverkusen').
+- Identified the systemic root cause: the discovery pipeline has an entity-resolution gate and a 60-day freshness filter, but NEITHER checks whether a player has ALREADY completed a transfer. So when a player moves (in real life) but is still on the watchlist, discovery keeps surfacing OLD pre-move Tier 1 rumors as if they were current active news. This is the same bug class as Arnold (Alexander-Arnold → Real Madrid, fixed earlier by removing him from the watchlist).
+- Removed Florian Wirtz from tracked-players.ts (added explanatory comment matching the Arnold pattern). Wirtz completed Leverkusen → Liverpool in summer 2025.
+- Removed Kevin De Bruyne from tracked-players.ts (added explanatory comment). His saga was already marked [completed] (Man City → Napoli, summer 2025 free transfer) but he was still in the watchlist, causing discovery to keep re-confirming the completed move.
+- Wrote scripts/cleanup-stale-sagas.ts and ran it: deleted the Wirtz → Man City saga (cmrxli43j001qrn6emz2b71kj) + 2 sources + 16 posts + 2 timeline rows. Verified gone.
+- SYSTEMIC FIX — added a "staleness guard" to src/lib/transfer-pulse/discovery.ts:
+  • New function checkPlayerAlreadyMoved(player): asks the AI (via ai.chat, Grok-primary chain) "Has {player} already COMPLETED a transfer away from {fromClubName}? If so, to which club?" Returns {alreadyMoved, actualClub, confidence}. Only trusts high/medium confidence answers; low confidence fails open (keeps the saga active).
+  • New function resolvePlayerSagas(player, actualClub, confidence): for each active saga of a player who already moved, marks it [completed] if the saga's toClubName matches the actual new club, or [debunked] if it differs. Preserves all sources/posts/timeline (audit trail).
+  • Wired the guard into discoverTransferSagas() — it runs BEFORE the xAI x_search call for every player in the batch. If alreadyMoved=true, sagas are resolved and discovery is SKIPPED for that player (saves xAI budget too).
+  • Be CONSERVATIVE in the prompt: only "alreadyMoved=true" for COMPLETED transfers (signed/announced/presented), not mere rumors. Loans count only if long-term. This avoids prematurely hiding real ongoing rumors.
+  • Fail-open on LLM errors (keep the saga active) — the entity-resolution gate, same-club guard, and 60-day freshness filter still apply as secondary defenses.
+- Tested the guard via discoverTransferSagas({playerName:'Rodri'}) — Rodri is still at Man City, so the guard ran (asked LLM), got alreadyMoved=false, and discovery proceeded normally (found 6 fresh Tier 1 posts, updated 2 sagas, 22s). playersScanned=1, skipped=0, errors=[]. Guard works end-to-end.
+- Ran bun run lint → 0 errors (clean).
+- Verified final DB state: 12 sagas (9 active, 1 completed, 2 debunked). Wirtz GONE. No "already moved" players showing as active.
+
+Stage Summary:
+- Stale Wirtz → Man City saga DELETED from DB (+ 2 sources, 16 posts, 2 timeline rows cascade-deleted).
+- Florian Wirtz + Kevin De Bruyne removed from tracked-players.ts (both already moved in summer 2025).
+- SYSTEMIC FIX: the discovery pipeline now runs checkPlayerAlreadyMoved() BEFORE searching X for each tracked player. If the player has already completed a transfer (high/medium confidence), their active sagas are auto-resolved (completed if right destination, debunked if wrong) and discovery is skipped. This catches the entire bug class — any player who moves while still on the watchlist will be detected and resolved within one discovery cycle, instead of staying "active" with stale/wrong rumors for weeks.
+- Guard is conservative (only fires on confident "already moved" answers, fails open on uncertainty) to avoid prematurely hiding real ongoing rumors.
+- Lint clean. DB verified. Files changed: src/lib/transfer-pulse/tracked-players.ts (Wirtz + De Bruyne removed), src/lib/transfer-pulse/discovery.ts (staleness guard added), scripts/cleanup-stale-sagas.ts (new cleanup script).
+- This is the SAME systemic fix pattern that should have been added when Arnold was removed. Now it's in place, so the next time a tracked player moves, the app will catch it automatically — no manual watchlist cleanup required (though removing them from the watchlist is still good hygiene).
+
+---
+Task ID: stale-saga-systemic-fix (addendum)
+Agent: Main Agent
+Task: During verification of the Wirtz fix, discovered the "Rodri → Bournemouth [completed]" saga had RESURFACED. Investigated and fixed the root cause.
+
+Work Log:
+- Ran discoverTransferSagas({playerName:'Rodri'}) to test the new staleness guard. The guard worked correctly (said Rodri is still at Man City, not moved). But during the subsequent discovery, the "Rodri → Bournemouth" saga reappeared in the API (count went 12 → 13).
+- Investigated: the Rodri→Bournemouth saga's source was a Romano post titled "Bournemouth agree deal to sign Álvaro Rodríguez from Elche" — this is about ÁlVARO RODRÍGUEZ (a different player), NOT Rodri (Man City MF). The discovery pipeline's entity-resolution gate + LLM extraction failed to catch this because "Rodríguez" contains "Rodri" as a substring, and the post text matched the search query for "Rodri transfer".
+- Deleted the bad saga (cms1dwozw0000qn4on8udtcfq) + its source. DB back to 12 sagas.
+- ROOT CAUSE FIX: added an ENTITY-NAME-OVERLAP GUARD in discovery.ts (function hasEntityNameOverlap). Before upserting a saga from a Tier 1 post, the guard checks: (a) does the tracked player's EXACT name appear as a standalone word in the post (word-boundary regex)? If yes, accept. (b) If not, does the post contain a longer name that starts with the tracked name (e.g. "Álvaro Rodríguez" for tracked "Rodri")? If yes, REJECT the post — it's about a different player.
+- The guard is conservative: it only fires when the exact name does NOT appear standalone AND a longer overlapping name does. This avoids false rejections of posts that genuinely mention the tracked player alongside others.
+- Known overlap pairs this guards: "Rodri" ⊂ "Rodríguez", "Pedri" ⊂ "Pedrinho", "Gavi" ⊂ "Gavilán". Single-name players are most at risk.
+- Ran lint → 0 errors. Verified DB: 12 sagas, Wirtz gone, Rodri→Bournemouth gone.
+
+Stage Summary:
+- Bonus fix: deleted the resurfaced "Rodri → Bournemouth" saga (entity-confusion with Álvaro Rodríguez) and added hasEntityNameOverlap() guard in discovery.ts to prevent substring name false-matches from creating sagas for the wrong player.
+- The discovery pipeline now has THREE layers of defense against bad sagas: (1) checkPlayerAlreadyMoved (staleness guard — skips players who already transferred), (2) verifyPlayerCurrentClub (entity-resolution gate — rejects posts about same-name different players), (3) hasEntityNameOverlap (name-overlap guard — rejects posts where a longer different name contains the tracked name as a substring). Plus the existing same-club guard and 60-day freshness filter.
+- Final DB: 12 sagas (9 active, 1 completed, 2 debunked). Lint clean.

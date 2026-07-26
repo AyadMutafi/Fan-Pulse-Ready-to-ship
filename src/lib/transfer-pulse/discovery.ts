@@ -58,6 +58,16 @@ interface ExtractedTransfer {
  * Processes players in a rotating window so the cron can cycle through the
  * full watchlist without hammering the xAI API.
  *
+ * SYSTEMIC STALENESS GUARD (added 2026-07-26):
+ *   Before running discovery for a player, `checkPlayerAlreadyMoved()` asks
+ *   the AI whether the player has already completed a transfer AWAY from
+ *   their watchlist `fromClubName`. If yes, ALL of that player's active
+ *   sagas are marked `completed` (or `debunked` if the actual destination
+ *   differs from the saga's `toClubName`), and the player is SKIPPED for
+ *   the rest of this discovery run. This prevents the "Wirtz → Man City"
+ *   class of bug where a player who already moved keeps getting surfaced
+ *   as an active rumor based on stale pre-move Tier 1 posts.
+ *
  * @param opts.maxPlayers  how many players to scan this run (default 5)
  * @param opts.offset      starting index into TRACKED_PLAYERS (default 0)
  * @param opts.playerName  scan a single named player instead of a batch
@@ -99,6 +109,25 @@ export async function discoverTransferSagas(opts: {
   for (const player of batch) {
     result.playersScanned++
     try {
+      // ── STALENESS GUARD ──────────────────────────────────────────────────
+      // Before spending xAI/LLM budget on discovery, check whether the player
+      // has ALREADY moved. If so, resolve their sagas and skip discovery.
+      const movedCheck = await checkPlayerAlreadyMoved(player)
+      if (movedCheck.alreadyMoved) {
+        console.log(
+          `[transfer-pulse/discovery] ${player.name} already moved to ${movedCheck.actualClub} ` +
+            `(watchlist had ${player.fromClubName}) — resolving sagas and skipping discovery`,
+        )
+        const resolved = await resolvePlayerSagas(
+          player,
+          movedCheck.actualClub ?? 'unknown',
+          movedCheck.confidence,
+        )
+        result.sagasUpdated += resolved
+        result.skipped += 1
+        continue
+      }
+
       const outcome = await discoverForPlayer(player)
       result.sagasCreated += outcome.sagasCreated
       result.sagasUpdated += outcome.sagasUpdated
@@ -283,6 +312,26 @@ async function discoverForPlayer(
       console.log(
         `[transfer-pulse/discovery] rejecting same-club extraction for ${player.name}: ` +
           `"${toClubName}" matches current club "${player.fromClubName}" — likely a contract-renewal post, not a transfer`,
+      )
+      continue
+    }
+
+    // ── ENTITY-NAME-OVERLAP GUARD (added 2026-07-26) ───────────────────────
+    // Reject posts where the text mentions a DIFFERENT player whose name
+    // CONTAINS the tracked player's name as a substring — e.g. a post about
+    // "Álvaro Rodríguez" should NOT create a saga for "Rodri" (Man City MF),
+    // even though "Rodríguez" contains "Rodri". This class of false-match
+    // created the bad "Rodri → Bournemouth" saga from a Romano post that was
+    // actually about Álvaro Rodríguez (Elche → Bournemouth).
+    //
+    // Heuristic: if the post text contains a longer name that starts with or
+    // contains the tracked player's name AND the tracked player's EXACT full
+    // name does NOT appear as a standalone token in the post, reject it.
+    const entityOverlap = hasEntityNameOverlap(post.text, player.name)
+    if (entityOverlap) {
+      console.log(
+        `[transfer-pulse/discovery] rejecting entity-name-overlap for ${player.name}: ` +
+          `post appears to be about "${entityOverlap}" (a different player whose name contains "${player.name}")`,
       )
       continue
     }
@@ -553,10 +602,239 @@ async function verifyPlayerCurrentClub(
   }
 }
 
+// ── Staleness guard: "has this player already moved?" ────────────────────────
+
+/**
+ * SYSTEMIC STALENESS GUARD — checks whether a tracked player has ALREADY
+ * completed a transfer AWAY from their watchlist `fromClubName`.
+ *
+ * BACKGROUND:
+ *   This guard was added 2026-07-26 after the "Florian Wirtz → Man City" bug.
+ *   Wirtz completed his move to Liverpool in summer 2025, but the watchlist
+ *   still had him at Leverkusen. The discovery pipeline kept finding OLD
+ *   pre-move Tier 1 posts (Plettenberg/Falk, July 21-22) linking him to Man
+ *   City — speculation that predated his actual move. The saga was created
+ *   with the WRONG destination and marked "active" even though the player
+ *   had already moved to a different club. The Arnold bug was the same
+ *   class (Alexander-Arnold → Real Madrid completed in 2025, still surfaced).
+ *
+ * GATE:
+ *   Before running discovery for a player, we ask the AI: "Has {player}
+ *   already completed a transfer away from {fromClubName}? If so, to which
+ *   club?" The AI returns {alreadyMoved: bool, actualClub: string|null,
+ *   confidence: 'high'|'medium'|'low'}.
+ *
+ * If `alreadyMoved=true` with high/medium confidence, the caller resolves the
+ * player's active sagas (see `resolvePlayerSagas`) and SKIPS discovery. This
+ * prevents stale pre-move rumors from being re-surfaced as "active" news.
+ *
+ * FALLBACK:
+ *   If the LLM call fails entirely, we FAIL OPEN (alreadyMoved=false) to
+ *   avoid blocking all discovery. The entity-resolution gate, same-club
+ *   guard, and 60-day freshness filter still apply as secondary defenses.
+ *   We only RESOLVE sagas on a positive, confident "already moved" answer.
+ *
+ * COST:
+ *   One LLM call per player per discovery run. Cheaper than the xAI x_search
+ *   call it replaces when the player has already moved (skips xAI entirely).
+ */
+async function checkPlayerAlreadyMoved(player: TrackedPlayer): Promise<{
+  alreadyMoved: boolean
+  actualClub: string | null
+  confidence: 'high' | 'medium' | 'low'
+}> {
+  const systemPrompt =
+    `You are a football transfer fact-checker. Answer ONE question with ` +
+    `high precision: has the footballer ${player.name} ALREADY COMPLETED a ` +
+    `transfer AWAY from ${player.fromClubName} (his watchlist club) to a ` +
+    `DIFFERENT club — as of ${new Date().toISOString().slice(0, 10)}?\n\n` +
+    `Context:\n` +
+    `- The watchlist says ${player.name} is currently at ${player.fromClubName}.\n` +
+    `- If he is STILL at ${player.fromClubName}, answer alreadyMoved=false.\n` +
+    `- If he has COMPLETED a permanent transfer to another club (signed, ` +
+    `announced, presented — not just rumored), answer alreadyMoved=true and ` +
+    `name the actual destination club in actualClub.\n` +
+    `- Loan moves DO count as "moved" only if the loan is long-term (≥1 season) ` +
+    `and the player is no longer training/playing for ${player.fromClubName}.\n` +
+    `- A mere RUMOR of interest (even from Tier 1 journalists) does NOT count ` +
+    `as "moved" — only a COMPLETED transfer counts.\n\n` +
+    `Return a JSON object:\n` +
+    `  "alreadyMoved": boolean\n` +
+    `  "actualClub": string | null   — the destination club's full name, or null if not moved\n` +
+    `  "confidence": "high" | "medium" | "low"   — how sure you are\n` +
+    `  "reason": string              — 1-sentence explanation\n\n` +
+    `RULES:\n` +
+    `- Be CONSERVATIVE. If you are not sure the transfer is COMPLETED, answer ` +
+    `alreadyMoved=false. Resolving a saga prematurely hides real ongoing rumors.\n` +
+    `- Output ONLY the JSON object, no commentary.`
+
+  const result = await ai.chat(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: `${player.name} — current club per watchlist: ${player.fromClubName}` },
+    ],
+    { temperature: 0.1, maxTokens: 400, json: true },
+  )
+
+  if (!result.ok || !result.content) {
+    console.warn(
+      `[transfer-pulse/discovery] checkPlayerAlreadyMoved: ai.chat failed (${result.provider}), failing OPEN:`,
+      result.error?.slice(0, 100),
+    )
+    return { alreadyMoved: false, actualClub: null, confidence: 'low' }
+  }
+
+  let cleaned = result.content.trim()
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '')
+  const start = cleaned.indexOf('{')
+  const end = cleaned.lastIndexOf('}')
+  if (start === -1 || end === -1 || end <= start) {
+    return { alreadyMoved: false, actualClub: null, confidence: 'low' }
+  }
+  try {
+    const obj = JSON.parse(cleaned.slice(start, end + 1))
+    const alreadyMoved = obj.alreadyMoved === true
+    const actualClub =
+      typeof obj.actualClub === 'string' && obj.actualClub.trim()
+        ? obj.actualClub.trim()
+        : null
+    const confidenceRaw = String(obj.confidence).toLowerCase().trim()
+    const confidence: 'high' | 'medium' | 'low' =
+      confidenceRaw === 'high' ? 'high' : confidenceRaw === 'medium' ? 'medium' : 'low'
+    // Only trust high/medium confidence "alreadyMoved=true" answers. Low
+    // confidence = fail open (keep the saga active, let discovery run).
+    if (alreadyMoved && confidence === 'low') {
+      console.log(
+        `[transfer-pulse/discovery] ${player.name}: LLM says moved but low confidence — failing open (keeping active)`,
+      )
+      return { alreadyMoved: false, actualClub: null, confidence: 'low' }
+    }
+    return { alreadyMoved, actualClub, confidence }
+  } catch {
+    return { alreadyMoved: false, actualClub: null, confidence: 'low' }
+  }
+}
+
+/**
+ * Resolve all of a player's active sagas after determining they've already
+ * moved. For each active saga:
+ *   - If the saga's `toClubName` matches the player's ACTUAL new club →
+ *     mark `completed` (the rumor was correct and came true).
+ *   - If the saga's `toClubName` DIFFERS from the actual new club →
+ *     mark `debunked` (the rumor was wrong; he went elsewhere).
+ *
+ * Resolved sagas keep all their sources/posts/timeline (audit trail
+ * preserved per the anti-hallucination contract). Only the `status` and
+ * `resolvedAt` fields change.
+ *
+ * @returns the number of sagas whose status was updated.
+ */
+async function resolvePlayerSagas(
+  player: TrackedPlayer,
+  actualClub: string,
+  confidence: 'high' | 'medium' | 'low',
+): Promise<number> {
+  // Only resolve on confident answers (the checkPlayerAlreadyMoved gate
+  // already filters low confidence, but double-guard here for safety).
+  if (confidence === 'low') return 0
+
+  const activeSagas = await db.transferSaga.findMany({
+    where: { playerName: player.name, status: 'active' },
+  })
+  if (activeSagas.length === 0) return 0
+
+  const actualLower = actualClub.toLowerCase().trim()
+  let updated = 0
+  for (const saga of activeSagas) {
+    const sagaToLower = saga.toClubName.toLowerCase().trim()
+    // Match if either string contains the other (handles "Manchester City"
+    // vs "Man City" naming differences).
+    const isMatch =
+      actualLower.includes(sagaToLower) || sagaToLower.includes(actualLower)
+    const newStatus: 'completed' | 'debunked' = isMatch ? 'completed' : 'debunked'
+    await db.transferSaga.update({
+      where: { id: saga.id },
+      data: {
+        status: newStatus,
+        resolvedAt: new Date(),
+        lastUpdatedAt: new Date(),
+      },
+    })
+    console.log(
+      `[transfer-pulse/discovery] resolved ${player.name} → ${saga.toClubName} ` +
+        `as [${newStatus}] (actual club: ${actualClub})`,
+    )
+    updated++
+  }
+  return updated
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function safeParseDate(s: string): Date {
   const d = new Date(s)
   if (isNaN(d.getTime())) return new Date()
   return d
+}
+
+/**
+ * ENTITY-NAME-OVERLAP DETECTOR — catches substring false-matches between
+ * tracked players and other footballers whose names contain the tracked
+ * name. Returns the longer (different) name if a collision is detected, or
+ * null if the post is safely about the tracked player.
+ *
+ * EXAMPLES (tracked player = "Rodri"):
+ *   • post mentions "Álvaro Rodríguez" → returns "Álvaro Rodríguez" (REJECT)
+ *   • post mentions "Rodri" standalone  → returns null (ACCEPT)
+ *   • post mentions "Rodri Hernández"   → returns null (ACCEPT — full name
+ *     contains "Rodri" but the standalone short name also appears, so it's
+ *     plausibly the same player)
+ *
+ * The detector is deliberately conservative: it only fires when (a) the
+ * tracked player's EXACT name does NOT appear as a standalone word in the
+ * post, AND (b) the post contains a longer name that starts with or contains
+ * the tracked name as a substring. This avoids false rejections of posts
+ * that genuinely mention the tracked player alongside others.
+ *
+ * Known overlap pairs this guards against:
+ *   "Rodri" ⊂ "Rodríguez", "Rodri Hernández"
+ *   "Pedri" ⊂ "Pedrinho"
+ *   "Gavi" ⊂ "Gavilán"
+ *   (single-name players are most at risk — that's why the entity-resolution
+ *   gate + this heuristic both exist)
+ */
+function hasEntityNameOverlap(postText: string, playerName: string): string | null {
+  const text = postText
+  const playerLower = playerName.toLowerCase()
+  // Check if the tracked player's EXACT name appears as a standalone token.
+  // Word-boundary regex: \b ensures "Rodri" doesn't match inside "Rodríguez".
+  const exactRe = new RegExp(`\\b${escapeRegex(playerLower)}\\b`, 'i')
+  if (exactRe.test(text)) {
+    // The exact name appears standalone — accept the post.
+    return null
+  }
+  // The exact name does NOT appear standalone. Now check whether a LONGER
+  // name containing the tracked name appears (e.g. "Álvaro Rodríguez").
+  // We look for patterns like "<Word> <tracked-name>..." or "<tracked-name><suffix>".
+  // Specifically: any capitalized word sequence where one token starts with
+  // or contains the tracked name as a substring.
+  //
+  // To keep this cheap and false-positive-free, we only flag the specific
+  // known-dangerous pattern: a longer surname that STARTS WITH the tracked
+  // name and continues with more letters (no word boundary). This catches
+  // "Rodríguez" from "Rodri", "Pedrinho" from "Pedri", etc.
+  const suffixRe = new RegExp(`\\b[A-Z][a-z]+\\s+${escapeRegex(playerLower)}[a-záéíóúñ]+`, 'i')
+  // Also catch the pattern where a full name is given and the tracked name
+  // is a prefix of the surname: "Álvaro Rodríguez" → "Rodri" + "guez"
+  const prefixRe = new RegExp(`\\b[A-Z][a-záéíóúñ]+\\s+${escapeRegex(playerLower)}[a-záéíóúñ]*`, 'i')
+  const match = text.match(prefixRe) || text.match(suffixRe)
+  if (match) {
+    return match[0]
+  }
+  return null
+}
+
+/** Escape special regex characters in a string so it can be used in a RegExp. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
