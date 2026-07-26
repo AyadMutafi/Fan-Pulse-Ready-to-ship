@@ -503,6 +503,174 @@ export async function fetchFanPostsViaZai(opts: {
   return { posts: collected }
 }
 
+// ── Journalist-feed discovery (for PUSH-based feed-scan) ─────────────────────
+
+/**
+ * Find real X posts by a SPECIFIC Tier 1 journalist about ANY transfer
+ * (not tied to a tracked player). Used by feed-scan.ts as the PUSH-based
+ * discovery path: "what has Romano tweeted about recently?"
+ *
+ * Strategy:
+ *   1. `site:x.com/<handle>/status` restricts Google/Bing to URLs in the
+ *      journalist's own X profile path. This is the key trick — Google
+ *      indexes individual tweets at x.com/<handle>/status/<id>, and the
+ *      path-prefix restricts results to that journalist's posts only.
+ *   2. The `transfer` keyword + `after:<cutoff>` date bias the search
+ *      toward recent transfer-rumor posts.
+ *   3. Snowflake-decode freshness gate (mirrors fetchTier1PostsViaZai).
+ *   4. Transfer-keyword gate (mirrors fetchTier1PostsViaZai).
+ *
+ * ANTI-HALLUCINATION CONTRACT (preserved):
+ *   - URL must match ^https://x.com/<handle>/status/<digits>$
+ *   - Handle MUST be the requested journalist's handle (case-insensitive)
+ *   - The handle MUST be in TIER1_HANDLES (defense in depth)
+ *   - Post date decoded from Snowflake ID; posts >maxAgeDays rejected
+ *   - Post text must contain a transfer keyword
+ *   - If web_search returns nothing, returns [] (empty) — never fabricates
+ *
+ * @param handle       the journalist's X handle WITHOUT @, e.g. "FabrizioRomano"
+ * @param opts.maxAgeDays  reject posts older than this (default 14)
+ */
+export async function fetchJournalistPostsViaZai(
+  handle: string,
+  opts: ZaiFallbackOpts = {},
+): Promise<{ posts: XPost[]; error?: string }> {
+  const maxAgeDays = opts.maxAgeDays ?? 14
+  const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
+  const cutoffStr = cutoffDate.toISOString().slice(0, 10)
+  const cleanHandle = handle.replace(/^@/, '').trim()
+  if (!cleanHandle) return { posts: [], error: 'no handle provided' }
+
+  let zai: any
+  try {
+    zai = await ZAI.create()
+  } catch (err) {
+    return { posts: [], error: `ZAI init failed: ${String(err).slice(0, 100)}` }
+  }
+
+  // Three query variants — Google/Bing index tweets unevenly, so we try
+  // multiple phrasings and dedupe by URL.
+  const queries = [
+    `site:x.com/${cleanHandle}/status transfer after:${cutoffStr}`,
+    `site:x.com/${cleanHandle} transfer deal 2026 after:${cutoffStr}`,
+    `from:${cleanHandle} transfer x.com 2026`,
+  ].slice(0, MAX_QUERIES_PER_PLAYER)
+
+  const collected: XPost[] = []
+  const seenUrls = new Set<string>()
+  let rejectedStale = 0
+  let rejectedNoDate = 0
+  let rejectedNoKeyword = 0
+
+  for (const query of queries) {
+    if (collected.length >= MAX_POSTS_PER_PLAYER) break
+    try {
+      await sleep(SDK_CALL_DELAY_MS)
+      console.log(`[transfer-pulse/zai-fallback] journalist web_search: "${query.slice(0, 90)}..."`)
+      const results = (await zai.functions.invoke('web_search', {
+        query,
+        num: MAX_RESULTS_PER_QUERY,
+      })) as ZaiSearchResult[]
+      if (!Array.isArray(results)) continue
+
+      for (const r of results) {
+        if (collected.length >= MAX_POSTS_PER_PLAYER) break
+        const url = String(r.url || '').trim()
+        if (!url) continue
+
+        // Must be a real x.com/<handle>/status/<id> URL
+        const match = url.match(
+          /^https:\/\/(?:x\.com|twitter\.com)\/([^/]+)\/status\/(\d+)/i,
+        )
+        if (!match) continue
+        const urlHandle = match[1]
+        // Defense in depth: URL handle must be the requested journalist
+        if (urlHandle.toLowerCase() !== cleanHandle.toLowerCase()) continue
+        // And must be in TIER1_HANDLES
+        if (!TIER1_HANDLES.has(urlHandle.toLowerCase())) continue
+        if (seenUrls.has(url)) continue
+
+        // ── FRESHNESS GATE ───────────────────────────────────────────────
+        const postDate = resolvePostDate(url, r)
+        if (!postDate) {
+          rejectedNoDate++
+          continue
+        }
+        if (!isFresh(postDate, maxAgeDays)) {
+          rejectedStale++
+          console.log(
+            `[transfer-pulse/zai-fallback] rejecting stale journalist post (${Math.round(
+              (Date.now() - postDate.getTime()) / (24 * 3600 * 1000),
+            )}d old): ${url}`,
+          )
+          continue
+        }
+
+        // Build text from snippet + title
+        const snippet = String(r.snippet || r.description || r.summary || '').trim()
+        const title = String(r.name || r.title || '').trim()
+        let text = snippet || title
+        if (title && snippet && !snippet.startsWith(title)) {
+          text = `${title} — ${snippet}`
+        }
+        // If the snippet is too short, try page_reader to extract tweet text
+        if (text.length < 30 || text === url) {
+          const enriched = await enrichViaPageReader(zai, url)
+          if (enriched && enriched.length > 30) text = enriched
+        }
+        if (text.length < 15) continue
+
+        // ── TRANSFER-KEYWORD GATE ────────────────────────────────────────
+        const cleanedText = text
+          .replace(/Missing:\s*[^|]+\|\s*Show results with:[^"]*/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+        const lowerText = cleanedText.toLowerCase()
+        const TRANSFER_KEYWORDS = [
+          'transfer', 'deal', 'move', 'signing', 'signs', 'signed',
+          'agrees', 'agreed', 'bid', 'offer', 'medical', 'contract',
+          'here we go', 'launch', 'approach', 'talks', 'negotiat',
+          'joining', 'joins', 'completed', 'confirmed', 'close to',
+          'reaches', 'verbal', 'personal terms', 'fee',
+        ]
+        const hasTransferKeyword = TRANSFER_KEYWORDS.some((kw) =>
+          lowerText.includes(kw),
+        )
+        if (!hasTransferKeyword) {
+          rejectedNoKeyword++
+          continue
+        }
+        text = cleanedText
+
+        seenUrls.add(url)
+        collected.push({
+          url,
+          handle: urlHandle,
+          text: text.slice(0, 1200),
+          postedAt: postDate.toISOString(),
+        })
+      }
+    } catch (err) {
+      const msg = String(err)
+      console.warn(`[transfer-pulse/zai-fallback] journalist web_search failed: ${msg.slice(0, 150)}`)
+      if (msg.includes('429')) {
+        console.log(`[transfer-pulse/zai-fallback] 429 hit, backing off ${RATE_LIMIT_BACKOFF_MS / 1000}s`)
+        await sleep(RATE_LIMIT_BACKOFF_MS)
+      }
+      // continue to next query
+    }
+  }
+
+  if (rejectedStale > 0 || rejectedNoDate > 0 || rejectedNoKeyword > 0) {
+    console.log(
+      `[transfer-pulse/zai-fallback] @${cleanHandle}: rejected ${rejectedStale} stale, ` +
+        `${rejectedNoDate} no-date, ${rejectedNoKeyword} no-keyword posts`,
+    )
+  }
+
+  return { posts: collected }
+}
+
 // ── Internal helpers ────────────────────────────────────────────────────────
 
 async function enrichViaPageReader(zai: any, url: string): Promise<string | null> {

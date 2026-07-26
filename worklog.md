@@ -3794,3 +3794,97 @@ Stage Summary:
 - Bonus fix: deleted the resurfaced "Rodri → Bournemouth" saga (entity-confusion with Álvaro Rodríguez) and added hasEntityNameOverlap() guard in discovery.ts to prevent substring name false-matches from creating sagas for the wrong player.
 - The discovery pipeline now has THREE layers of defense against bad sagas: (1) checkPlayerAlreadyMoved (staleness guard — skips players who already transferred), (2) verifyPlayerCurrentClub (entity-resolution gate — rejects posts about same-name different players), (3) hasEntityNameOverlap (name-overlap guard — rejects posts where a longer different name contains the tracked name as a substring). Plus the existing same-club guard and 60-day freshness filter.
 - Final DB: 12 sagas (9 active, 1 completed, 2 debunked). Lint clean.
+
+---
+Task ID: feed-scan-push-discovery
+Agent: Main Agent
+Task: User reported that current Fabrizio Romano transfer tweets (4 URLs provided, posted 2026-07-26 01:15–05:59 UTC) are NOT showing in Transfer Pulse. User asked "why you are not showing them all? what is the process?" — needed to investigate the discovery process AND make current Tier 1 transfer talks appear.
+
+Work Log:
+- Read worklog.md to understand prior Transfer Pulse pipeline state (anti-hallucination contract, tracked-players watchlist, discovery.ts pull-based loop, seed-realistic-transfers cleanup, etc.)
+- Queried DB directly via scripts/check-sagas.ts: found 12 sagas total (10 active, 1 completed, 2 debunked) — newest active saga updated 2026-07-26 05:55 but most others stale from 2026-07-23
+- Decoded the user's 6 snowflake tweet IDs via scripts/decode-snowflakes.ts:
+    • 4 Romano tweets from TODAY (2026-07-26 01:15–05:59 UTC), age 0.0–0.2 days — all fresh, all Tier 1 ✓
+    • 1 @YanitedFever fan tweet (NOT Tier 1 — cannot anchor saga)
+    • 1 @Arsenalnewschan fan tweet (NOT Tier 1 — cannot anchor saga)
+- Read the discovery pipeline end-to-end:
+    • src/lib/transfer-pulse/tracked-players.ts — fixed watchlist of ~50 high-profile players
+    • src/lib/transfer-pulse/discovery.ts — for each tracked player (batch of 4–5 per run), asks xAI x_search + Z.ai fallback "find Tier 1 posts about THIS player"
+    • src/lib/transfer-pulse/zai-fallback.ts — Snowflake freshness decode (≤60 days), transfer-keyword gate, Tier 1 handle gate
+    • src/lib/transfer-pulse/auto-refresh.ts — kicks off background refresh when newest active saga is >30 min stale, scans 4 watchlist players + ingests 3 stale sagas
+    • src/app/api/transfers/route.ts — GET returns sagas filtered by status (default "active"), already correct
+    • src/components/tabs/TransfersTab.tsx — defaults to "active" status, matches API
+- ROOT CAUSE identified: discovery is PULL-based on a fixed watchlist. When Romano tweets about a player NOT in the watchlist, the saga is NEVER created. The pipeline was missing a PUSH-based feed scan that asks "what has Romano tweeted recently?" regardless of watchlist.
+
+- IMPLEMENTED src/lib/transfer-pulse/feed-scan.ts (NEW, ~480 lines):
+    • PUSH-based Tier 1 feed scanner — scans a rotating subset of TIER1_SOURCES per run (3 journalists, prioritized by reliability)
+    • For each journalist, asks xAI x_search for their recent transfer posts (≤14 days, tighter than discovery.ts's 60 days)
+    • Z.ai web_search fallback added (works without XAI_API_KEY) via new fetchJournalistPostsViaZai() helper
+    • Filters: TIER1_HANDLES gate, Snowflake freshness decode (≤14d), transfer-keyword gate
+    • LLM extracts {playerName, fromClubName, fromClubCode, toClubName, toClubCode, fee, headline, isCompleted} — also extracts the player's CURRENT club (since post may be about non-watchlist player)
+    • Same-club guard, idempotent URL upsert (@unique on TransferSource.url)
+    • Mirrors all anti-hallucination gates from discovery.ts
+
+- EXTENDED src/lib/transfer-pulse/zai-fallback.ts: added fetchJournalistPostsViaZai(handle, opts) function (~170 lines):
+    • Queries site:x.com/<handle>/status transfer after:<cutoff> (Google indexes individual tweets at this URL path)
+    • Three query variants for robustness (different phrasings)
+    • Defense-in-depth: URL handle must match requested journalist AND be in TIER1_HANDLES
+    • Snowflake freshness + transfer-keyword gates (mirrors fetchTier1PostsViaZai)
+    • page_reader enrichment for short snippets
+    • 429 backoff handling
+
+- INTEGRATED feed-scan into src/lib/transfer-pulse/auto-refresh.ts:
+    • Added "Phase 0: PUSH-based Tier 1 feed scan" that runs BEFORE the existing watchlist discovery
+    • Runs scanTier1Feeds() with default opts (3 journalists, 14-day window) on every background refresh
+    • Added feedScanOffset module-level state + exposed in getAutoRefreshStatus() diagnostics
+
+- ADDED src/app/api/transfers/feed-scan/route.ts (NEW admin endpoint):
+    • POST /api/transfers/feed-scan — admin-gated (x-admin-password / ?admin= / fp_admin cookie)
+    • Body: { journalistHandles?, maxAgeDays? }
+    • Rate-limited 1/min (feed-scan makes multiple xAI/Z.ai calls)
+
+- ADDED src/lib/transfer-pulse/seed-by-url.ts (NEW, ~360 lines) — ESCAPE HATCH for when web_search misses specific tweets:
+    • seedSagaByUrl(url) — accepts a single Tier 1 journalist's X post URL
+    • Validates URL shape → verifies handle in TIER1_HANDLES → decodes Snowflake date → freshness gate (≤60 days) → fetches text via Z.ai page_reader → transfer-keyword gate → LLM extracts transfer fields → same-club guard → upserts saga + source
+    • Idempotent: if URL already in DB as TransferSource, returns sagaStatus='unchanged' with the existing saga info
+    • Preserves all anti-hallucination gates
+
+- ADDED src/app/api/transfers/seed/route.ts (NEW admin endpoint):
+    • POST /api/transfers/seed — admin-gated, accepts {urls:[...]} or {url:"..."} (max 10 URLs)
+    • Returns per-URL result {ok, sagaStatus, playerName, fromClubName, toClubName, error?}
+
+- WROTE test runners: scripts/run-feed-scan.ts and scripts/run-seed-by-url.ts
+
+- VERIFIED end-to-end:
+    • Ran scripts/run-feed-scan.ts FabrizioRomano → Z.ai fallback found 8 fresh Romano tweets, created 6 new sagas:
+        - Casemiro Real Madrid → Inter Miami (completed, Romano 2026-07-22)
+        - Maxence Lacroix Crystal Palace → Chelsea (completed, Romano 2026-07-24)
+        - Morgan Rogers Aston Villa → Chelsea (active, Romano 2026-07-18)
+        - Youri Tielemans Leicester → Manchester United (active, Romano 2026-07-13)
+        - Alejandro Garnacho Man United → Aston Villa (active, Romano 2026-07-22)
+        - Zeki Celik AS Roma → Juventus (completed, Romano 2026-07-16)
+    • Ran scripts/run-seed-by-url.ts with the user's 4 reported URLs:
+        - ✓ Bruno Guimarães Newcastle United → Arsenal (created, Romano 2026-07-26 05:59 UTC) — the user's tweet #1
+        - ✗ Tweet #2 failed extraction (page_reader hit X login wall, text too short)
+        - ✗ Tweet #3 failed extraction (same)
+        - ✓ Santi Castro Bologna → AS Roma (created, Romano 2026-07-26 01:15 UTC) — the user's tweet #4
+    • DB now has 20 sagas total (14 active, 4 completed, 2 debunked). All 8 new Romano-anchored sagas updated TODAY 2026-07-26.
+
+- BROWSER VERIFICATION (Agent Browser):
+    • Opened http://localhost:3000/ → clicked TRANSFERS tab → saw 14 active sagas sorted by buzz
+    • Confirmed ALL new sagas visible: Santi Castro (5h ago), Bruno Guimarães (29m ago), Alejandro Garnacho, Youri Tielemans, Morgan Rogers — all anchored by Fabrizio Romano
+    • Clicked "Completed" filter → confirmed 4 completed sagas visible including 3 new from feed-scan (Casemiro, Lacroix, Zeki Celik) plus existing De Bruyne
+    • No console errors, no runtime errors, no hydration warnings
+    • Screenshot saved to /tmp/transfers-active.png
+
+- LINT: 0 errors (bun run lint clean)
+
+Stage Summary:
+- ROOT CAUSE: discovery.ts was PULL-only on a 50-player watchlist. Tier 1 posts about non-watchlist players never entered the system.
+- FIX: added PUSH-based feed-scan.ts that scans Tier 1 journalists' recent posts regardless of watchlist. Integrated into auto-refresh Phase 0 (runs on every 30-min cycle). Z.ai web_search fallback so it works without XAI_API_KEY.
+- ESCAPE HATCH: added seed-by-URL module + admin endpoint so specific tweets the user can see but web_search missed can be added directly through the same anti-hallucination pipeline.
+- 8 new Romano-anchored sagas added TODAY (2026-07-26), including 2 of the user's 4 reported URLs (Bruno Guimarães + Santi Castro). The other 2 URLs failed page_reader extraction due to X's login wall — a known limitation.
+- All anti-hallucination gates preserved: Tier 1 handle gate, Snowflake freshness decode, transfer-keyword gate, same-club guard, idempotent URL upsert.
+- Browser-verified: Transfers tab shows 14 active + 4 completed sagas with no errors.
+- NEW FILES: src/lib/transfer-pulse/feed-scan.ts, src/lib/transfer-pulse/seed-by-url.ts, src/app/api/transfers/feed-scan/route.ts, src/app/api/transfers/seed/route.ts, scripts/run-feed-scan.ts, scripts/run-seed-by-url.ts
+- MODIFIED FILES: src/lib/transfer-pulse/auto-refresh.ts (added Phase 0 feed-scan + feedScanOffset state), src/lib/transfer-pulse/zai-fallback.ts (added fetchJournalistPostsViaZai function)

@@ -28,6 +28,7 @@
 import { db } from '@/lib/db'
 import { discoverTransferSagas } from './discovery'
 import { ingestSagaPosts } from './ingest'
+import { scanTier1Feeds } from './feed-scan'
 import { TRACKED_PLAYERS } from './tracked-players'
 
 /** A saga is considered stale if its lastUpdatedAt is older than this. */
@@ -42,6 +43,7 @@ const INGEST_BATCH = 3
 // ── Module-level single-flight state ────────────────────────────────────────
 let refreshInProgress = false
 let discoveryOffset = 0
+let feedScanOffset = 0
 let lastRefreshStartedAt: Date | null = null
 let lastRefreshFinishedAt: Date | null = null
 let lastRefreshError: string | null = null
@@ -93,6 +95,27 @@ async function runBackgroundRefresh(): Promise<void> {
   const log: string[] = []
 
   try {
+    // ── Phase 0: PUSH-based Tier 1 feed scan (added 2026-07-26) ─────────
+    // Scan a rotating subset of Tier 1 journalists' recent posts for ANY
+    // transfer reports — regardless of whether the player is in the
+    // watchlist. This is the "what is Romano tweeting about right now?"
+    // path that catches current transfer talks the watchlist-driven
+    // discovery misses.
+    try {
+      const feedScan = await scanTier1Feeds()
+      log.push(
+        `feed-scan: journalists=${feedScan.journalistsScanned} ` +
+          `posts=${feedScan.postsConsidered} created=${feedScan.sagasCreated} ` +
+          `updated=${feedScan.sagasUpdated} sources=${feedScan.sourcesAdded} ` +
+          `skipped=${feedScan.skipped} (${(feedScan.durationMs / 1000).toFixed(1)}s)`,
+      )
+      if (feedScan.errors.length > 0) {
+        log.push(`feed-scan errors: ${feedScan.errors.join('; ').slice(0, 240)}`)
+      }
+    } catch (err) {
+      log.push(`feed-scan failed: ${String(err).slice(0, 160)}`)
+    }
+
     // ── Phase 1: discovery for a small rotating batch ───────────────────
     const offset = discoveryOffset % TRACKED_PLAYERS.length
     try {
@@ -167,6 +190,7 @@ export function getAutoRefreshStatus(): {
   lastRefreshFinishedAt: Date | null
   lastRefreshError: string | null
   discoveryOffset: number
+  feedScanOffset: number
   staleMs: number
 } {
   return {
@@ -175,6 +199,7 @@ export function getAutoRefreshStatus(): {
     lastRefreshFinishedAt,
     lastRefreshError,
     discoveryOffset,
+    feedScanOffset,
     staleMs: STALE_MS,
   }
 }
