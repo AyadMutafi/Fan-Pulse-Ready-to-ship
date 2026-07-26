@@ -1999,4 +1999,4 @@
   1999→Task: Research real WC 2026 knockout stage results (R32, R16, QF, SF) from the web
   2000→
 
-[showing lines 1-2000 of 3891; use offset=2001 with limit to continue reading]
+[showing lines 1-2000 of 3950; use offset=2001 with limit to continue reading]

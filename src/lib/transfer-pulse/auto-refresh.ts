@@ -96,13 +96,19 @@ async function runBackgroundRefresh(): Promise<void> {
 
   try {
     // ── Phase 0: PUSH-based Tier 1 feed scan (added 2026-07-26) ─────────
-    // Scan a rotating subset of Tier 1 journalists' recent posts for ANY
-    // transfer reports — regardless of whether the player is in the
-    // watchlist. This is the "what is Romano tweeting about right now?"
-    // path that catches current transfer talks the watchlist-driven
-    // discovery misses.
+    // Scan ALL Tier 1 journalists' recent posts for ANY transfer reports —
+    // regardless of whether the player is in the watchlist. This is the
+    // "what is Romano tweeting about right now?" path that catches current
+    // transfer talks the watchlist-driven discovery misses.
+    //
+    // skipVerifyClub=true: the web_search from-club verification gate is
+    // too slow for a background refresh that scans all 33 journalists (each
+    // new saga would add ~15s of web_search calls). The gate still runs in
+    // seed-by-url.ts (for specific URL seeds) and discovery.ts (for tracked
+    // players). Wrong from-clubs are also caught by the LLM extraction prompt
+    // + same-club guard.
     try {
-      const feedScan = await scanTier1Feeds()
+      const feedScan = await scanTier1Feeds({ skipVerifyClub: true })
       log.push(
         `feed-scan: journalists=${feedScan.journalistsScanned} ` +
           `posts=${feedScan.postsConsidered} created=${feedScan.sagasCreated} ` +

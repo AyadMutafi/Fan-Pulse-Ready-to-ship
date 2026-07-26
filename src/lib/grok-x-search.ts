@@ -133,6 +133,8 @@ export async function searchXPostsGeneric(opts: {
   fromDate?: string
   toDate?: string
   startedAt?: number
+  /** Override the default 10-post cap. Useful for broad feed-scan queries. */
+  maxPosts?: number
 }): Promise<XSearchResult> {
   const startedAt = opts.startedAt ?? Date.now()
   const key = process.env.XAI_API_KEY
@@ -153,11 +155,13 @@ export async function searchXPostsGeneric(opts: {
     }
   }
 
+  const effectiveMaxPosts = opts.maxPosts && opts.maxPosts > 0 ? opts.maxPosts : MAX_POSTS
+
   const toolConfig: Record<string, unknown> = { type: 'x_search' }
   if (opts.fromDate) toolConfig.from_date = opts.fromDate
   if (opts.toDate) toolConfig.to_date = opts.toDate
 
-  const systemPrompt = buildSystemPrompt()
+  const systemPrompt = buildSystemPrompt(effectiveMaxPosts)
 
   // Try each preferred model until one works
   let lastError = ''
@@ -184,7 +188,7 @@ export async function searchXPostsGeneric(opts: {
         error: result.error,
       }
     }
-    const posts = filterValidPosts(result.posts)
+    const posts = filterValidPosts(result.posts, effectiveMaxPosts)
     return {
       posts,
       rawCount: result.rawCount,
@@ -213,13 +217,13 @@ function buildSearchQuery(codes: string[], matchLabel: string): string {
   )
 }
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(maxPosts: number = MAX_POSTS): string {
   return (
     'You are a social-media research agent. You have access to the x_search tool ' +
     'which performs REAL keyword and semantic search over X (Twitter) posts. ' +
     'USE THE TOOL — do not write any post content yourself.\n\n' +
     'After the tool returns results, output ONLY a JSON array of the posts you found. ' +
-    'Each element must be an object with these fields:\n' +
+    `Each element must be an object with these fields (return up to ${maxPosts} posts):\n` +
     '  "handle": string      — the author handle WITHOUT @, e.g. "faltyfootball"\n' +
     '  "url": string         — the real post URL, must match https://x.com/<handle>/status/<digits>\n' +
     '  "text": string        — the post text, verbatim or near-verbatim\n' +
@@ -367,7 +371,7 @@ function parsePostsFromText(text: string): XPost[] {
 /**
  * Final validation: reject posts that look fabricated or broken.
  */
-function filterValidPosts(posts: XPost[]): XPost[] {
+function filterValidPosts(posts: XPost[], maxPosts: number = MAX_POSTS): XPost[] {
   const seen = new Set<string>()
   const out: XPost[] = []
   for (const p of posts) {
@@ -376,7 +380,7 @@ function filterValidPosts(posts: XPost[]): XPost[] {
     seen.add(p.url)
     out.push(p)
   }
-  return out.slice(0, MAX_POSTS)
+  return out.slice(0, maxPosts)
 }
 
 function isModelNotFoundError(err: string): boolean {

@@ -1,22 +1,25 @@
-import { db } from '../src/lib/db'
+import { PrismaClient } from '@prisma/client'
+const prisma = new PrismaClient()
 async function main() {
-  const r32 = await db.match.findMany({ where: { group: 'R32' }, orderBy: { matchDate: 'asc' } })
-  console.log('=== R32 Matches ===')
-  for (const m of r32) {
-    console.log(`${m.homeTeamCode} ${m.homeScore}-${m.awayScore} ${m.awayTeamCode} | ${m.status} | ${m.matchDate?.toISOString().slice(0,10)}`)
+  await prisma.$connect()
+  const sagas = await prisma.transferSaga.findMany({
+    select: { id: true, playerName: true, fromClubName: true, toClubName: true, status: true, lastUpdatedAt: true, tier1Count: true },
+    orderBy: { lastUpdatedAt: 'desc' },
+  })
+  console.log('Total sagas:', sagas.length)
+  const byStatus = sagas.reduce((acc, s) => { acc[s.status] = (acc[s.status]||0)+1; return acc }, {} as Record<string, number>)
+  console.log('By status:', byStatus)
+  console.log('\nAll sagas:')
+  for (const s of sagas) {
+    console.log(`  [${s.status.padEnd(10)}] ${s.playerName} ${s.fromClubName} -> ${s.toClubName} | tier1=${s.tier1Count} | ${s.lastUpdatedAt.toISOString().slice(0,16)}`)
   }
-  const stages = await db.wCStage.findMany({ orderBy: { order: 'asc' } })
-  console.log('\n=== Stages ===')
-  for (const s of stages) {
-    console.log(`${s.order}. ${s.name} | ${s.status} | started=${s.startedAt?.toISOString().slice(0,10) ?? 'null'} | completed=${s.completedAt?.toISOString().slice(0,10) ?? 'null'}`)
-  }
-  const r32stage = stages.find(s => s.name === 'Round of 32')
-  if (r32stage) {
-    const sels = await db.wCSelection.findMany({ where: { stageId: r32stage.id }, include: { players: true } })
-    console.log(`\n=== R32 Selections (${sels.length}) ===`)
-    for (const sel of sels) {
-      console.log(`${sel.type}: ${sel.players.length} players, locked=${sel.locked}`)
-    }
-  }
+  const sources = await prisma.transferSource.findMany({
+    select: { journalistHandle: true, url: true, reportedAt: true },
+    orderBy: { reportedAt: 'desc' },
+  })
+  console.log('\nTotal sources:', sources.length)
+  const byJourno = sources.reduce((acc, s) => { acc[s.journalistHandle] = (acc[s.journalistHandle]||0)+1; return acc }, {} as Record<string, number>)
+  console.log('Sources by journalist:', byJourno)
+  await prisma.$disconnect()
 }
-main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1) })
+main().catch(e => { console.error(e); process.exit(1) })

@@ -1,26 +1,27 @@
 /**
- * Transfer Pulse — PUSH-based Tier 1 Feed Scanner.
+ * Transfer Pulse — PUSH-based Tier 1 Feed Scanner (FULL COVERAGE).
  *
  * PROBLEM (2026-07-26, user report):
- *   The existing `discovery.ts` iterates over a fixed watchlist of ~50
- *   tracked players and asks "find Tier 1 posts about THIS player". This
- *   means Tier 1 posts about players NOT in the watchlist NEVER enter the
- *   system. When Fabrizio Romano tweets about a player we don't track,
- *   the saga is never created — and the user wonders why "current transfer
- *   talks" aren't appearing.
+ *   The previous version of this module only scanned 3 rotating Tier 1
+ *   journalists per run (always the top-3 by reliability: Romano, Ornstein,
+ *   Di Marzio). The user reported "there are at least 50+ rumors here reported
+ *   by Tier 1 journalists — why are they not showing?" The answer: only 3 of
+ *   33 configured Tier 1 journalists were being scanned, so ~90% of Tier 1
+ *   rumors never entered the system.
  *
- * SOLUTION:
- *   This module runs the OPPOSITE direction: it asks "what transfers have
- *   Tier 1 journalists reported in the last 7 days?" — and creates/upserts
- *   sagas for ALL of them, regardless of watchlist membership.
+ * SOLUTION (this version):
+ *   Scan ALL Tier 1 journalists on every run. To keep latency + xAI budget
+ *   reasonable, journalists are batched into groups of JOURNALISTS_PER_BATCH
+ *   and each batch is fetched via a SINGLE xAI x_search call that asks for
+ *   recent transfer posts from those specific handles. Batches run with
+ *   bounded concurrency (BATCH_CONCURRENCY at a time) so the full sweep of
+ *   33 journalists completes in ~1 minute.
  *
- *   Concretely: for a small rotating subset of TIER1_SOURCES per run, we
- *   call `searchXPostsGeneric` (xAI x_search) with a query like "Fabrizio
- *   Romano transfer reports from the last 7 days", filter to TIER1_HANDLES,
- *   then for each post extract {player, fromClub, toClub, fee, isCompleted}
- *   via a single LLM call. We then upsert the saga + the Tier 1 source.
+ *   This module runs the OPPOSITE direction from `discovery.ts`: it asks
+ *   "what transfers have Tier 1 journalists reported recently?" — and
+ *   creates/upserts sagas for ALL of them, regardless of watchlist.
  *
- * ANTI-HALLUCINATION CONTRACT (preserved from discovery.ts):
+ * ANTI-HALLUCINATION CONTRACT (preserved):
  *   - Only accepts posts authored by handles in TIER1_HANDLES (Romano, etc.)
  *   - Only accepts posts with verifiable dates (Snowflake decode, ≤14 days)
  *   - Only accepts posts whose text contains transfer keywords
@@ -43,6 +44,7 @@
  *   - Staleness guard: posts >14 days old are rejected (tighter than
  *     discovery.ts's 60-day window because we want CURRENT talks).
  *   - Idempotent: re-running on the same posts is a no-op (URL @unique).
+ *   - Web-verified from-club gate on NEW saga creation (verify-club.ts).
  */
 
 import { db } from '@/lib/db'
@@ -83,11 +85,23 @@ interface ExtractedTransfer {
 /** How recent a Tier 1 post must be to be considered "current talk". */
 const MAX_POST_AGE_DAYS = 14
 
-/** How many journalists to scan per feed-scan run. */
-const JOURNALISTS_PER_RUN = 3
+/**
+ * How many journalists to pack into a SINGLE xAI x_search call. Batching
+ * keeps the total number of (slow) API calls low while still covering all
+ * Tier 1 journalists. 5 handles per call is a good balance — the model can
+ * return up to ~15 posts for the batch without truncating.
+ */
+const JOURNALISTS_PER_BATCH = 5
 
-/** Max posts to ingest per journalist per run. */
-const MAX_POSTS_PER_JOURNALIST = 8
+/**
+ * How many xAI batches to run in PARALLEL. Higher = faster but risks xAI
+ * rate limits (429). 3 parallel batches × 10-15s each ≈ 30-60s per wave.
+ * With 33 journalists / 5 per batch = 7 batches / 3 parallel = 3 waves.
+ */
+const BATCH_CONCURRENCY = 3
+
+/** Max posts to ask xAI for per batch (covers all journalists in the batch). */
+const MAX_POSTS_PER_BATCH = 15
 
 /** Transfer keywords (mirrors zai-fallback.ts). */
 const TRANSFER_KEYWORDS = [
@@ -104,13 +118,21 @@ const TRANSFER_KEYWORDS = [
  * Scan Tier 1 journalists' recent posts for transfer reports. PUSH-based
  * discovery that complements the watchlist-driven PULL discovery.
  *
+ * DEFAULT BEHAVIOR (changed 2026-07-26): scans ALL configured Tier 1
+ * journalists on every run (batched + parallel). This ensures every rumor
+ * reported by any Tier 1 journalist enters the system, per user request.
+ *
  * @param opts.journalistHandles  specific handles to scan this run (default:
- *                                rotating subset of TIER1_SOURCES)
+ *                                ALL TIER1_SOURCES, batched + parallel)
  * @param opts.maxAgeDays         reject posts older than this (default 14)
+ * @param opts.skipVerifyClub     skip the web_search from-club verification
+ *                                gate (use for fast bulk scans; the next
+ *                                auto-refresh cycle will verify clubs)
  */
 export async function scanTier1Feeds(opts: {
   journalistHandles?: string[]
   maxAgeDays?: number
+  skipVerifyClub?: boolean
 } = {}): Promise<FeedScanResult> {
   const startedAt = Date.now()
   const result: FeedScanResult = {
@@ -125,98 +147,175 @@ export async function scanTier1Feeds(opts: {
   }
 
   const maxAgeDays = opts.maxAgeDays ?? MAX_POST_AGE_DAYS
+  const skipVerifyClub = opts.skipVerifyClub ?? false
 
-  // Resolve the journalist subset for this run
+  // Resolve the journalist set for this run.
+  // DEFAULT: scan ALL Tier 1 journalists (full coverage per user request).
   let handles: string[]
   if (opts.journalistHandles && opts.journalistHandles.length > 0) {
     handles = opts.journalistHandles
   } else {
-    // Rotate through TIER1_SOURCES so successive runs cover different
-    // journalists. Prioritize the highest-reliability sources first.
-    const sorted = [...TIER1_SOURCES].sort((a, b) => b.reliability - a.reliability)
-    handles = sorted.slice(0, JOURNALISTS_PER_RUN).map((s) => s.handle.replace(/^@/, ''))
+    // Full coverage — every Tier 1 journalist, every run.
+    handles = TIER1_SOURCES.map((s) => s.handle.replace(/^@/, ''))
   }
 
-  for (const handle of handles) {
-    result.journalistsScanned++
-    try {
-      const outcome = await scanJournalistFeed(handle, maxAgeDays)
-      result.postsConsidered += outcome.postsConsidered
-      result.sagasCreated += outcome.sagasCreated
-      result.sagasUpdated += outcome.sagasUpdated
-      result.sourcesAdded += outcome.sourcesAdded
-      result.skipped += outcome.skipped
-      if (outcome.error) result.errors.push(`${handle}: ${outcome.error}`)
-    } catch (err) {
-      result.errors.push(`${handle}: ${String(err).slice(0, 200)}`)
+  result.journalistsScanned = handles.length
+  console.log(
+    `[transfer-pulse/feed-scan] starting FULL Tier 1 sweep: ${handles.length} journalists, ` +
+      `batched ${JOURNALISTS_PER_BATCH}/call, ${BATCH_CONCURRENCY} parallel` +
+      `${skipVerifyClub ? ', skipVerifyClub=true' : ''}`,
+  )
+
+  // Batch handles into groups for parallel xAI calls
+  const batches: string[][] = []
+  for (let i = 0; i < handles.length; i += JOURNALISTS_PER_BATCH) {
+    batches.push(handles.slice(i, i + JOURNALISTS_PER_BATCH))
+  }
+
+  // Run batches with bounded concurrency
+  const batchResults = await runWithConcurrency(
+    batches.map((batch) => () => scanBatch(batch, maxAgeDays, skipVerifyClub)),
+    BATCH_CONCURRENCY,
+  )
+
+  // Aggregate results
+  for (let i = 0; i < batchResults.length; i++) {
+    const r = batchResults[i]
+    if (r.error) {
+      result.errors.push(`batch[${batches[i].join(',')}]${r.error}`)
     }
+    result.postsConsidered += r.postsConsidered
+    result.sagasCreated += r.sagasCreated
+    result.sagasUpdated += r.sagasUpdated
+    result.sourcesAdded += r.sourcesAdded
+    result.skipped += r.skipped
   }
 
   result.durationMs = Date.now() - startedAt
+  console.log(
+    `[transfer-pulse/feed-scan] FULL sweep done in ${(result.durationMs / 1000).toFixed(1)}s: ` +
+      `journalists=${result.journalistsScanned} posts=${result.postsConsidered} ` +
+      `created=${result.sagasCreated} updated=${result.sagasUpdated} ` +
+      `sources=${result.sourcesAdded} skipped=${result.skipped} ` +
+      `errors=${result.errors.length}`,
+  )
   return result
 }
 
-// ── Per-journalist scan ──────────────────────────────────────────────────────
+// ── Concurrency helper ───────────────────────────────────────────────────────
 
-async function scanJournalistFeed(
-  handle: string,
-  maxAgeDays: number,
-): Promise<{
+/**
+ * Run async tasks with bounded concurrency. Returns results in the SAME
+ * order as the input tasks (not completion order) so callers can correlate.
+ */
+async function runWithConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number,
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length)
+  let nextIndex = 0
+  async function worker() {
+    while (true) {
+      const idx = nextIndex++
+      if (idx >= tasks.length) return
+      try {
+        results[idx] = await tasks[idx]()
+      } catch (err) {
+        // Re-throw wrapped — caller handles per-task errors via the result shape
+        results[idx] = { error: String(err).slice(0, 200) } as unknown as T
+      }
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker())
+  await Promise.all(workers)
+  return results
+}
+
+// ── Batch scan (one xAI call for N journalists) ──────────────────────────────
+
+interface BatchResult {
   postsConsidered: number
   sagasCreated: number
   sagasUpdated: number
   sourcesAdded: number
   skipped: number
   error?: string
-}> {
-  const out = { postsConsidered: 0, sagasCreated: 0, sagasUpdated: 0, sourcesAdded: 0, skipped: 0 }
-  const source = getTier1Source(handle)
-  if (!source) {
-    out.error = `not a Tier 1 source: ${handle}`
-    return out
-  }
+}
 
-  // 1. Search X for recent posts by this journalist about transfers
-  const cleanHandle = handle.replace(/^@/, '')
+async function scanBatch(
+  handles: string[],
+  maxAgeDays: number,
+  skipVerifyClub: boolean = false,
+): Promise<BatchResult> {
+  const out: BatchResult = {
+    postsConsidered: 0,
+    sagasCreated: 0,
+    sagasUpdated: 0,
+    sourcesAdded: 0,
+    skipped: 0,
+  }
+  if (handles.length === 0) return out
+
   const today = new Date().toISOString().slice(0, 10)
   const fromDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10)
 
+  // Build a single query asking for transfer posts from ALL handles in the batch
+  const handleList = handles.map((h) => `@${h}`).join(', ')
+  const sources = handles
+    .map((h) => {
+      const s = getTier1Source(h)
+      return s ? `${s.name} (@${h}, ${s.outlet})` : `@${h}`
+    })
+    .join('; ')
+
   const query =
-    `Find real X (Twitter) posts authored by @${cleanHandle} (${source.name}, ${source.outlet}) ` +
-    `reporting football transfer news between ${fromDate} and ${today}. ` +
-    `Focus on posts that name a specific player AND a destination club. ` +
-    `Exclude match reports, player stat tweets, and contract renewals at the same club. ` +
-    `Return up to ${MAX_POSTS_PER_JOURNALIST} of the most recent transfer-rumor posts.`
+    `Find real X (Twitter) posts authored by these football transfer journalists: ${handleList}. ` +
+    `Journalist details: ${sources}. ` +
+    `Find posts published between ${fromDate} and ${today} that report a football transfer — ` +
+    `the post MUST name a specific player AND a destination club. ` +
+    `Include posts about: completed signings, agreed deals, bids, medicals, "here we go", ` +
+    `contract talks with a new club, or confirmed transfers. ` +
+    `EXCLUDE: match reports, player stats, contract renewals at the SAME club, ` +
+    `generic commentary, and retweets with no original reporting. ` +
+    `Return up to ${MAX_POSTS_PER_BATCH} of the most recent transfer-rumor posts from these journalists.`
 
   const search = await searchXPostsGeneric({
     query,
     fromDate,
     toDate: today,
+    maxPosts: MAX_POSTS_PER_BATCH,
   })
 
   let posts: XPost[] = []
   if (search.error) {
-    // xAI unavailable — try the Z.ai web_search fallback so feed-scan still
-    // works in environments without XAI_API_KEY (e.g. the dev sandbox).
+    // xAI unavailable — try Z.ai fallback for each journalist in the batch
     console.log(
-      `[transfer-pulse/feed-scan] xAI unavailable for @${cleanHandle}: ${search.error.slice(0, 100)} — trying Z.ai fallback`,
+      `[transfer-pulse/feed-scan] batch [${handles.join(',')}] xAI unavailable: ` +
+        `${search.error.slice(0, 80)} — trying Z.ai fallback`,
     )
-    const zaiResult = await fetchJournalistPostsViaZai(cleanHandle, { maxAgeDays })
-    if (zaiResult.error) {
-      out.error = `xAI: ${search.error.slice(0, 80)} | zai: ${zaiResult.error.slice(0, 80)}`
+    for (const h of handles) {
+      try {
+        const zaiResult = await fetchJournalistPostsViaZai(h, { maxAgeDays })
+        if (!zaiResult.error && zaiResult.posts.length > 0) {
+          posts = posts.concat(zaiResult.posts)
+        }
+      } catch (err) {
+        out.error = `zai@${h}: ${String(err).slice(0, 80)}`
+      }
+    }
+    if (posts.length === 0) {
+      out.error = `xAI: ${search.error.slice(0, 60)} | zai: no posts`
       return out
     }
-    posts = zaiResult.posts
     console.log(
-      `[transfer-pulse/feed-scan] @${cleanHandle}: Z.ai fallback returned ${posts.length} fresh Tier 1 posts`,
+      `[transfer-pulse/feed-scan] batch [${handles.join(',')}] Z.ai fallback returned ${posts.length} posts`,
     )
   } else {
-    // 2. Filter to TIER1_HANDLES only + freshness gate (Snowflake decode)
+    // Filter to TIER1_HANDLES only + freshness gate
     posts = search.posts.filter((p) => {
       if (!TIER1_HANDLES.has(p.handle.toLowerCase())) return false
-      if (p.handle.toLowerCase() !== cleanHandle.toLowerCase()) return false
       // Resolve post date via Snowflake decode (most reliable) or postedAt
       let date: Date | null = null
       if (p.postedAt) {
@@ -233,22 +332,24 @@ async function scanJournalistFeed(
     })
 
     console.log(
-      `[transfer-pulse/feed-scan] @${cleanHandle}: xAI returned ${search.posts.length} posts, ` +
-        `${posts.length} fresh Tier 1 posts by this journalist`,
+      `[transfer-pulse/feed-scan] batch [${handles.join(',')}] xAI returned ${search.posts.length} posts, ` +
+        `${posts.length} fresh Tier 1 posts`,
     )
 
-    // If xAI gave us nothing for this journalist, try Z.ai as a secondary
-    // source — it may index tweets that xAI's tool didn't surface.
+    // If xAI gave nothing for this batch, try Z.ai as secondary
     if (posts.length === 0) {
       console.log(
-        `[transfer-pulse/feed-scan] @${cleanHandle}: xAI returned 0 fresh posts — trying Z.ai fallback`,
+        `[transfer-pulse/feed-scan] batch [${handles.join(',')}] xAI 0 posts — trying Z.ai fallback`,
       )
-      const zaiResult = await fetchJournalistPostsViaZai(cleanHandle, { maxAgeDays })
-      if (!zaiResult.error && zaiResult.posts.length > 0) {
-        posts = zaiResult.posts
-        console.log(
-          `[transfer-pulse/feed-scan] @${cleanHandle}: Z.ai fallback added ${posts.length} posts`,
-        )
+      for (const h of handles) {
+        try {
+          const zaiResult = await fetchJournalistPostsViaZai(h, { maxAgeDays })
+          if (!zaiResult.error && zaiResult.posts.length > 0) {
+            posts = posts.concat(zaiResult.posts)
+          }
+        } catch {
+          // ignore individual failures
+        }
       }
     }
   }
@@ -257,7 +358,15 @@ async function scanJournalistFeed(
     return out
   }
 
-  // 3. Transfer-keyword gate (mirrors zai-fallback.ts)
+  // Deduplicate posts by URL (xAI + Z.ai may overlap)
+  const seenUrls = new Set<string>()
+  posts = posts.filter((p) => {
+    if (seenUrls.has(p.url)) return false
+    seenUrls.add(p.url)
+    return true
+  })
+
+  // Transfer-keyword gate
   posts = posts.filter((p) => {
     const lower = p.text.toLowerCase()
     return TRANSFER_KEYWORDS.some((kw) => lower.includes(kw))
@@ -265,9 +374,11 @@ async function scanJournalistFeed(
 
   out.postsConsidered = posts.length
 
-  // 4. For each post, extract transfer fields via LLM + upsert saga + source
+  // For each post, extract transfer fields via LLM + upsert saga + source
   for (const post of posts) {
     try {
+      const cleanHandle = post.handle
+      const source = getTier1Source(cleanHandle)
       const extracted = await extractTransferFieldsFromPost(post.text, cleanHandle)
       if (
         !extracted ||
@@ -333,55 +444,49 @@ async function scanJournalistFeed(
         sagaId = existing.id
         out.sagasUpdated++
       } else {
-        // ── WEB-VERIFIED FROM-CLUB GATE (added 2026-07-26) ───────────────
+        // ── WEB-VERIFIED FROM-CLUB GATE ───────────────────────────────────
         // Before creating a NEW saga, verify the player's actual current club
-        // via web_search. The LLM extraction above can have stale "current
-        // club" knowledge (e.g. it thinks Isak is at Newcastle when he's
-        // actually at Liverpool since Sep 2025). Web search is always fresher
-        // than LLM training data, so we trust it when the two disagree.
-        //
-        // See src/lib/transfer-pulse/verify-club.ts for the full logic. The
-        // helper returns one of:
-        //   'accept'           — LLM extraction was correct, use as-is.
-        //   'update-from-club' — LLM had stale info; use the web-verified club.
-        //   'mark-completed'   — player already moved to to-club; resolve saga.
-        //   'reject'           — extraction is untrustworthy; skip.
+        // via web_search. The LLM extraction can have stale "current club"
+        // knowledge. Web search is always fresher than LLM training data.
+        // SKIPPED when skipVerifyClub=true (bulk scan mode) — the next
+        // auto-refresh cycle will verify clubs for newly-created sagas.
         let adjustedFromClubCode = fromClubCode
         let adjustedFromClubName = fromClubName
         let adjustedIsCompleted = extracted.isCompleted
 
-        try {
-          const decision = await verifyAndAdjustFromClub({
-            playerName,
-            fromClubName,
-            fromClubCode,
-            toClubName,
-            toClubCode,
-          })
-          console.log(
-            `[transfer-pulse/feed-scan] verify-club: ${playerName} → ${decision.decision} ` +
-              `(${decision.reason.slice(0, 100)})`,
-          )
-          if (decision.decision === 'reject') {
-            out.skipped++
-            continue
+        if (!skipVerifyClub) {
+          try {
+            const decision = await verifyAndAdjustFromClub({
+              playerName,
+              fromClubName,
+              fromClubCode,
+              toClubName,
+              toClubCode,
+            })
+            console.log(
+              `[transfer-pulse/feed-scan] verify-club: ${playerName} → ${decision.decision} ` +
+                `(${decision.reason.slice(0, 80)})`,
+            )
+            if (decision.decision === 'reject') {
+              out.skipped++
+              continue
+            }
+            adjustedFromClubCode = decision.fromClubCode
+            adjustedFromClubName = decision.fromClubName
+            if (decision.decision === 'mark-completed') {
+              adjustedIsCompleted = true
+            }
+          } catch (err) {
+            console.warn(
+              `[transfer-pulse/feed-scan] verify-club failed for ${playerName}, failing open: ${String(err).slice(0, 80)}`,
+            )
           }
-          adjustedFromClubCode = decision.fromClubCode
-          adjustedFromClubName = decision.fromClubName
-          if (decision.decision === 'mark-completed') {
-            adjustedIsCompleted = true
-          }
-        } catch (err) {
-          // Fail open — if verification errors out, trust the LLM extraction.
-          console.warn(
-            `[transfer-pulse/feed-scan] verify-club failed for ${playerName}, failing open: ${String(err).slice(0, 100)}`,
-          )
         }
 
         const created = await db.transferSaga.create({
           data: {
             playerName,
-            playerNationCode: '', // unknown for non-watchlist players
+            playerNationCode: '',
             fromClubCode: adjustedFromClubCode,
             fromClubName: adjustedFromClubName,
             toClubCode,
@@ -409,12 +514,12 @@ async function scanJournalistFeed(
         await db.transferSource.create({
           data: {
             sagaId,
-            journalistName: source.name,
+            journalistName: source?.name ?? cleanHandle,
             journalistHandle: cleanHandle,
             tier: 1,
             url: post.url,
             headline: extracted.headline.slice(0, 280),
-            outlet: source.outlet,
+            outlet: source?.outlet ?? 'Independent',
             reportedAt,
           },
         })
@@ -426,8 +531,8 @@ async function scanJournalistFeed(
       }
     } catch (err) {
       console.warn(
-        `[transfer-pulse/feed-scan] post processing failed for @${cleanHandle}:`,
-        String(err).slice(0, 200),
+        `[transfer-pulse/feed-scan] post processing failed:`,
+        String(err).slice(0, 160),
       )
       out.skipped++
     }
@@ -448,10 +553,6 @@ async function countTier1Sources(sagaId: string): Promise<number> {
  * Ask the AI facade (Grok → Cerebras → Groq → Z.ai) to extract structured
  * transfer metadata from a Tier 1 journalist's X post text. Returns null if
  * the player OR destination cannot be confidently determined — we never guess.
- *
- * Unlike discovery.ts (which trusts the watchlist's `fromClub`), this version
- * asks the LLM to ALSO extract the player's current club — because the post
- * may be about a player NOT in our watchlist.
  */
 async function extractTransferFieldsFromPost(
   postText: string,
@@ -473,8 +574,6 @@ async function extractTransferFieldsFromPost(
     `- If the post does NOT clearly name a player AND a destination club, return null fields.\n` +
     `- Do NOT invent a club. If unsure, return null for that field.\n` +
     `- The "fromClub" is the player's CURRENT club (where he plays right now), NOT the destination.\n` +
-    `- Common current-club examples (as of July 2026): Salah=Liverpool, Haaland=Man City, Mbappé=Real Madrid, ` +
-    `Saka=Arsenal, Bellingham=Real Madrid, Isak=Newcastle, Palmer=Chelsea, Rodri=Man City.\n` +
     `- If the post is about a contract renewal at the SAME club (no actual transfer), ` +
     `return toClubName = fromClubName (the same club).\n` +
     `- If the post is a generic commentary, opinion, or match report (not a transfer rumor), ` +
@@ -491,7 +590,7 @@ async function extractTransferFieldsFromPost(
 
   if (!result.ok || !result.content) {
     console.warn(
-      `[transfer-pulse/feed-scan] extractTransferFields: ai.chat failed (${result.provider}): ${result.error?.slice(0, 120)}`,
+      `[transfer-pulse/feed-scan] extractTransferFields: ai.chat failed (${result.provider}): ${result.error?.slice(0, 100)}`,
     )
     return null
   }
