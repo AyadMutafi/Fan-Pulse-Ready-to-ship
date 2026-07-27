@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fan Pulse — Bolt Icon (favicon)
+
+  Design: rounded-square purple (#6C2BD9) background with a custom
+  Fan Pulse lightning bolt in white. This is the brand mark used for:
+    - Browser tab favicon (<link rel="icon" type="image/svg+xml">)
+    - PNG derivative for iOS apple-touch-icon (180×180)
+
+  The bolt is a CUSTOM Fan Pulse shape — NOT the Lucide "Zap" icon.
+  It has a slightly heavier stroke and a sharper lower-right tail,
+  evoking a "pulse spike" rather than a generic lightning bolt.
+-->
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Rounded square background: Fan Pulse purple #6C2BD9 -->
+  <rect width="64" height="64" rx="14" fill="#6C2BD9"/>
+
+  <!--
+    Fan Pulse lightning bolt — custom path.
+    Geometry: a right-leaning bolt with a sharp tail, centered in the 64×64 box.
+    The path is designed to read clearly at 16×16 (favicon size) and scale
+    crisply to 180×180 (apple-touch-icon).
+  -->
+  <path
+    d="M36.5 10 L20 36 L30 36 L27.5 54 L44 28 L34 28 Z"
+    fill="#FFFFFF"
+    stroke="#FFFFFF"
+    stroke-width="1.2"
+    stroke-linejoin="round"
+  />
+</svg>

@@ -4000,3 +4000,56 @@ Stage Summary:
 - X API TRACKING: the code uses xAI x_search as the PRIMARY path (searchXPostsGeneric). XAI_API_KEY is not currently in .env (only DATABASE_URL), so the Z.ai web_search fallback is being used. To enable the faster/primary X API path, add XAI_API_KEY=xai-... to .env. The architecture is correct — it just needs the key.
 - The remaining ~15 Tier 1 journalists (Sam Lee, Dawson, Steinberg, Kinsella, Phil Hay, Amoyal, Llorens, Balague, Aouna, Arancha, Jose, Conterio, Falk, Johnson, Tanzi) will be picked up by subsequent auto-refresh cycles (every 30 min, scans all 33 journalists with skipVerifyClub=true). The Z.ai web_search rate limit (429) slowed the bulk scan, but the auto-refresh runs incrementally so it won't hit the rate limit as hard.
 - Files changed: src/lib/grok-x-search.ts (added maxPosts param), src/lib/transfer-pulse/feed-scan.ts (full rewrite — all 33 journalists, batched parallel, skipVerifyClub option), src/lib/transfer-pulse/auto-refresh.ts (skipVerifyClub=true for feed-scan phase), scripts/run-feed-scan-chunk.ts (NEW chunked runner), scripts/dedupe-sagas.ts (NEW), scripts/fix-trafford-dupe.ts (NEW), scripts/check-db.ts (NEW diagnostic).
+
+---
+Task ID: p0-meta-favicon-css-fixes
+Agent: Main Agent
+Task: Fix 3 critical P0 issues: (1) og:url/og:image/twitter:image/JSON-LD URLs hardcoded to fan-pulse.fly.dev — make dynamic via NEXT_PUBLIC_APP_URL; (2) replace external z-cdn.chatglm.cn favicon with locally-hosted Fan Pulse bolt icon (purple #6C2BD9, white lightning bolt, NOT a generic Zap icon); (3) add CSS-only fadeInUp fallback for the main content wrapper that starts at opacity:0 for Framer Motion.
+
+Work Log:
+- Read worklog.md tail to understand prior context (Transfer Pulse pipeline work).
+- Investigated all files containing hardcoded URLs: src/app/layout.tsx (metadata + JSON-LD + icons), src/app/opengraph-image.tsx (OG image URL baked into image), src/app/twitter-image.tsx (Twitter card image URL), src/app/api/fan-card/route.tsx (fan card URL), src/lib/cors.ts (CORS allowlist), next.config.ts (CSP img-src allows z-cdn.chatglm.cn).
+- Found the main-content-wrapper: src/app/page.tsx line 2627 — a `<motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>` inside `<main>`. This is the wrapper that stays invisible if JS is delayed.
+
+- FIX #1 — Dynamic URLs (NEW centralized helper + 4 file updates):
+  • Created src/lib/site-url.ts: exports getSiteUrl(), getDisplayUrl(), url(path). Resolution order: NEXT_PUBLIC_APP_URL → NEXT_PUBLIC_SITE_URL → 'https://fan-pulse.fly.dev' (fallback). Normalizes trailing slashes. NEXT_PUBLIC_* prefix ensures the var is inlined at build time and visible client-side.
+  • Updated src/app/layout.tsx: replaced `const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://fan-pulse.fly.dev"` with `import { getSiteUrl } from "@/lib/site-url"; const siteUrl = getSiteUrl()`. This makes metadataBase, og:url, JSON-LD WebApplication.url, and JSON-LD publisher.url ALL dynamic.
+  • Updated src/app/opengraph-image.tsx: replaced inline env-var read with `import { getDisplayUrl } from "@/lib/site-url"`. The URL baked into the OG image now resolves dynamically.
+  • Updated src/app/twitter-image.tsx: same change — displayUrl now from getDisplayUrl().
+  • Updated src/app/api/fan-card/route.tsx: same change — the fan card PNG's bottom CTA pill now shows the dynamic domain.
+  • Updated src/lib/cors.ts: added NEXT_PUBLIC_APP_URL / NEXT_PUBLIC_SITE_URL to the allowed-origins builder, so the actual deployment domain is always allowed to make credentialed API requests (keeps CORS in sync with metadata URLs).
+  • Verified all 3 resolution paths with scripts/test-site-url.ts: (a) NEXT_PUBLIC_APP_URL set → uses it; (b) NEXT_PUBLIC_SITE_URL set → uses it (legacy compat); (c) neither set → falls back to fan-pulse.fly.dev.
+
+- FIX #2 — Fan Pulse bolt favicon (NEW icon files + layout.tsx + next.config.ts):
+  • Created public/icon.svg: a 64×64 SVG with a rounded-square (rx=14) purple #6C2BD9 background and a CUSTOM white lightning bolt path. The bolt is a Fan Pulse original design (NOT the Lucide Zap icon) — it has a sharper lower-right tail evoking a "pulse spike". Path: `M36.5 10 L20 36 L30 36 L27.5 54 L44 28 L34 28 Z` with white fill + 1.2px white stroke + round joins for crisp rendering at 16×16.
+  • Created scripts/generate-apple-touch-icon.ts: uses sharp to render the SVG at 180×180 PNG (Apple's required size for apple-touch-icon). Ran it → public/apple-touch-icon.png (3802 bytes).
+  • VLM-verified the icon: "solid vibrant purple background, white lightning bolt in the center, clean professional app icon with squircle shape, high contrast, flat design aesthetic."
+  • Updated src/app/layout.tsx: removed `icons: { icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg" }`. Added to metadata.icons: `icon: [{ url: "/icon.svg", type: "image/svg+xml" }], apple: "/apple-touch-icon.png"`. Also added explicit `<link rel="icon" type="image/svg+xml" href="/icon.svg" />` and `<link rel="apple-touch-icon" href="/apple-touch-icon.png" />` in the <head> (belt-and-suspenders: Next.js metadata.icons injects these automatically, but explicit links guarantee correct type + rel attributes).
+  • Updated next.config.ts CSP: removed `https://z-cdn.chatglm.cn` from img-src (no longer needed — favicon is local). Tightens the security posture.
+
+- FIX #3 — CSS-only fadeInUp fallback (page.tsx + globals.css):
+  • Updated src/app/page.tsx: added `className="main-content-wrapper"` to the motion.div that wraps the active tab content (line ~2627). Added a comment explaining the CSS fallback.
+  • Updated src/app/globals.css: added @keyframes fadeInUp (from opacity:0 + translateY(10px) → to opacity:1 + translateY(0)) and `.main-content-wrapper { animation: fadeInUp 0.5s ease-out forwards; }`. The `forwards` fill-mode ensures the final visible state persists after the animation completes, even if Framer Motion's inline styles haven't applied yet. Added a `@media (prefers-reduced-motion: reduce)` block that disables the animation but forces opacity:1 + transform:none (accessibility — reduced-motion users see content immediately).
+
+- BROWSER VERIFICATION (Agent Browser):
+  • Favicon: `document.querySelectorAll('link[rel*=icon]')` returns 4 links (icon.svg ×2 from metadata + head, apple-touch-icon.png ×2) — ALL pointing to localhost:3000/icon.svg and localhost:3000/apple-touch-icon.png. No external z-cdn links.
+  • z-cdn check: `document.querySelector('link[href*=z-cdn]')` returns null → "No z-cdn links (GOOD)".
+  • JSON-LD: `JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent).url` = "https://fan-pulse.fly.dev" (dynamic — fallback since NEXT_PUBLIC_APP_URL not set in dev; would resolve to the real domain in production).
+  • JSON-LD publisher.url: same dynamic value.
+  • og:url: `document.querySelector('meta[property="og:url"]').content` = "https://fan-pulse.fly.dev" (dynamic).
+  • twitter:image: resolves to the dynamic twitter-image route (localhost:3000/twitter-image?...).
+  • main-content-wrapper: class present on the motion.div. Computed animationName = "fadeInUp". Computed opacity = "1" (content visible — fallback works).
+  • @keyframes fadeInUp found in the compiled CSS: `@keyframes fadeInUp { 0% { opacity: 0; transform: translateY(10px); } 100% ... }`.
+  • icon.svg HTTP: 200, content-type image/svg+xml.
+  • apple-touch-icon.png HTTP: 200, content-type image/png.
+  • No console errors, no page errors.
+  • Screenshot saved to /tmp/p0-fixes-verified.png.
+
+- LINT: 0 errors (bun run lint clean).
+
+Stage Summary:
+- FIX #1 (URL mismatch): created src/lib/site-url.ts centralized helper with NEXT_PUBLIC_APP_URL → NEXT_PUBLIC_SITE_URL → fallback resolution. Updated layout.tsx (metadataBase, og:url, JSON-LD WebApplication.url, JSON-LD publisher.url), opengraph-image.tsx, twitter-image.tsx, fan-card/route.tsx, and cors.ts. All URLs are now DYNAMIC — set NEXT_PUBLIC_APP_URL in production to the real deployment domain.
+- FIX #2 (Favicon): created public/icon.svg (custom Fan Pulse bolt — purple #6C2BD9 rounded square + white lightning bolt, NOT a generic Zap icon) + public/apple-touch-icon.png (180×180 PNG via sharp). Removed the external z-cdn.chatglm.cn link from layout.tsx and from the CSP img-src in next.config.ts. Explicit <link> tags added in <head>.
+- FIX #3 (opacity:0 CSS fallback): added className="main-content-wrapper" to the Framer Motion wrapper in page.tsx. Added @keyframes fadeInUp + .main-content-wrapper animation in globals.css (0.5s ease-out forwards) + prefers-reduced-motion override. Content is now visible even if JS is delayed.
+- Browser-verified all 3 fixes: favicon loads (200, correct content-type), no z-cdn links, JSON-LD/og:url dynamic, main-content-wrapper has fadeInUp animation with computed opacity:1. Lint clean.
+- Files changed: src/lib/site-url.ts (NEW), src/app/layout.tsx (dynamic URLs + local favicon + explicit link tags), src/app/opengraph-image.tsx (dynamic URL), src/app/twitter-image.tsx (dynamic URL), src/app/api/fan-card/route.tsx (dynamic URL), src/lib/cors.ts (dynamic origin in allowlist), next.config.ts (removed z-cdn from CSP), src/app/page.tsx (added main-content-wrapper class), src/app/globals.css (added fadeInUp keyframe + animation + reduced-motion override), public/icon.svg (NEW Fan Pulse bolt icon), public/apple-touch-icon.png (NEW 180×180 PNG), scripts/generate-apple-touch-icon.ts (NEW), scripts/test-site-url.ts (NEW verification script).

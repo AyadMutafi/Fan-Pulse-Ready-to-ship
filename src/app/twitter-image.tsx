@@ -1,10 +1,15 @@
 import { ImageResponse } from 'next/og'
+import { getDisplayUrl } from '@/lib/site-url'
 
 // ── Twitter Card image ───────────────────────────────────────────────────────
 // Used for Twitter/X `summary_large_image` cards. Reuses the OG design —
 // keeping brand consistency across platforms is more important than having
 // two distinct designs. Twitter crops to 2:1, so the URL pill stays inside
 // the safe area (centered horizontally, lower-third vertically).
+//
+// DYNAMIC URL: the site URL is resolved via @/lib/site-url, which checks
+// NEXT_PUBLIC_APP_URL → NEXT_PUBLIC_SITE_URL → fallback. This ensures the
+// URL baked into the image always matches the actual deployment domain.
 
 export const runtime = 'edge'
 export const alt = 'Fan Pulse — Real-Time Fan Sentiment for World Cup 2026'
@@ -12,8 +17,7 @@ export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
 export default async function TwitterImage() {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://fan-pulse.fly.dev'
-  const displayUrl = siteUrl.replace(/^https?:\/\//, '')
+  const displayUrl = getDisplayUrl()
 
   return new ImageResponse(
     (

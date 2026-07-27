@@ -22,6 +22,16 @@ function buildAllowedOrigins(): Set<string> {
     origins.push(deployOrigin)
   }
 
+  // Dynamic origin from NEXT_PUBLIC_APP_URL (canonical env var for the
+  // deployment URL). This keeps the CORS allowlist in sync with the URLs
+  // used in og:url / JSON-LD / social-share images, so the actual deployment
+  // domain is always allowed to make credentialed API requests.
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
+  if (appUrl) {
+    origins.push(appUrl.replace(/\/+$/, ''))
+  }
+
   // Canonical production origins.
   origins.push('https://e1v0s5v6hje1-d.space-z.ai')
   origins.push('https://fan-pulse.fly.dev')

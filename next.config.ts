@@ -2,8 +2,11 @@ import type { NextConfig } from "next";
 
 // ── Content Security Policy ─────────────────────────────────────────────────
 // Allows: self, flagcdn.com (flag images), cloud.umami.is (analytics),
-// z-cdn.chatglm.cn (logo icon), inline styles + scripts (Next.js runtime
-// requires these for hydration), data: URIs (for unoptimized images).
+// inline styles + scripts (Next.js runtime requires these for hydration),
+// data: URIs (for unoptimized images).
+//
+// NOTE: z-cdn.chatglm.cn was REMOVED — the favicon is now locally hosted
+// at /public/icon.svg (Fan Pulse bolt logo). No external CDN needed.
 //
 // H2 SECURITY FIX — frame-ancestors is now environment-aware:
 //  - PRODUCTION: `frame-ancestors 'self'` — blocks clickjacking. Only same-
@@ -28,7 +31,7 @@ const cspHeader = [
   // 'unsafe-eval' kept in dev for Turbopack HMR; removed in prod (no eval usage).
   "script-src 'self' 'unsafe-inline'" + (isProd ? '' : " 'unsafe-eval'") + " https://cloud.umami.is",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' https://flagcdn.com https://z-cdn.chatglm.cn data:",
+  "img-src 'self' https://flagcdn.com data:",
   "font-src 'self' data:",
   "connect-src 'self' https://cloud.umami.is",
   // Production: 'self' only (clickjacking protection).

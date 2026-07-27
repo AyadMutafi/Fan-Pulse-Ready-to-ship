@@ -2626,6 +2626,12 @@ export default function Home() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
+                // `main-content-wrapper` class provides a CSS-only fadeInUp
+                // fallback so content is visible even if Framer Motion / JS is
+                // delayed. The keyframe animation in globals.css runs on mount
+                // and sets opacity:1 + transform:none after 0.5s. Framer Motion
+                // then takes over and may re-animate — both paths land visible.
+                className="main-content-wrapper"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}

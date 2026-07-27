@@ -1,13 +1,18 @@
 import { ImageResponse } from 'next/og'
+import { getDisplayUrl } from '@/lib/site-url'
 
 // ── Dynamic OG image for SEO + social sharing ────────────────────────────────
-// This is the image shown when someone shares fan-pulse.fly.dev on Twitter,
+// This is the image shown when someone shares the site on Twitter,
 // Facebook, Discord, WhatsApp, LinkedIn, etc. It REPLACES the static
 // /public/og-image.png via Next.js's opengraph-image convention.
 //
 // Why dynamic: the URL is baked into the image at render time, so anyone who
 // sees this card in a social feed can read the domain directly — critical
 // for brand recall + SEO (search engines OCR text in OG images).
+//
+// DYNAMIC URL: the site URL is resolved via @/lib/site-url, which checks
+// NEXT_PUBLIC_APP_URL → NEXT_PUBLIC_SITE_URL → fallback. This ensures the
+// URL baked into the image always matches the actual deployment domain.
 
 export const runtime = 'edge'
 export const alt = 'Fan Pulse — Real-Time Fan Sentiment for World Cup 2026'
@@ -15,8 +20,7 @@ export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
 export default async function OGImage() {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://fan-pulse.fly.dev'
-  const displayUrl = siteUrl.replace(/^https?:\/\//, '')
+  const displayUrl = getDisplayUrl()
 
   return new ImageResponse(
     (

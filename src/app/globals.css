@@ -501,3 +501,40 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   border-color: rgba(139, 92, 246, 0.2);
 }
+
+/* ── CSS-only fallback for main content wrapper ──────────────────────────────
+   The main content motion.div (page.tsx) starts at opacity:0 + translateY(10px)
+   via Framer Motion's `initial` prop. If JS is delayed/slow, the content stays
+   invisible until Framer hydrates and applies `animate`. This keyframe animation
+   is a CSS-only safety net: it runs on mount (no JS needed) and fades the
+   content in after a short delay. If Framer Motion loads first, it takes over
+   and both paths land at opacity:1 + translateY(0) — no conflict.
+
+   The animation uses `forwards` fill-mode so the final state (opacity:1,
+   transform:none) persists after the animation completes, even if Framer's
+   inline styles haven't applied yet.
+*/
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.main-content-wrapper {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+/* Respect users who prefer reduced motion — skip the animation but still
+   ensure content is visible (the whole point of the fallback). */
+@media (prefers-reduced-motion: reduce) {
+  .main-content-wrapper {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

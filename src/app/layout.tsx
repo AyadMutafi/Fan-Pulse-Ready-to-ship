@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { Analytics } from "@/components/Analytics";
+import { getSiteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,7 +21,13 @@ const geistMono = Geist_Mono({
 // metadataBase is REQUIRED for relative OG image paths to resolve. Without it,
 // link previews on X / Discord / WhatsApp show nothing — killing the
 // "share → visit → vote" marketing funnel at the click-through step.
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://fan-pulse.fly.dev";
+//
+// DYNAMIC URL: the site URL is resolved via @/lib/site-url, which checks
+// NEXT_PUBLIC_APP_URL → NEXT_PUBLIC_SITE_URL → fallback. This ensures all
+// og:url / og:image / JSON-LD URLs resolve to the ACTUAL deployment domain,
+// not a hardcoded fan-pulse.fly.dev string. Set NEXT_PUBLIC_APP_URL in .env
+// to the real deployment URL.
+const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -43,7 +50,13 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "Fan Pulse" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    // Fan Pulse bolt logo — locally hosted (no external CDN dependency).
+    // icon.svg = purple #6C2BD9 rounded square + white lightning bolt.
+    // apple-touch-icon.png = 180×180 PNG version for iOS home screen.
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
   openGraph: {
     type: "website",
@@ -87,6 +100,10 @@ export default function RootLayout({
   // improves rich-result eligibility, and bakes the URL into the page's
   // semantic markup (separate from <meta> tags). This is the #1 on-page SEO
   // signal after <title>.
+  //
+  // Both WebApplication.url and publisher.url use the DYNAMIC siteUrl (resolved
+  // from NEXT_PUBLIC_APP_URL → NEXT_PUBLIC_SITE_URL → fallback) so structured
+  // data always points at the real deployment domain.
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "WebApplication",
@@ -125,10 +142,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* JSON-LD structured data — dynamic siteUrl for WebApplication.url + publisher.url */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        {/* Fan Pulse bolt icon — locally hosted SVG (purple #6C2BD9 + white lightning bolt). */}
+        <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}

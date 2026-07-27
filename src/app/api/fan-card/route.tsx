@@ -1,6 +1,7 @@
 import { ImageResponse } from 'next/og'
 import { NextRequest } from 'next/server'
 import { NATIONAL_TEAMS } from '@/lib/national-teams'
+import { getDisplayUrl } from '@/lib/site-url'
 
 export const runtime = 'edge'
 
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
     // Flag fetch failed — card will render without the flag image (text-only fallback)
   }
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://fan-pulse.fly.dev'
+  const displayUrl = getDisplayUrl()
 
   return new ImageResponse(
     (
@@ -273,7 +274,7 @@ export async function GET(request: NextRequest) {
                 fontWeight: 900,
                 letterSpacing: '-0.5px',
                 lineHeight: 1,
-              }}>{siteUrl.replace(/^https?:\/\//, '')}</span>
+              }}>{displayUrl}</span>
             </div>
           </div>
         </div>
