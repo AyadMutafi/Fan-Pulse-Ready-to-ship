@@ -4053,3 +4053,34 @@ Stage Summary:
 - FIX #3 (opacity:0 CSS fallback): added className="main-content-wrapper" to the Framer Motion wrapper in page.tsx. Added @keyframes fadeInUp + .main-content-wrapper animation in globals.css (0.5s ease-out forwards) + prefers-reduced-motion override. Content is now visible even if JS is delayed.
 - Browser-verified all 3 fixes: favicon loads (200, correct content-type), no z-cdn links, JSON-LD/og:url dynamic, main-content-wrapper has fadeInUp animation with computed opacity:1. Lint clean.
 - Files changed: src/lib/site-url.ts (NEW), src/app/layout.tsx (dynamic URLs + local favicon + explicit link tags), src/app/opengraph-image.tsx (dynamic URL), src/app/twitter-image.tsx (dynamic URL), src/app/api/fan-card/route.tsx (dynamic URL), src/lib/cors.ts (dynamic origin in allowlist), next.config.ts (removed z-cdn from CSP), src/app/page.tsx (added main-content-wrapper class), src/app/globals.css (added fadeInUp keyframe + animation + reduced-motion override), public/icon.svg (NEW Fan Pulse bolt icon), public/apple-touch-icon.png (NEW 180×180 PNG), scripts/generate-apple-touch-icon.ts (NEW), scripts/test-site-url.ts (NEW verification script).
+
+---
+Task ID: nav-routing-accessibility-d4
+Agent: Main Agent
+Task: Day 4 — Convert Fan Pulse navigation from buttons to Next.js Link anchor links (accessibility only, NO route refactor). Single-page tab architecture preserved; route refactor deferred to September.
+
+Work Log:
+- Read /home/z/my-project/worklog.md (prior context) + located navigation components: src/components/Navigation.tsx (sidebar + mobile bottom nav), src/components/TopHeader.tsx (theme toggle), src/app/page.tsx (activeTab state + main-content-wrapper)
+- Confirmed the 3 earlier P0 tasks were ALREADY completed in prior work: layout.tsx uses getSiteUrl() for dynamic og:url/og:image/JSON-LD; /public/icon.svg + /public/apple-touch-icon.png exist (local Fan Pulse bolt icon); globals.css has @keyframes fadeInUp + .main-content-wrapper animation with prefers-reduced-motion guard
+- Navigation.tsx: added `import Link from 'next/link'`; added `href` field to tabs array (#home, #sentiments, #world-cup, #transfers — kebab-case slug for worldcup)
+- Sidebar nav: converted <button> → <Link href={tab.href}> keeping onClick={() => onTabChange(tab.id)} for instant in-memory tab switch; added aria-current={isActive ? 'page' : undefined}; preserved existing purple active styling (text-[#6C2BD9] dark:text-[#8B5CF6] font-bold); added role="navigation" + aria-label="Main navigation" to <nav>
+- Mobile bottom nav: same <button>→<Link> conversion + aria-current + role/aria-label; made active label font-bold (was font-semibold) to satisfy "purple + bold" active styling requirement
+- WC 2026 Complete widget award labels: Ball→Golden Ball, Boot→Golden Boot, Glove→Golden Glove, Young→Best Young; restructured each cell so name span gets min-w-0 flex-1 truncate (graceful clip) and award label span is shrink-0 whitespace-nowrap (always fully readable)
+- TopHeader.tsx: added aria-label="Toggle dark mode" to the theme toggle <Button>
+- Ran `bun run lint` → clean, no errors
+- Browser-verified (agent-browser, desktop 1280×800 + mobile 390×800):
+  * Both <nav> elements have role="navigation" + aria-label="Main navigation"
+  * All 4 sidebar links render as <a href="#home/#sentiments/#world-cup/#transfers">; active HOME link has aria-current="page"
+  * Zero <button> elements remain inside <nav> (navButtonsStillInNav = 0)
+  * Award labels confirmed: "🥇RodriGolden Ball", "⚽MbappéGolden Boot", "🧤U. SimónGolden Glove", "🌱CubarsíBest Young"
+  * Theme toggle has aria-label="Toggle dark mode"
+  * Clicked SENTIMENTS → active link became SENTIMENTS (aria-current=page), URL → /#sentiments, header title → "Sentiments Hub", SentimentsTab rendered
+  * Clicked TRANSFERS → active link TRANSFERS, URL → /#transfers, transfer content rendered
+  * Mobile viewport: bottom nav visible (fixed, 390×59px), all 4 anchor links present, active TRANSFERS link shows aria-current="page"
+  * dev.log: no hydration mismatches, no compile errors, GET / 200 OK throughout
+
+Stage Summary:
+- All 5 sub-tasks completed and browser-verified. Navigation is now semantically correct Next.js <Link> anchor links with proper aria-current="page" on the active tab, accessible nav landmarks (role + aria-label), an accessible theme toggle (aria-label), and full WC 2026 award names (Golden Ball/Boot/Glove, Best Young).
+- The single-page tab architecture is preserved (onClick still drives activeTab state for instant switching); the href anchor links add URL-hash shareability + screen-reader/keyboard semantics. No route pages created (route refactor deferred to September as instructed).
+- Files changed: src/components/Navigation.tsx, src/components/TopHeader.tsx
+- Lint clean; dev server healthy; no regressions.

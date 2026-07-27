@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useLanguage } from '@/context/LanguageContext'
 import { Home, Activity, Globe, Zap, ArrowLeftRight, Trophy } from 'lucide-react'
 
@@ -10,11 +11,16 @@ interface NavigationProps {
   onTabChange: (tab: TabId) => void
 }
 
-const tabs: { id: TabId; icon: typeof Home; labelKey: string; isNew?: boolean }[] = [
-  { id: 'home', icon: Home, labelKey: 'nav.home' },
-  { id: 'sentiments', icon: Activity, labelKey: 'nav.sentiments' },
-  { id: 'worldcup', icon: Globe, labelKey: 'nav.worldcup' },
-  { id: 'transfers', icon: ArrowLeftRight, labelKey: 'nav.transfers', isNew: true },
+// Each tab maps to an in-page anchor link (href="#…"). The hash uses a
+// kebab-case slug (e.g. worldcup → #world-cup) for readable, shareable URLs.
+// The route refactor to real /pages is deferred to September — for now these
+// are same-page anchors that preserve the single-page tab architecture while
+// giving screen-reader + keyboard users proper <a> semantics + aria-current.
+const tabs: { id: TabId; icon: typeof Home; labelKey: string; href: string; isNew?: boolean }[] = [
+  { id: 'home', icon: Home, labelKey: 'nav.home', href: '#home' },
+  { id: 'sentiments', icon: Activity, labelKey: 'nav.sentiments', href: '#sentiments' },
+  { id: 'worldcup', icon: Globe, labelKey: 'nav.worldcup', href: '#world-cup' },
+  { id: 'transfers', icon: ArrowLeftRight, labelKey: 'nav.transfers', href: '#transfers', isNew: true },
 ]
 
 export default function Navigation({ activeTab, onTabChange }: NavigationProps) {
@@ -44,16 +50,21 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
             </p>
           </div>
 
-          {/* Nav items */}
-          <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto scrollbar-none">
+          {/* Nav items — rendered as Next.js <Link> anchor links (#home, #sentiments,
+              #world-cup, #transfers) for proper routing semantics + accessibility.
+              onClick still drives the in-memory activeTab state so the tab switches
+              instantly; the href updates the URL hash for shareability + aria-current. */}
+          <nav role="navigation" aria-label="Main navigation" className="flex-1 px-3 space-y-0.5 overflow-y-auto scrollbar-none">
             {tabs.map((tab) => {
               const isActive = activeTab === tab.id
               const Icon = tab.icon
 
               return (
-                <button
+                <Link
                   key={tab.id}
+                  href={tab.href}
                   onClick={() => onTabChange(tab.id)}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`
                     sidebar-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium
                     ${isActive
@@ -69,7 +80,7 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                       NEW
                     </span>
                   )}
-                </button>
+                </Link>
               )
             })}
           </nav>
@@ -91,27 +102,29 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                   </p>
                 </div>
               </div>
-              {/* Individual awards strip */}
+              {/* Individual awards strip — full award names (Golden Ball / Boot /
+                  Glove, Best Young). Names truncate gracefully (min-w-0 flex-1) so
+                  the award label is always fully readable. */}
               <div className="mt-2.5 grid grid-cols-2 gap-1 text-[9px]">
                 <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
                   <span className="shrink-0">🥇</span>
-                  <span className="font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Rodri</span>
-                  <span className="text-[#999] dark:text-gray-500 truncate">Ball</span>
+                  <span className="min-w-0 flex-1 font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Rodri</span>
+                  <span className="shrink-0 whitespace-nowrap text-[#999] dark:text-gray-500">Golden Ball</span>
                 </div>
                 <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
                   <span className="shrink-0">⚽</span>
-                  <span className="font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Mbappé</span>
-                  <span className="text-[#999] dark:text-gray-500 truncate">Boot</span>
+                  <span className="min-w-0 flex-1 font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Mbappé</span>
+                  <span className="shrink-0 whitespace-nowrap text-[#999] dark:text-gray-500">Golden Boot</span>
                 </div>
                 <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
                   <span className="shrink-0">🧤</span>
-                  <span className="font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">U. Simón</span>
-                  <span className="text-[#999] dark:text-gray-500 truncate">Glove</span>
+                  <span className="min-w-0 flex-1 font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">U. Simón</span>
+                  <span className="shrink-0 whitespace-nowrap text-[#999] dark:text-gray-500">Golden Glove</span>
                 </div>
                 <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
                   <span className="shrink-0">🌱</span>
-                  <span className="font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Cubarsí</span>
-                  <span className="text-[#999] dark:text-gray-500 truncate">Young</span>
+                  <span className="min-w-0 flex-1 font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Cubarsí</span>
+                  <span className="shrink-0 whitespace-nowrap text-[#999] dark:text-gray-500">Best Young</span>
                 </div>
               </div>
             </div>
@@ -120,16 +133,18 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
       </aside>
 
       {/* ── Mobile Bottom Tab Bar ────────────────────────────── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#2D2D2D] border-t border-[#E0E0E0] dark:border-white/10 safe-area-bottom">
+      <nav role="navigation" aria-label="Main navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#2D2D2D] border-t border-[#E0E0E0] dark:border-white/10 safe-area-bottom">
         <div className="flex items-center justify-around py-1.5 px-1">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id
             const Icon = tab.icon
 
             return (
-              <button
+              <Link
                 key={tab.id}
+                href={tab.href}
                 onClick={() => onTabChange(tab.id)}
+                aria-current={isActive ? 'page' : undefined}
                 className={`
                   relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg min-w-[48px]
                   transition-colors duration-200
@@ -145,11 +160,11 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                     <span className="absolute -top-1 -right-1.5 size-1.5 rounded-full bg-[#6C2BD9]" />
                   )}
                 </div>
-                <span className="text-[9px] font-semibold">{t(tab.labelKey)}</span>
+                <span className={`text-[9px] ${isActive ? 'font-bold' : 'font-semibold'}`}>{t(tab.labelKey)}</span>
                 {isActive && (
                   <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-0.5 w-4 rounded-full bg-[#6C2BD9] dark:bg-[#8B5CF6]" />
                 )}
-              </button>
+              </Link>
             )
           })}
         </div>

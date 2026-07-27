@@ -37,6 +37,7 @@ export default function TopHeader({ activeTab }: TopHeaderProps) {
             variant="ghost"
             size="icon"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label="Toggle dark mode"
             className="size-8 text-[#666] dark:text-gray-400 hover:text-[#1A1A1A] dark:hover:text-white"
           >
             {theme === 'dark' ? (
