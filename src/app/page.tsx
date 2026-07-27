@@ -2649,9 +2649,32 @@ export default function Home() {
           </main>
 
           {/* Desktop footer — sticky to bottom via mt-auto in the flex-col.
-              Hidden on mobile where the fixed bottom nav serves as the footer. */}
-          <footer className="hidden md:block mt-auto border-t border-[#E0E0E0] dark:border-white/10 px-4 py-3 text-center text-[11px] text-[#666] dark:text-[#999]">
-            Fan Pulse © 2026 · World Cup 2026 Real-Time Fan Sentiment Dashboard
+              Hidden on mobile where the fixed bottom nav serves as the footer.
+              Includes text links for About · Privacy · GitHub (placeholder # for now). */}
+          <footer className="hidden md:flex mt-auto border-t border-[#E0E0E0] dark:border-white/10 px-4 py-3 items-center justify-between text-[11px] text-[#666] dark:text-[#999]">
+            <span>Fan Pulse © 2026 · World Cup 2026 Real-Time Fan Sentiment Dashboard</span>
+            <nav aria-label="Footer" className="flex items-center gap-1">
+              <a
+                href="#"
+                className="px-2 py-0.5 rounded hover:text-[#6C2BD9] dark:hover:text-[#8B5CF6] transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+              >
+                About
+              </a>
+              <span aria-hidden="true" className="text-[#E0E0E0] dark:text-white/20">·</span>
+              <a
+                href="#"
+                className="px-2 py-0.5 rounded hover:text-[#6C2BD9] dark:hover:text-[#8B5CF6] transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+              >
+                Privacy
+              </a>
+              <span aria-hidden="true" className="text-[#E0E0E0] dark:text-white/20">·</span>
+              <a
+                href="#"
+                className="px-2 py-0.5 rounded hover:text-[#6C2BD9] dark:hover:text-[#8B5CF6] transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+              >
+                GitHub
+              </a>
+            </nav>
           </footer>
         </div>
       </div>

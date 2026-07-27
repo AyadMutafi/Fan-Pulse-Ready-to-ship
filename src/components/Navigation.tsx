@@ -63,6 +63,7 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                 <Link
                   key={tab.id}
                   href={tab.href}
+                  prefetch={true}
                   onClick={() => onTabChange(tab.id)}
                   aria-current={isActive ? 'page' : undefined}
                   className={`
@@ -143,6 +144,7 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
               <Link
                 key={tab.id}
                 href={tab.href}
+                prefetch={true}
                 onClick={() => onTabChange(tab.id)}
                 aria-current={isActive ? 'page' : undefined}
                 className={`

@@ -7,14 +7,18 @@ import { getDisplayUrl } from '@/lib/site-url'
 // two distinct designs. Twitter crops to 2:1, so the URL pill stays inside
 // the safe area (centered horizontally, lower-third vertically).
 //
+// PERFORMANCE: Same simplifications as opengraph-image.tsx — solid-color
+// headline (no backgroundClip:text gradient), nodejs runtime + revalidate=3600
+// for ISR caching. See opengraph-image.tsx for full perf notes.
+//
 // DYNAMIC URL: the site URL is resolved via @/lib/site-url, which checks
 // NEXT_PUBLIC_APP_URL → NEXT_PUBLIC_SITE_URL → fallback. This ensures the
 // URL baked into the image always matches the actual deployment domain.
 
-export const runtime = 'edge'
 export const alt = 'Fan Pulse — Real-Time Fan Sentiment for World Cup 2026'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
+export const revalidate = 3600
 
 export default async function TwitterImage() {
   const displayUrl = getDisplayUrl()
@@ -29,11 +33,10 @@ export default async function TwitterImage() {
           flexDirection: 'column',
           background: 'linear-gradient(135deg, #6C2BD9 0%, #1A1A1A 55%, #10B981 100%)',
           fontFamily: 'sans-serif',
-          position: 'relative',
           padding: '60px',
         }}
       >
-        {/* ── Top: Brand ── */}
+        {/* ── Top: Brand row ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{
             width: '56px',
@@ -64,7 +67,7 @@ export default async function TwitterImage() {
           }}>World Cup 2026</div>
         </div>
 
-        {/* ── Center: Hero headline ── */}
+        {/* ── Center: Hero headline (solid white — no gradient text for speed) ── */}
         <div style={{
           display: 'flex',
           flexDirection: 'column',
@@ -78,23 +81,7 @@ export default async function TwitterImage() {
             fontWeight: 900,
             letterSpacing: '-3px',
             lineHeight: 1,
-          }}>Real-Time</div>
-          <div style={{
-            color: 'white',
-            fontSize: '84px',
-            fontWeight: 900,
-            letterSpacing: '-3px',
-            lineHeight: 1,
-            display: 'flex',
-          }}>
-            <span>Fan&nbsp;</span>
-            <span style={{
-              background: 'linear-gradient(90deg, #10B981, #FF6B35)',
-              backgroundClip: 'text',
-              color: 'transparent',
-              WebkitBackgroundClip: 'text',
-            }}>Sentiment</span>
-          </div>
+          }}>Real-Time Fan Sentiment</div>
           <div style={{
             color: 'rgba(255,255,255,0.85)',
             fontSize: '26px',
@@ -121,7 +108,7 @@ export default async function TwitterImage() {
             width: '44px',
             height: '44px',
             borderRadius: '12px',
-            background: 'linear-gradient(135deg, #6C2BD9, #10B981)',
+            background: '#6C2BD9',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

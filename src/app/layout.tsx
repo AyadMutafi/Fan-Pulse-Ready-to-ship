@@ -10,11 +10,17 @@ import "./globals.css";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  // font-display: swap prevents FOIT (flash of invisible text) — text renders
+  // immediately with a system fallback, then swaps to Geist once loaded.
+  // This is the recommended setting for body/UI fonts where readability
+  // matters more than avoiding FOUT (flash of unstyled text).
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 // ── SEO + Social sharing metadata ────────────────────────────────────────────

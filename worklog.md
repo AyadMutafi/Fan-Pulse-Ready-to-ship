@@ -4322,3 +4322,40 @@ Stage Summary:
 - Caught and fixed a dark-mode regression where standalone #999→#6B7280 conversions (no dark variant) would have failed AA in dark mode — added dark:text-gray-400 to 11 occurrences across 6 files.
 - Files changed (foundation + regression fix by main agent): src/app/globals.css, src/components/ui/skeleton.tsx, src/components/Navigation.tsx, src/components/TransferPulseCard.tsx, src/components/TransferSagaDetail.tsx, src/components/FanTalkPanel.tsx, src/components/tabs/TransfersTab.tsx, src/components/tabs/WorldCupTab.tsx, src/components/pulse/PulseScoreRing.tsx. Plus 21 component files edited by subagents (page.tsx, all tabs, pulse/*, pitch/*, common/*, admin/feed-monitor, transfer components, FanTalkPanel).
 - Intentional keeps (documented by subagents): live-status indicator dots retain animate-pulse (functional liveness, not loaders); footer dark:text-[#999] (#999 on dark passes AA); compact 10px badges/eyebrows/timestamps/unit-suffixes per the "keep for badges/labels" rule; SVG fill-#999 (different prefix, out of scope); shadcn Button focus rings left untouched (already accessible).
+
+---
+Task ID: day-11-perf-seo
+Agent: Main Agent
+Task: Day 11 Performance & SEO optimization for Fan Pulse — (1) OG image < 3s response, (2) prefetch nav Links, (3) Geist font-display: swap, (4) desktop footer link section (About · Privacy · GitHub).
+
+Work Log:
+- Read worklog tail + examined current state of: src/app/opengraph-image.tsx, src/app/twitter-image.tsx, src/components/Navigation.tsx, src/app/layout.tsx, src/app/page.tsx (footer at line 2653), src/lib/site-url.ts.
+- Task 1 (OG image optimization): Both opengraph-image.tsx and twitter-image.tsx used `next/og` ImageResponse with `runtime = 'edge'` and a complex design featuring `backgroundClip: 'text'` gradient text (the single slowest Satori operation). Rewrote BOTH files:
+  - Removed `export const runtime = 'edge'` → now uses default Node.js runtime (enables ISR).
+  - Removed the `backgroundClip: 'text'` + `WebkitBackgroundClip: 'text'` + `color: 'transparent'` gradient text on "Sentiment" — replaced with a single solid-white "Real-Time Fan Sentiment" headline line. This eliminates the slowest Satori rendering step.
+  - Replaced the nested two-line headline (`<div>Real-Time</div>` + `<div>Fan <span gradient>Sentiment</span></div>`) with a single `<div>Real-Time Fan Sentiment</div>` — reduces nested flex containers from 6 → 3 levels.
+  - Simplified the URL-pill F-icon background from `linear-gradient(135deg, #6C2BD9, #10B981)` to solid `#6C2BD9`.
+  - Added `export const revalidate = 3600` — ISR caches the rendered PNG for 1 hour. First request renders (~1.5s), subsequent requests serve the cached PNG instantly (~0.6s), background regeneration after 1 hour keeps the baked-in URL fresh.
+  - Preserved: dynamic URL via `getDisplayUrl()`, gradient background, brand row, subtitle, URL CTA pill.
+- Task 2 (prefetch navigation): Added `prefetch={true}` to all 8 `<Link>` components in Navigation.tsx — 4 sidebar links + 4 mobile bottom-nav links. The hrefs are in-page anchors (`#home`, `#sentiments`, `#world-cup`, `#transfers`) so prefetch is effectively a no-op for same-page hash links (the current page's RSC payload is already loaded), but it signals intent and will activate real route prefetching once the September route refactor lands.
+- Task 3 (font optimization): Added explicit `display: "swap"` to both `Geist` and `Geist_Mono` font configs in layout.tsx. `next/font/google` defaults to `display: 'swap'` but adding it explicitly confirms the setting and prevents FOIT (flash of invisible text) — text renders immediately with a system fallback, then swaps to Geist once loaded. Verified via browser eval: the generated `@font-face` rule for `__nextjs-Geist` contains `font-display: swap`.
+- Task 4 (desktop footer link section): Restructured the footer in page.tsx from a centered single-line `<footer>` to a flex layout (`hidden md:flex ... items-center justify-between`):
+  - Left: existing copyright text "Fan Pulse © 2026 · World Cup 2026 Real-Time Fan Sentiment Dashboard"
+  - Right: `<nav aria-label="Footer">` with three `<a href="#">` links: About · Privacy · GitHub, separated by `·` dots (with `aria-hidden="true"` on the separators). Each link has `hover:text-[#6C2BD9]` + `transition-colors` + `focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2` (consistent with the WCAG AA focus-ring standard established in the prior task).
+- VERIFICATION (agent-browser, desktop 1280×800):
+  - Lint: `bun run lint` clean (0 errors).
+  - Dev log: compiled successfully (✓ Compiled in 229ms/231ms/249ms/483ms/369ms), GET / 200 OK, no compile/hydration/runtime errors from the changes. (Pre-existing Z.ai 429 rate-limit errors from background feed-scan are unrelated.)
+  - OG image response time: first request 1.55s, second request (ISR-cached) 0.65s — both well under the 3-second target. twitter-image: 0.67s. Image size ~341KB PNG.
+  - Font: `@font-face { font-family: __nextjs-Geist; ... font-display: swap; ... }` confirmed in CSSOM.
+  - Footer: visible at bottom of viewport (bottom=800, innerHeight=800 — sticky). innerText = "Fan Pulse © 2026 · World Cup 2026 Real-Time Fan Sentiment Dashboard\nAbout\n·\nPrivacy\n·\nGitHub". All 3 links have href="#".
+  - Nav clicks: clicked "World Cup" → hash updated to #world-cup ✓; clicked "Transfers" → hash updated to #transfers ✓. Tab switching works with prefetch={true}.
+  - Console: no errors, no warnings (only HMR + Fast Refresh info logs).
+  - Page errors: none.
+
+Stage Summary:
+- All 4 Day 11 tasks complete and browser-verified.
+- OG image performance: removed backgroundClip:text gradient (slowest Satori op) + added ISR caching (revalidate=3600) → 1.55s first render, 0.65s cached, both under 3s. Both opengraph-image.tsx and twitter-image.tsx simplified identically.
+- Nav prefetch: prefetch={true} on all 8 nav Links (4 sidebar + 4 mobile).
+- Font: display="swap" explicitly set on both Geist + Geist_Mono — verified in CSSOM.
+- Footer: restructured to flex layout with copyright (left) + About · Privacy · GitHub links (right), each with hover + focus-visible ring styling.
+- Files changed: src/app/opengraph-image.tsx, src/app/twitter-image.tsx, src/components/Navigation.tsx, src/app/layout.tsx, src/app/page.tsx.
