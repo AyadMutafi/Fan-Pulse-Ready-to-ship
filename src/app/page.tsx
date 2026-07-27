@@ -262,6 +262,41 @@ interface TransferTweet {
   sentimentLabel: 'positive' | 'neutral' | 'negative'
 }
 
+// ── Transfer Saga summary (from /api/transfers) ──────────────────────────────
+// Used for the "Latest Transfer Tweets" section which now shows top transfer
+// sagas (with fan breakdown: excitedPct / skepticalPct / dreadingPct) instead
+// of raw tweets. Sagas are richer — they aggregate Tier 1 journalist posts +
+// fan sentiment into a single "buzz" card with a curiosity-gap reveal.
+interface TransferSagaSummary {
+  id: string
+  playerName: string
+  playerNationCode: string
+  fromClubCode: string
+  fromClubName: string
+  toClubCode: string
+  toClubName: string
+  status: string
+  feeReported: string
+  tier1Count: number
+  fanReadLikelihood: number
+  buzzVolume: number
+  buzzTrend: string
+  excitedPct: number
+  skepticalPct: number
+  dreadingPct: number
+  avgSentiment: number
+  firstReportedAt: string
+  lastUpdatedAt: string
+  topSources: {
+    journalistName: string
+    journalistHandle: string
+    outlet: string
+    url: string | null
+    headline: string
+    reportedAt: string
+  }[]
+}
+
 function HomeTab() {
   const { t } = useLanguage()
   const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('WC')
@@ -277,6 +312,13 @@ function HomeTab() {
   const [showAllBallonDor, setShowAllBallonDor] = useState(false)
   const [transferTweets, setTransferTweets] = useState<TransferTweet[]>([])
   const [tweetsLoading, setTweetsLoading] = useState(true)
+
+  // ── Transfer Sagas state (for the curiosity-gap transfer cards) ──
+  const [transferSagas, setTransferSagas] = useState<TransferSagaSummary[]>([])
+  const [sagasLoading, setSagasLoading] = useState(true)
+  // Track which saga cards have their fan breakdown revealed (curiosity gap).
+  // Stored as a Set of saga IDs — click "See Fan Reaction" to add the ID.
+  const [revealedSagas, setRevealedSagas] = useState<Set<string>>(new Set())
 
   // Fan vote state
   const [sessionId, setSessionId] = useState<string>('')
@@ -418,6 +460,30 @@ function HomeTab() {
     return () => { cancelled = true }
   }, [])
 
+  // ── Fetch top transfer sagas (for the curiosity-gap transfer cards) ──
+  // Sorted by buzzVolume desc server-side. We show the top 6 active sagas.
+  useEffect(() => {
+    let cancelled = false
+    async function loadSagas() {
+      setSagasLoading(true)
+      try {
+        const res = await fetch('/api/transfers?limit=6&status=active')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        if (data && Array.isArray(data.sagas)) {
+          setTransferSagas(data.sagas as TransferSagaSummary[])
+        }
+      } catch (err) {
+        console.error('Failed to fetch transfer sagas:', err)
+      } finally {
+        if (!cancelled) setSagasLoading(false)
+      }
+    }
+    loadSagas()
+    return () => { cancelled = true }
+  }, [])
+
   const totalVoteCount = fanVotes.reduce((sum, v) => sum + (v.count || 0), 0)
 
   const handleVote = async (teamCode: string, score: number) => {
@@ -490,6 +556,65 @@ function HomeTab() {
     ? Math.max(0, ballonDor.contenders.length - 8)
     : 0
 
+  // ── Hero Narrative: the single most significant data point of the day ──
+  // Picks the highest-impact story to surface at the top of the page:
+  //   1. If there's a transfer saga with buzzVolume >= 5, lead with that
+  //      (the hottest transfer rumor driving fan conversation).
+  //   2. Else if a team's fan mood has dropped below 40 (restless fans),
+  //      lead with the sentiment-drop story.
+  //   3. Else if there's any saga at all, lead with the top one.
+  //   4. Else null (banner doesn't render).
+  const heroNarrative = useMemo(() => {
+    const topSaga = transferSagas[0] // already sorted by buzzVolume desc
+    const lowestMood = [...fanVotes].sort((a, b) => a.score - b.score)[0]
+
+    if (topSaga && topSaga.buzzVolume >= 5) {
+      return {
+        type: 'transfer' as const,
+        headline: `${topSaga.playerName} → ${topSaga.toClubName}`,
+        subtext: `${topSaga.buzzVolume} fan posts · ${topSaga.tier1Count} Tier 1 ${topSaga.tier1Count === 1 ? 'source' : 'sources'}`,
+        trend: topSaga.buzzTrend,
+        isPositive: topSaga.excitedPct >= topSaga.dreadingPct,
+        badge: 'HOT TRANSFER',
+      }
+    }
+    if (lowestMood && lowestMood.score < 40 && lowestMood.count > 0) {
+      const team = NATIONAL_TEAMS.find(t => t.code === lowestMood.teamCode)
+      return {
+        type: 'sentiment' as const,
+        headline: `${team?.name ?? lowestMood.teamCode} fans are restless`,
+        subtext: `Fan mood dropped to ${lowestMood.score}/100 · ${lowestMood.count} ${lowestMood.count === 1 ? 'vote' : 'votes'} cast`,
+        trend: 'falling',
+        isPositive: false,
+        badge: 'MOOD ALERT',
+      }
+    }
+    if (topSaga) {
+      return {
+        type: 'transfer' as const,
+        headline: `${topSaga.playerName} → ${topSaga.toClubName}`,
+        subtext: `${topSaga.buzzVolume} fan posts · ${topSaga.tier1Count} Tier 1 ${topSaga.tier1Count === 1 ? 'source' : 'sources'}`,
+        trend: topSaga.buzzTrend,
+        isPositive: topSaga.excitedPct >= topSaga.dreadingPct,
+        badge: 'TRANSFER BUZZ',
+      }
+    }
+    return null
+  }, [transferSagas, fanVotes])
+
+  // ── Curiosity gap: toggle fan-breakdown reveal on a saga card ──
+  function toggleSagaReveal(sagaId: string) {
+    setRevealedSagas(prev => {
+      const next = new Set(prev)
+      if (next.has(sagaId)) {
+        next.delete(sagaId)
+      } else {
+        next.add(sagaId)
+      }
+      return next
+    })
+  }
+
   // ── Transfer Tweets: relative-time formatter ──
   function formatRelativeTime(iso: string | null): string {
     if (!iso) return 'recently'
@@ -536,123 +661,87 @@ function HomeTab() {
   return (
     <div className="space-y-8">
       {/* ════════════════════════════════════════════════════════════════════
-          SECTION A — MATCH SENTIMENTS
-          Horizontal scrollable row of match cards (mobile) / grid (desktop).
+          POSITION 1 — HERO NARRATIVE BANNER
+          Full-width compact banner surfacing the single most significant data
+          point of the day: the hottest transfer saga (by buzzVolume) OR the
+          team with the biggest sentiment drop. Subtle gradient bg + bold
+          headline + red/green trend arrow.
           ════════════════════════════════════════════════════════════════════ */}
-      <section>
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-[#6C2BD9]/10 dark:bg-[#8B5CF6]/15">
-              <Activity className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+      {heroNarrative && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className={`relative overflow-hidden rounded-2xl border p-4 sm:p-5 ${
+            heroNarrative.isPositive
+              ? 'bg-gradient-to-r from-[#10B981]/8 via-white dark:via-[#1A1A1A] to-[#10B981]/5 border-[#10B981]/20 dark:border-[#10B981]/25'
+              : 'bg-gradient-to-r from-[#EF4444]/8 via-white dark:via-[#1A1A1A] to-[#FF6B35]/5 border-[#EF4444]/20 dark:border-[#EF4444]/25'
+          }`}
+        >
+          {/* Decorative glow */}
+          <div className={`absolute -right-6 -top-6 size-24 rounded-full blur-3xl ${
+            heroNarrative.isPositive ? 'bg-[#10B981]/8' : 'bg-[#EF4444]/8'
+          }`} />
+
+          <div className="relative flex items-center gap-3 sm:gap-4">
+            {/* Trend arrow icon */}
+            <div className={`flex size-11 sm:size-12 shrink-0 items-center justify-center rounded-xl ${
+              heroNarrative.isPositive
+                ? 'bg-[#10B981]/15 text-[#10B981]'
+                : 'bg-[#EF4444]/15 text-[#EF4444]'
+            }`}>
+              {heroNarrative.isPositive
+                ? <TrendingUp className="size-6" />
+                : <TrendingDown className="size-6" />}
             </div>
-            <div>
-              <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white">
-                Match Sentiments
+
+            {/* Headline + subtext */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
+                  heroNarrative.isPositive
+                    ? 'bg-[#10B981]/15 text-[#10B981]'
+                    : 'bg-[#EF4444]/15 text-[#EF4444]'
+                }`}>
+                  <Flame className="size-2.5" />
+                  {heroNarrative.badge}
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-black tracking-tight text-[#1A1A1A] dark:text-white leading-tight truncate">
+                {heroNarrative.headline}
               </h2>
-              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
-                Fan reactions from recent matches
+              <p className="text-[11px] sm:text-xs text-[#666] dark:text-[#CCCCCC] truncate">
+                {heroNarrative.subtext}
               </p>
             </div>
-          </div>
-          <div className="flex gap-1.5 shrink-0">
-            {(['WC', 'ALL'] as const).map((filter) => (
-              <button
-                key={filter}
-                onClick={() => setMatchFilter(filter)}
-                className={`
-                  rounded-full px-3 py-1.5 text-[10px] font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
-                  ${matchFilter === filter
-                    ? 'bg-[#6C2BD9] text-white shadow-sm'
-                    : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10'
-                  }
-                `}
-              >
-                {filter === 'ALL' ? '⚽ All' : '🏆 World Cup'}
-              </button>
-            ))}
-          </div>
-        </div>
 
-        {/* Horizontal scroll on mobile, grid on desktop. Cards ~280px wide. */}
-        {filteredMatches.length === 0 ? (
-          <Card className="border-[#E0E0E0]/50 dark:border-white/5">
-            <CardContent className="py-10 text-center">
-              <Clock className="mx-auto size-7 text-[#666]/30 dark:text-[#CCCCCC]/30 mb-2" />
-              <p className="text-sm text-[#666] dark:text-[#CCCCCC]">No matches available — check back soon.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="flex gap-3 overflow-x-auto scrollbar-none snap-x snap-mandatory pb-2 -mx-1 px-1 md:grid md:grid-cols-2 md:overflow-visible md:snap-none lg:grid-cols-3">
-            {filteredMatches.slice(0, 9).map((match, i) => (
-              <motion.div
-                key={match.id}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, delay: i * 0.05 }}
-                className="shrink-0 snap-start w-[280px] md:w-auto"
-              >
-                <Card className="card-hover h-full border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <FlagImage nationCode={match.home} size={26} fallbackEmoji={match.homeFlag} />
-                        <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.home}</span>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <span className="text-lg font-black tracking-wider text-[#1A1A1A] dark:text-white">{match.score}</span>
-                        {match.live && <LiveBadge />}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.away}</span>
-                        <FlagImage nationCode={match.away} size={26} fallbackEmoji={match.awayFlag} />
-                      </div>
-                    </div>
-                    {/* League badge */}
-                    <div className="mt-2">
-                      <Badge variant="outline" className={`text-[8px] font-bold px-1.5 py-0 ${
-                        match.league === 'Friendly'
-                          ? 'border-[#FF6B35]/30 text-[#FF6B35]'
-                          : 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]'
-                      }`}>
-                        {match.league}
-                      </Badge>
-                    </div>
-                    {/* Fan Mood — Emoji Only with team flags */}
-                    <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2.5">
-                      <div className="flex items-center gap-1.5" title={`${match.home} fan mood`}>
-                        <FlagImage nationCode={match.home} size={20} fallbackEmoji={match.homeFlag} />
-                        <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.homeSentiment)}`}>
-                          {getFanMoodEmoji(match.homeSentiment)}
-                        </span>
-                      </div>
-                      <span className="text-[11px] font-bold uppercase tracking-widest text-[#6B7280] dark:text-gray-400">
-                        {t('home.fan_mood')}
-                      </span>
-                      <div className="flex items-center gap-1.5" title={`${match.away} fan mood`}>
-                        <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.awaySentiment)}`}>
-                          {getFanMoodEmoji(match.awaySentiment)}
-                        </span>
-                        <FlagImage nationCode={match.away} size={20} fallbackEmoji={match.awayFlag} />
-                      </div>
-                    </div>
-                    {/* What Fans Are Saying — collapsible real-time fan posts panel */}
-                    <FanTalkPanel
-                      teamCodes={[match.home, match.away]}
-                      matchLabel={`${match.home} vs ${match.away}`}
-                      matchId={match.id}
-                    />
-                    <div className="mt-3 flex items-center">
-                      <SharePulseButton className="flex-1" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+            {/* Trend label pill (right side) */}
+            <div className={`hidden sm:flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold ${
+              heroNarrative.isPositive
+                ? 'bg-[#10B981]/10 text-[#10B981]'
+                : 'bg-[#EF4444]/10 text-[#EF4444]'
+            }`}>
+              {heroNarrative.isPositive ? (
+                <>
+                  <TrendingUp className="size-3.5" />
+                  Rising
+                </>
+              ) : (
+                <>
+                  <TrendingDown className="size-3.5" />
+                  Falling
+                </>
+              )}
+            </div>
           </div>
-        )}
-      </section>
+        </motion.div>
+      )}
 
-      {/* ═══ Fan Mood sub-section (moved below Match Sentiments) ═══ */}
+      {/* ════════════════════════════════════════════════════════════════════
+          POSITION 2 — FAN MOOD (voting carousel)
+          Moved up so the interactive voting is the first thing users engage
+          with after the hero banner.
+          ════════════════════════════════════════════════════════════════════ */}
       <section>
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -762,209 +851,409 @@ function HomeTab() {
       </section>
 
       {/* ════════════════════════════════════════════════════════════════════
-          SECTIONS B + C — side-by-side on desktop (lg:grid-cols-2)
+          POSITION 3 — MATCH SENTIMENTS
+          Horizontal scrollable row of match cards (mobile) / grid (desktop).
+          Includes a green pulsing "Live Pulse" dot next to the header.
           ════════════════════════════════════════════════════════════════════ */}
-      <div className="grid gap-6 lg:grid-cols-2">
-
-        {/* ═══ SECTION B — BALLON D'OR RACE ═══ */}
-        <section>
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-[#F59E0B]/15">
-              <Trophy className="size-4 text-[#F59E0B]" />
+      <section>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-[#6C2BD9]/10 dark:bg-[#8B5CF6]/15">
+              <Activity className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
             </div>
             <div>
-              <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white">
-                {ballonDor?.framing.title ?? "Ballon d'Or Race"}
+              <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white flex items-center gap-1.5">
+                Match Sentiments
+                {/* Live Pulse indicator — green pulsing dot */}
+                <span
+                  aria-label="Live"
+                  className="inline-block size-2 rounded-full bg-[#10B981] animate-live-pulse shadow-[0_0_6px_#10B981]"
+                />
               </h2>
               <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
-                {ballonDor?.framing.subtitle ?? 'Who fans think should win — not a forecast of the actual award'}
+                Fan reactions from recent matches
               </p>
             </div>
           </div>
+          <div className="flex gap-1.5 shrink-0">
+            {(['WC', 'ALL'] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setMatchFilter(filter)}
+                className={`
+                  rounded-full px-3 py-1.5 text-[10px] font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
+                  ${matchFilter === filter
+                    ? 'bg-[#6C2BD9] text-white shadow-sm'
+                    : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10'
+                  }
+                `}
+              >
+                {filter === 'ALL' ? '⚽ All' : '🏆 World Cup'}
+              </button>
+            ))}
+          </div>
+        </div>
 
-          <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
-            <CardContent className="p-4">
-              {/* Movement highlights */}
-              {ballonDor && (ballonDor.movers.biggestRiser || ballonDor.movers.biggestFaller) && (
-                <div className="mb-3 flex flex-wrap gap-2 text-[10px] font-semibold">
-                  {ballonDor.movers.biggestRiser && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#10B981]/10 px-2 py-1 text-[#10B981]">
-                      📈 Biggest riser: {ballonDor.movers.biggestRiser.name} ↑
-                    </span>
-                  )}
-                  {ballonDor.movers.biggestFaller && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#EF4444]/10 px-2 py-1 text-[#EF4444]">
-                      📉 Biggest faller: {ballonDor.movers.biggestFaller.name} ↓
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Ranked table */}
-              {ballonDorLoading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="h-10 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
-                  ))}
-                </div>
-              ) : ballonDorVisible.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
-                  Ballon d'Or data unavailable — check back soon.
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {ballonDorVisible.map((c, i) => {
-                    const rank = i + 1
-                    const isTop3 = rank <= 3
-                    return (
-                      <motion.div
-                        key={c.name}
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.25, delay: i * 0.04 }}
-                        title={c.verifiedMatchFact}
-                        className={`
-                          flex items-center gap-2 rounded-lg px-2 py-2 transition-colors
-                          ${isTop3 ? 'bg-[#F59E0B]/5 dark:bg-[#F59E0B]/10' : 'hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D]'}
-                        `}
-                      >
-                        {/* Rank */}
-                        <span className={`w-5 text-center text-xs font-black ${isTop3 ? 'text-[#F59E0B]' : 'text-[#6B7280] dark:text-gray-400'}`}>
-                          {rank}
-                        </span>
-                        {/* Flag */}
-                        <FlagImage nationCode={c.nationCode} size={18} fallbackEmoji="" />
-                        {/* Name + club */}
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-bold text-[#1A1A1A] dark:text-white">
-                            {c.name}
-                          </p>
-                          <p className="truncate text-[10px] text-[#666] dark:text-[#CCCCCC]">
-                            {c.clubName} · {c.position}
-                          </p>
-                        </div>
-                        {/* Score */}
-                        <span className="text-sm font-black text-[#6C2BD9] dark:text-[#8B5CF6]">
-                          {c.ballonDorScore}
-                        </span>
-                        {/* Trend */}
-                        <span className="w-4 text-center">
-                          {c.trend === 'rising' && <TrendingUp className="size-3.5 text-[#10B981]" />}
-                          {c.trend === 'falling' && <TrendingDown className="size-3.5 text-[#EF4444]" />}
-                          {c.trend === 'stable' && <Minus className="size-3.5 text-[#FF6B35]" />}
-                        </span>
-                      </motion.div>
-                    )
-                  })}
-
-                  {/* See full rankings toggle */}
-                  {ballonDorHiddenCount > 0 && (
-                    <button
-                      onClick={() => setShowAllBallonDor(!showAllBallonDor)}
-                      className="mt-2 w-full rounded-lg border border-[#E0E0E0]/50 dark:border-white/10 py-1.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/5 dark:hover:bg-[#8B5CF6]/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
-                    >
-                      {showAllBallonDor ? '▲ Show top 8' : `▼ See full rankings (+${ballonDorHiddenCount} more)`}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Tagline footer */}
-              {ballonDor && (
-                <div className="mt-3 border-t border-[#E0E0E0]/50 dark:border-white/5 pt-3">
-                  <p className="text-[11px] italic text-[#666] dark:text-[#CCCCCC]">
-                    {ballonDor.framing.tagline}
-                  </p>
-                  <p className="mt-1 text-[11px] text-[#6B7280] dark:text-gray-400">
-                    Updated {ballonDor.framing.lastUpdated} · Ceremony in {ballonDor.framing.ceremonyDate}
-                  </p>
-                </div>
-              )}
+        {/* Horizontal scroll on mobile, grid on desktop. Cards ~280px wide. */}
+        {filteredMatches.length === 0 ? (
+          <Card className="border-[#E0E0E0]/50 dark:border-white/5">
+            <CardContent className="py-10 text-center">
+              <Clock className="mx-auto size-7 text-[#666]/30 dark:text-[#CCCCCC]/30 mb-2" />
+              <p className="text-sm text-[#666] dark:text-[#CCCCCC]">No matches available — check back soon.</p>
             </CardContent>
           </Card>
-        </section>
-
-        {/* ═══ SECTION C — LATEST TRANSFER TWEETS ═══ */}
-        <section>
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-[#FF6B35]/15">
-              <MessageCircle className="size-4 text-[#FF6B35]" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white">
-                Latest Transfer Tweets
-              </h2>
-              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
-                Real-time from Tier 1 journalists
-              </p>
-            </div>
+        ) : (
+          <div className="flex gap-3 overflow-x-auto scrollbar-none snap-x snap-mandatory pb-2 -mx-1 px-1 md:grid md:grid-cols-2 md:overflow-visible md:snap-none lg:grid-cols-3">
+            {filteredMatches.slice(0, 9).map((match, i) => (
+              <motion.div
+                key={match.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: i * 0.05 }}
+                className="shrink-0 snap-start w-[280px] md:w-auto"
+              >
+                <Card className="card-hover h-full border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FlagImage nationCode={match.home} size={26} fallbackEmoji={match.homeFlag} />
+                        <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.home}</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span className="text-lg font-black tracking-wider text-[#1A1A1A] dark:text-white">{match.score}</span>
+                        {match.live && <LiveBadge />}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-[#1A1A1A] dark:text-white">{match.away}</span>
+                        <FlagImage nationCode={match.away} size={26} fallbackEmoji={match.awayFlag} />
+                      </div>
+                    </div>
+                    {/* League badge */}
+                    <div className="mt-2">
+                      <Badge variant="outline" className={`text-[8px] font-bold px-1.5 py-0 ${
+                        match.league === 'Friendly'
+                          ? 'border-[#FF6B35]/30 text-[#FF6B35]'
+                          : 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]'
+                      }`}>
+                        {match.league}
+                      </Badge>
+                    </div>
+                    {/* Fan Mood — Emoji Only with team flags */}
+                    <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2.5">
+                      <div className="flex items-center gap-1.5" title={`${match.home} fan mood`}>
+                        <FlagImage nationCode={match.home} size={20} fallbackEmoji={match.homeFlag} />
+                        <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.homeSentiment)}`}>
+                          {getFanMoodEmoji(match.homeSentiment)}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-[#6B7280] dark:text-gray-400">
+                        {t('home.fan_mood')}
+                      </span>
+                      <div className="flex items-center gap-1.5" title={`${match.away} fan mood`}>
+                        <span className={`inline-block leading-none ${getFanMoodEmojiSize(match.awaySentiment)}`}>
+                          {getFanMoodEmoji(match.awaySentiment)}
+                        </span>
+                        <FlagImage nationCode={match.away} size={20} fallbackEmoji={match.awayFlag} />
+                      </div>
+                    </div>
+                    {/* What Fans Are Saying — collapsible real-time fan posts panel */}
+                    <FanTalkPanel
+                      teamCodes={[match.home, match.away]}
+                      matchLabel={`${match.home} vs ${match.away}`}
+                      matchId={match.id}
+                    />
+                    <div className="mt-3 flex items-center">
+                      <SharePulseButton className="flex-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
           </div>
+        )}
+      </section>
 
-          <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
-            <CardContent className="p-4">
-              {tweetsLoading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="h-16 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
-                  ))}
-                </div>
-              ) : transferTweets.length === 0 ? (
-                <p className="py-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
-                  No recent Tier 1 transfer tweets — check back soon.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {transferTweets.map((tweet, i) => (
-                    <motion.a
-                      key={tweet.url + i}
-                      href={tweet.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
+      {/* ════════════════════════════════════════════════════════════════════
+          POSITION 4 — LATEST TRANSFER TWEETS (with curiosity gap)
+          Shows top transfer sagas (by buzzVolume) as compact cards. Each card
+          displays the headline (player → club) + overall sentiment, but the
+          specific fan breakdown (excitedPct / dreadingPct) is BLURRED by
+          default. A "See Fan Reaction" button reveals the breakdown on click,
+          forcing user engagement to get the full story.
+          Includes a red/orange pulsing "Live Pulse" dot next to the header.
+          ════════════════════════════════════════════════════════════════════ */}
+      <section>
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex size-7 items-center justify-center rounded-lg bg-[#FF6B35]/15">
+            <MessageCircle className="size-4 text-[#FF6B35]" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white flex items-center gap-1.5">
+              Latest Transfer Tweets
+              {/* Live Pulse indicator — red/orange pulsing dot for hot transfers */}
+              <span
+                aria-label="Hot transfers"
+                className="inline-block size-2 rounded-full bg-[#FF6B35] animate-live-pulse shadow-[0_0_6px_#FF6B35]"
+              />
+            </h2>
+            <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+              Real-time from Tier 1 journalists
+            </p>
+          </div>
+        </div>
+
+        <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+          <CardContent className="p-4">
+            {sagasLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-20 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
+                ))}
+              </div>
+            ) : transferSagas.length === 0 ? (
+              <p className="py-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
+                No active transfer sagas right now — check back soon.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {transferSagas.map((saga, i) => {
+                  const revealed = revealedSagas.has(saga.id)
+                  const hasFanPosts = saga.buzzVolume > 0
+                  const neutralPct = Math.max(0, 100 - saga.excitedPct - saga.skepticalPct - saga.dreadingPct)
+                  return (
+                    <motion.div
+                      key={saga.id}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.25, delay: i * 0.05 }}
+                      className="rounded-lg border-l-4 border-l-[#FF6B35] bg-[#F8F9FA] dark:bg-[#2D2D2D] p-3"
+                    >
+                      {/* Headline row: player → club + buzz volume */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="text-sm font-bold text-[#1A1A1A] dark:text-white truncate">
+                              {saga.playerName}
+                            </h3>
+                            <ArrowLeft className="size-3 text-[#6C2BD9] dark:text-[#8B5CF6] shrink-0" />
+                            <span className="text-xs font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">
+                              {saga.toClubName}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            <BadgeCheck className="size-3 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+                            <span className="text-[10px] font-semibold text-[#6C2BD9] dark:text-[#8B5CF6]">
+                              {saga.tier1Count} Tier 1
+                            </span>
+                            <span className="text-[10px] text-[#6B7280] dark:text-gray-400">
+                              · {saga.buzzVolume} {saga.buzzVolume === 1 ? 'post' : 'posts'}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Overall sentiment trend arrow */}
+                        <div className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          saga.excitedPct >= saga.dreadingPct
+                            ? 'bg-[#10B981]/10 text-[#10B981]'
+                            : 'bg-[#EF4444]/10 text-[#EF4444]'
+                        }`}>
+                          {saga.buzzTrend === 'rising' && <TrendingUp className="size-3" />}
+                          {saga.buzzTrend === 'falling' && <TrendingDown className="size-3" />}
+                          {saga.buzzTrend === 'stable' && <Minus className="size-3" />}
+                          {saga.excitedPct >= saga.dreadingPct ? 'Bullish' : 'Bearish'}
+                        </div>
+                      </div>
+
+                      {/* Fan breakdown — BLURRED by default (curiosity gap) */}
+                      {hasFanPosts ? (
+                        <div className="mt-2.5">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280] dark:text-gray-400">
+                              Fan Sentiment
+                            </span>
+                            <span className="text-[10px] text-[#6B7280] dark:text-gray-400">
+                              {revealed ? `${saga.buzzVolume} posts` : '???'}
+                            </span>
+                          </div>
+
+                          {/* Stacked sentiment bar — blurred until revealed */}
+                          <div className={`relative h-2 rounded-full overflow-hidden flex bg-[#F0F0F0] dark:bg-white/5 transition-all duration-300 ${!revealed ? 'blur-sm select-none' : ''}`}>
+                            <div className="bg-[#10B981]" style={{ width: `${saga.excitedPct}%` }} title={`Excited ${saga.excitedPct}%`} />
+                            <div className="bg-[#F59E0B]" style={{ width: `${saga.skepticalPct}%` }} title={`Skeptical ${saga.skepticalPct}%`} />
+                            <div className="bg-[#EF4444]" style={{ width: `${saga.dreadingPct}%` }} title={`Dreading ${saga.dreadingPct}%`} />
+                            <div className="bg-[#999]/40" style={{ width: `${neutralPct}%` }} title={`Neutral ${neutralPct.toFixed(0)}%`} />
+                          </div>
+
+                          {/* Percentage labels — blurred/hidden until revealed */}
+                          <div className={`mt-1.5 flex items-center gap-2.5 text-[11px] transition-all duration-300 ${!revealed ? 'blur-sm select-none' : ''}`}>
+                            <span className="flex items-center gap-1 text-[#10B981]">
+                              <span className="size-1.5 rounded-full bg-[#10B981]" />
+                              {saga.excitedPct.toFixed(0)}%
+                            </span>
+                            <span className="flex items-center gap-1 text-[#F59E0B]">
+                              <span className="size-1.5 rounded-full bg-[#F59E0B]" />
+                              {saga.skepticalPct.toFixed(0)}%
+                            </span>
+                            <span className="flex items-center gap-1 text-[#EF4444]">
+                              <span className="size-1.5 rounded-full bg-[#EF4444]" />
+                              {saga.dreadingPct.toFixed(0)}%
+                            </span>
+                          </div>
+
+                          {/* "See Fan Reaction" reveal button — the curiosity gap CTA */}
+                          {!revealed && (
+                            <button
+                              onClick={() => toggleSagaReveal(saga.id)}
+                              className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg border border-[#6C2BD9]/30 dark:border-[#8B5CF6]/30 bg-[#6C2BD9]/5 dark:bg-[#8B5CF6]/10 py-1.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/10 dark:hover:bg-[#8B5CF6]/20 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+                            >
+                              <Eye className="size-3.5" />
+                              See Fan Reaction
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="mt-2.5 rounded-lg border border-dashed border-[#E0E0E0] dark:border-white/10 bg-[#F8F9FA]/50 dark:bg-white/[0.02] px-3 py-2">
+                          <p className="text-[11px] text-[#6B7280] dark:text-gray-400 leading-snug">
+                            No fan posts yet — sentiment will appear when fans react
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="mt-3 border-t border-[#E0E0E0]/50 dark:border-white/5 pt-3">
+              <p className="text-[11px] text-[#6B7280] dark:text-gray-400">
+                Powered by Tier 1 journalists — Romano, Ornstein, Plettenberg, Moretto, and others. No fabricated tweets.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* ════════════════════════════════════════════════════════════════════
+          POSITION 5 — BALLON D'OR RACE (full width)
+          Moved to the bottom + made full-width (was previously side-by-side
+          with the transfer tweets in a lg:grid-cols-2).
+          ════════════════════════════════════════════════════════════════════ */}
+      <section>
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex size-7 items-center justify-center rounded-lg bg-[#F59E0B]/15">
+            <Trophy className="size-4 text-[#F59E0B]" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+              {ballonDor?.framing.title ?? "Ballon d'Or Race"}
+            </h2>
+            <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+              {ballonDor?.framing.subtitle ?? 'Who fans think should win — not a forecast of the actual award'}
+            </p>
+          </div>
+        </div>
+
+        <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+          <CardContent className="p-4">
+            {/* Movement highlights */}
+            {ballonDor && (ballonDor.movers.biggestRiser || ballonDor.movers.biggestFaller) && (
+              <div className="mb-3 flex flex-wrap gap-2 text-[10px] font-semibold">
+                {ballonDor.movers.biggestRiser && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#10B981]/10 px-2 py-1 text-[#10B981]">
+                    📈 Biggest riser: {ballonDor.movers.biggestRiser.name} ↑
+                  </span>
+                )}
+                {ballonDor.movers.biggestFaller && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#EF4444]/10 px-2 py-1 text-[#EF4444]">
+                    📉 Biggest faller: {ballonDor.movers.biggestFaller.name} ↓
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Ranked table */}
+            {ballonDorLoading ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-10 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
+                ))}
+              </div>
+            ) : ballonDorVisible.length === 0 ? (
+              <p className="py-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
+                Ballon d'Or data unavailable — check back soon.
+              </p>
+            ) : (
+              <div className="grid gap-1 sm:grid-cols-2">
+                {ballonDorVisible.map((c, i) => {
+                  const rank = i + 1
+                  const isTop3 = rank <= 3
+                  return (
+                    <motion.div
+                      key={c.name}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.25, delay: i * 0.04 }}
+                      title={c.verifiedMatchFact}
                       className={`
-                        block rounded-lg border-l-4 ${sentimentBorder(tweet.sentimentLabel)}
-                        bg-[#F8F9FA] dark:bg-[#2D2D2D] p-3 transition-all hover:translate-x-0.5 hover:bg-[#F8F9FA]/80 dark:hover:bg-[#2D2D2D]/80 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
+                        flex items-center gap-2 rounded-lg px-2 py-2 transition-colors
+                        ${isTop3 ? 'bg-[#F59E0B]/5 dark:bg-[#F59E0B]/10' : 'hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D]'}
                       `}
                     >
-                      {/* Author row */}
-                      <div className="mb-1 flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-[#1A1A1A] dark:text-white">{tweet.author}</span>
-                        <BadgeCheck className="size-3.5 text-[#6C2BD9] dark:text-[#8B5CF6]" />
-                        <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">@{tweet.authorHandle}</span>
-                        <span className="ml-auto text-[11px] text-[#6B7280] dark:text-gray-400">
-                          {formatRelativeTime(tweet.postedAt)}
-                        </span>
+                      {/* Rank */}
+                      <span className={`w-5 text-center text-xs font-black ${isTop3 ? 'text-[#F59E0B]' : 'text-[#6B7280] dark:text-gray-400'}`}>
+                        {rank}
+                      </span>
+                      {/* Flag */}
+                      <FlagImage nationCode={c.nationCode} size={18} fallbackEmoji="" />
+                      {/* Name + club */}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-bold text-[#1A1A1A] dark:text-white">
+                          {c.name}
+                        </p>
+                        <p className="truncate text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                          {c.clubName} · {c.position}
+                        </p>
                       </div>
-                      {/* Content (truncated ~200 chars) */}
-                      <p className="text-[11px] leading-relaxed text-[#1A1A1A]/80 dark:text-white/80 line-clamp-3">
-                        {tweet.content}
-                      </p>
-                      {/* Footer: sentiment + source link */}
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[10px] font-semibold" title={`Sentiment: ${tweet.sentimentScore}/100`}>
-                          {sentimentEmoji(tweet.sentimentLabel)} {tweet.sentimentLabel}
-                        </span>
-                        <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">
-                          Source <ExternalLink className="size-3" />
-                        </span>
-                      </div>
-                    </motion.a>
-                  ))}
-                </div>
-              )}
+                      {/* Score */}
+                      <span className="text-sm font-black text-[#6C2BD9] dark:text-[#8B5CF6]">
+                        {c.ballonDorScore}
+                      </span>
+                      {/* Trend */}
+                      <span className="w-4 text-center">
+                        {c.trend === 'rising' && <TrendingUp className="size-3.5 text-[#10B981]" />}
+                        {c.trend === 'falling' && <TrendingDown className="size-3.5 text-[#EF4444]" />}
+                        {c.trend === 'stable' && <Minus className="size-3.5 text-[#FF6B35]" />}
+                      </span>
+                    </motion.div>
+                  )
+                })}
 
-              {/* Footer */}
+                {/* See full rankings toggle */}
+                {ballonDorHiddenCount > 0 && (
+                  <button
+                    onClick={() => setShowAllBallonDor(!showAllBallonDor)}
+                    className="mt-2 sm:col-span-2 w-full rounded-lg border border-[#E0E0E0]/50 dark:border-white/10 py-1.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/5 dark:hover:bg-[#8B5CF6]/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+                  >
+                    {showAllBallonDor ? '▲ Show top 8' : `▼ See full rankings (+${ballonDorHiddenCount} more)`}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Tagline footer */}
+            {ballonDor && (
               <div className="mt-3 border-t border-[#E0E0E0]/50 dark:border-white/5 pt-3">
-                <p className="text-[11px] text-[#6B7280] dark:text-gray-400">
-                  Powered by Tier 1 journalists — Romano, Ornstein, Plettenberg, Moretto, and others. No fabricated tweets.
+                <p className="text-[11px] italic text-[#666] dark:text-[#CCCCCC]">
+                  {ballonDor.framing.tagline}
+                </p>
+                <p className="mt-1 text-[11px] text-[#6B7280] dark:text-gray-400">
+                  Updated {ballonDor.framing.lastUpdated} · Ceremony in {ballonDor.framing.ceremonyDate}
                 </p>
               </div>
-            </CardContent>
-          </Card>
-        </section>
-      </div>
+            )}
+          </CardContent>
+        </Card>
+      </section>
 
       {/* Vote popup */}
       <AnimatePresence>

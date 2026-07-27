@@ -84,6 +84,25 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  // ── Standalone output tracing ──────────────────────────────────────────────
+  // Prisma's generated engine binaries (libquery_engine-*.so.node) live under
+  // node_modules/.prisma and node_modules/@prisma. Next.js's file tracer does
+  // NOT always pick these up because they're dynamically required at runtime.
+  // Without this, the standalone build silently omits the Prisma engine, and
+  // the production server crashes with "Prisma Client could not find its engine"
+  // on first DB query.
+  outputFileTracingIncludes: {
+    '/': [
+      './node_modules/.prisma/**/*',
+      './node_modules/@prisma/**/*',
+      './prisma/schema.prisma',
+    ],
+    '/api/**': [
+      './node_modules/.prisma/**/*',
+      './node_modules/@prisma/**/*',
+      './prisma/schema.prisma',
+    ],
+  },
   images: {
     // Avoid sharp native-module issues on deployment platforms; flag images
     // from flagcdn.com are already marked `unoptimized` per-image.

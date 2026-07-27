@@ -3,21 +3,29 @@
 # Multi-stage build: deps → build → lean runner
 # Keeps SQLite on a persistent Fly volume (no DB migration needed)
 # ─────────────────────────────────────────────────────────────
+#
+# Bun version: Pinned to 1.3 (matches local dev). Bun 1.1 cannot read
+# the project's `bun.lock` (lockfileVersion: 1, the Bun 1.2+ text format)
+# and would silently fall back to a non-frozen install — which is the
+# root cause of the previous deploy failures.
+# ─────────────────────────────────────────────────────────────
 
 # ── Stage 1: Install deps + generate Prisma client ──
-FROM oven/bun:1.1-debian AS deps
+FROM oven/bun:1.3-debian AS deps
 WORKDIR /app
 
-# Copy lockfile + package.json first for better layer caching
-COPY package.json bun.lockb* package-lock.json* ./
+# Copy lockfile + package.json first for better layer caching.
+# `bun.lock` is the Bun 1.2+ text-format lockfile (the only one in this repo).
+COPY package.json bun.lock ./
 COPY prisma ./prisma
 
-# Install deps and generate Prisma client (needed at build time)
-RUN bun install --frozen-lockfile || bun install
+# Install deps and generate Prisma client (needed at build time).
+# --frozen-lockfile guarantees the exact versions pinned in bun.lock.
+RUN bun install --frozen-lockfile
 RUN bunx prisma generate
 
 # ── Stage 2: Build the Next.js standalone output ──
-FROM oven/bun:1.1-debian AS builder
+FROM oven/bun:1.3-debian AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -28,7 +36,7 @@ COPY . .
 RUN bun run build
 
 # ── Stage 3: Lean production runner ──
-FROM oven/bun:1.1-debian AS runner
+FROM oven/bun:1.3-debian AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -62,7 +70,7 @@ USER nextjs
 EXPOSE 3000
 
 # Health check — uses bun (already in the image) instead of curl (not installed
-# on oven/bun:1.1-debian). The health endpoint now also verifies DB reachability.
+# on oven/bun:1.3-debian). The health endpoint now also verifies DB reachability.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD bun -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 

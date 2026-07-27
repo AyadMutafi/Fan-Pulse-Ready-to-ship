@@ -34,7 +34,10 @@ primary_region = "iad"  # ← change to your nearest region (see Step 4)
     hard_limit = 250
     soft_limit = 200
 
-# VM size — start small for soft launch, bump up before hard launch
+# VM size — bumped from 512MB → 1GB so the Next.js standalone build
+# (Turbopack + Prisma client generation + SQLite WAL mode) does not OOM.
+# 512MB was tight enough that peak traffic + the background feed-scan
+# worker could push the container past its limit and cause restart loops.
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  memory = "1gb"

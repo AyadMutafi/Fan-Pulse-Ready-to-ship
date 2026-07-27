@@ -1,5 +1,11 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Generate Prisma engines for both the local dev host (native) AND the
+  // Fly.io production host (Debian-based Linux with OpenSSL 3.x).
+  // Without this, Prisma generates ONLY the native engine at build time,
+  // which may not match the production runtime and crashes with
+  // "Query engine binary not found" or "openssl: not found".
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
