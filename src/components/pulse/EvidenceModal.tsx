@@ -264,7 +264,7 @@ export function EvidenceModal({ playerId, playerName, nationCode, onClose }: Evi
                                   href={post.sourceUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[11px] text-purple-500 hover:underline mt-1"
+                                  className="inline-flex items-center gap-1 text-[11px] text-purple-500 hover:underline mt-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                                 >
                                   <ExternalLink className="w-2.5 h-2.5" /> view source
                                 </a>
@@ -304,7 +304,7 @@ export function EvidenceBadge({ evidenceCount, hasAIRating, confidence, onClick,
         e.stopPropagation()
         onClick?.()
       }}
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold transition-colors ${
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 ${
         hasAIRating
           ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 hover:bg-purple-500/25'
           : 'bg-slate-500/15 text-slate-600 dark:text-slate-400 hover:bg-slate-500/25'

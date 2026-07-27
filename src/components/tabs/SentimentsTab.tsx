@@ -125,7 +125,7 @@ export default function SentimentsTab() {
               key={league}
               onClick={() => setFilter(league)}
               className={`
-                shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all duration-200
+                shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 ${isActive
                   ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
                   : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'

@@ -85,7 +85,7 @@ function EmojiRatingPicker({
             disabled={disabled}
             className={`
               relative flex items-center justify-center size-6 sm:size-7 rounded-md text-xs
-              transition-all duration-150
+              transition-all duration-150 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
               ${isActive
                 ? 'scale-110 opacity-100'
                 : 'scale-100 opacity-30'
@@ -209,7 +209,7 @@ export default function RateTab() {
                         <div>
                           <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">{player.playerName}</p>
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                            <Badge variant="outline" className="text-[11px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
                               {player.position}
                             </Badge>
                           </div>
@@ -224,9 +224,9 @@ export default function RateTab() {
                             <span className="text-lg font-black" style={{ color }}>
                               {avgRating.toFixed(1)}
                             </span>
-                            <span className="text-[10px] text-[#999] dark:text-gray-500">/10</span>
+                            <span className="text-[10px] text-[#6B7280] dark:text-gray-400">/10</span>
                           </div>
-                          <span className="text-[9px] font-semibold" style={{ color }}>
+                          <span className="text-[11px] font-semibold" style={{ color }}>
                             {label}
                           </span>
                         </div>

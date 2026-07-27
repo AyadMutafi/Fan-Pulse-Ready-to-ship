@@ -155,7 +155,7 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
       {/* Toggle button */}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 rounded-lg border border-[#E0E0E0]/50 dark:border-white/10 bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2 transition-colors hover:bg-[#F0F1F2] dark:hover:bg-[#333] group"
+        className="w-full flex items-center justify-between gap-2 rounded-lg border border-[#E0E0E0]/50 dark:border-white/10 bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2 transition-colors hover:bg-[#F0F1F2] dark:hover:bg-[#333] group focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
       >
         <span className="flex items-center gap-1.5">
           <MessageCircle className="size-3.5 text-[#6C2BD9] dark:text-[#8B5CF6]" />
@@ -170,7 +170,7 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
           )}
         </span>
         <ChevronDown
-          className={`size-3.5 text-[#999] transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+          className={`size-3.5 text-[#6B7280] dark:text-gray-400 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
         />
       </button>
 
@@ -192,7 +192,7 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
                     <button
                       key={t}
                       onClick={() => setTab(t)}
-                      className={`rounded-full px-2.5 py-1 text-[9px] font-bold transition-all ${
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-all focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 ${
                         tab === t
                           ? 'bg-[#6C2BD9] text-white'
                           : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC]'
@@ -205,7 +205,7 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
                 <button
                   onClick={fetchFanTalk}
                   disabled={loading}
-                  className="text-[#999] hover:text-[#6C2BD9] dark:hover:text-[#8B5CF6] transition-colors disabled:opacity-40"
+                  className="text-[#6B7280] dark:text-gray-400 hover:text-[#6C2BD9] dark:hover:text-[#8B5CF6] rounded focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 transition-colors disabled:opacity-40"
                   title="Refresh"
                 >
                   <RefreshCw className={`size-3 ${loading ? 'animate-spin' : ''}`} />
@@ -218,7 +218,7 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div
                       key={i}
-                      className="h-12 rounded-md bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse"
+                      className="h-12 rounded-md bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer"
                     />
                   ))}
                 </div>
@@ -228,12 +228,12 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
               {!loading && !hasData && (
                 <div className="text-center py-6 px-3">
                   <div className="inline-flex items-center justify-center size-9 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] mb-2">
-                    <Inbox className="size-4 text-[#999] dark:text-gray-500" />
+                    <Inbox className="size-4 text-[#6B7280] dark:text-gray-400" />
                   </div>
-                  <p className="text-[10px] font-semibold text-[#666] dark:text-[#CCCCCC]">
+                  <p className="text-[11px] font-semibold text-[#666] dark:text-[#CCCCCC]">
                     Fan posts are loading / unavailable for this match right now.
                   </p>
-                  <p className="text-[9px] text-[#999] dark:text-gray-500 mt-1.5 leading-relaxed">
+                  <p className="text-[11px] text-[#6B7280] dark:text-gray-400 mt-1.5 leading-relaxed">
                     {data?.liveFetchAttempted
                       ? data?.liveFetchError
                         ? `Live fetch attempted: ${data.liveFetchError}. Real posts will appear once the source is reachable.`
@@ -257,16 +257,16 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
                       <div className="flex items-center justify-between gap-1.5 mb-1">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <PlatformIcon platform={post.platform} />
-                          <span className="text-[9px] font-semibold text-[#666] dark:text-[#CCCCCC] truncate">
+                          <span className="text-[11px] font-semibold text-[#666] dark:text-[#CCCCCC] truncate">
                             {post.author}
                           </span>
-                          <span className="text-[8px] text-[#999] dark:text-gray-500 shrink-0">
+                          <span className="text-[8px] text-[#6B7280] dark:text-gray-400 shrink-0">
                             · {post.timeLabel}
                           </span>
                         </div>
                         <SentimentBadge label={post.sentimentLabel} score={post.sentimentScore} />
                       </div>
-                      <p className="text-[10px] leading-relaxed text-[#444] dark:text-[#DDD] line-clamp-3">
+                      <p className="text-[11px] leading-relaxed text-[#444] dark:text-[#DDD] line-clamp-3">
                         {post.topQuote || post.content}
                       </p>
                       {post.url && post.url !== '#' && (
@@ -274,7 +274,7 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
                           href={post.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-0.5 mt-1 text-[8px] font-semibold text-[#6C2BD9] dark:text-[#8B5CF6] hover:underline"
+                          className="inline-flex items-center gap-0.5 mt-1 text-[8px] font-semibold text-[#6C2BD9] dark:text-[#8B5CF6] hover:underline rounded focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                         >
                           <ExternalLink className="size-2.5" /> Source
                         </a>
@@ -288,10 +288,10 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
               {hasData && totalPosts > 0 && (
                 <div className="mt-2.5 pt-2.5 border-t border-[#E0E0E0]/40 dark:border-white/5">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[8px] font-bold uppercase tracking-wide text-[#999] dark:text-gray-500">
+                    <span className="text-[8px] font-bold uppercase tracking-wide text-[#6B7280] dark:text-gray-400">
                       Fan Sentiment Split
                     </span>
-                    <span className="text-[8px] text-[#999] dark:text-gray-500">
+                    <span className="text-[8px] text-[#6B7280] dark:text-gray-400">
                       {totalPosts} {totalPosts === 1 ? 'post' : 'posts'}
                     </span>
                   </div>
@@ -324,7 +324,7 @@ export function FanTalkPanel({ teamCodes, matchLabel, matchId }: FanTalkPanelPro
               {hasData && data?.freshnessLabel && (
                 <div className="mt-2 flex items-center justify-center gap-1">
                   <span className="size-1 rounded-full bg-[#10B981] animate-pulse" />
-                  <span className="text-[8px] text-[#999] dark:text-gray-500">
+                  <span className="text-[8px] text-[#6B7280] dark:text-gray-400">
                     Updated {data.freshnessLabel}
                     {data.monitorLabel ? ` · ${data.monitorLabel}` : ''}
                   </span>

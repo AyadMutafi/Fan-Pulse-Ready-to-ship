@@ -560,7 +560,7 @@ function HomeTab() {
                 key={filter}
                 onClick={() => setMatchFilter(filter)}
                 className={`
-                  rounded-full px-3 py-1.5 text-[10px] font-bold transition-all duration-200
+                  rounded-full px-3 py-1.5 text-[10px] font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                   ${matchFilter === filter
                     ? 'bg-[#6C2BD9] text-white shadow-sm'
                     : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10'
@@ -625,7 +625,7 @@ function HomeTab() {
                           {getFanMoodEmoji(match.homeSentiment)}
                         </span>
                       </div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-[#999] dark:text-gray-500">
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-[#6B7280] dark:text-gray-400">
                         {t('home.fan_mood')}
                       </span>
                       <div className="flex items-center gap-1.5" title={`${match.away} fan mood`}>
@@ -660,19 +660,19 @@ function HomeTab() {
               {t('home.fan_mood')}
             </h3>
             {!votesLoading && (
-              <Badge className="bg-[#6C2BD9]/10 text-[#6C2BD9] dark:text-[#8B5CF6] border-0 text-[9px] font-bold px-2 py-0.5">
+              <Badge className="bg-[#6C2BD9]/10 text-[#6C2BD9] dark:text-[#8B5CF6] border-0 text-[11px] font-bold px-2 py-0.5">
                 {totalVoteCount.toLocaleString()} {totalVoteCount === 1 ? 'vote' : 'votes'} cast
               </Badge>
             )}
           </div>
-          <span className="text-[10px] font-semibold text-[#FF6B35]">Swipe teams to vote →</span>
+          <span className="text-[11px] font-semibold text-[#FF6B35]">Swipe teams to vote →</span>
         </div>
         <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none overflow-hidden">
           <CardContent className="p-4">
             {votesLoading ? (
               <div className="flex gap-2.5 overflow-hidden">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="shrink-0 w-28 h-36 rounded-2xl bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                  <div key={i} className="shrink-0 w-28 h-36 rounded-2xl bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
                 ))}
               </div>
             ) : (
@@ -700,7 +700,7 @@ function HomeTab() {
                         transition={{ duration: 0.3, delay: i * 0.04 }}
                         onClick={() => setSelectedVoteTeam(entry.code)}
                         className={`
-                          relative shrink-0 snap-start w-28 sm:w-32 rounded-2xl border p-3 flex flex-col items-center
+                          relative shrink-0 snap-start w-28 sm:w-32 rounded-2xl border p-3 flex flex-col items-center focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                           transition-all duration-200
                           ${hasMyVote
                             ? 'border-[#10B981]/60 bg-[#10B981]/5 dark:bg-[#10B981]/10 shadow-md shadow-[#10B981]/15'
@@ -754,7 +754,7 @@ function HomeTab() {
                 </div>
               </div>
             )}
-            <p className="mt-3 text-[10px] text-[#999] dark:text-gray-500 text-center">
+            <p className="mt-3 text-[11px] text-[#6B7280] dark:text-gray-400 text-center">
               Your vote is anonymous — stored only in your browser session.
             </p>
           </CardContent>
@@ -804,7 +804,7 @@ function HomeTab() {
               {ballonDorLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="h-10 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                    <div key={i} className="h-10 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
                   ))}
                 </div>
               ) : ballonDorVisible.length === 0 ? (
@@ -829,7 +829,7 @@ function HomeTab() {
                         `}
                       >
                         {/* Rank */}
-                        <span className={`w-5 text-center text-xs font-black ${isTop3 ? 'text-[#F59E0B]' : 'text-[#999] dark:text-gray-500'}`}>
+                        <span className={`w-5 text-center text-xs font-black ${isTop3 ? 'text-[#F59E0B]' : 'text-[#6B7280] dark:text-gray-400'}`}>
                           {rank}
                         </span>
                         {/* Flag */}
@@ -861,7 +861,7 @@ function HomeTab() {
                   {ballonDorHiddenCount > 0 && (
                     <button
                       onClick={() => setShowAllBallonDor(!showAllBallonDor)}
-                      className="mt-2 w-full rounded-lg border border-[#E0E0E0]/50 dark:border-white/10 py-1.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/5 dark:hover:bg-[#8B5CF6]/10 transition-colors"
+                      className="mt-2 w-full rounded-lg border border-[#E0E0E0]/50 dark:border-white/10 py-1.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/5 dark:hover:bg-[#8B5CF6]/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                     >
                       {showAllBallonDor ? '▲ Show top 8' : `▼ See full rankings (+${ballonDorHiddenCount} more)`}
                     </button>
@@ -872,10 +872,10 @@ function HomeTab() {
               {/* Tagline footer */}
               {ballonDor && (
                 <div className="mt-3 border-t border-[#E0E0E0]/50 dark:border-white/5 pt-3">
-                  <p className="text-[10px] italic text-[#666] dark:text-[#CCCCCC]">
+                  <p className="text-[11px] italic text-[#666] dark:text-[#CCCCCC]">
                     {ballonDor.framing.tagline}
                   </p>
-                  <p className="mt-1 text-[9px] text-[#999] dark:text-gray-500">
+                  <p className="mt-1 text-[11px] text-[#6B7280] dark:text-gray-400">
                     Updated {ballonDor.framing.lastUpdated} · Ceremony in {ballonDor.framing.ceremonyDate}
                   </p>
                 </div>
@@ -905,7 +905,7 @@ function HomeTab() {
               {tweetsLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="h-16 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                    <div key={i} className="h-16 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
                   ))}
                 </div>
               ) : transferTweets.length === 0 ? (
@@ -925,7 +925,7 @@ function HomeTab() {
                       transition={{ duration: 0.25, delay: i * 0.05 }}
                       className={`
                         block rounded-lg border-l-4 ${sentimentBorder(tweet.sentimentLabel)}
-                        bg-[#F8F9FA] dark:bg-[#2D2D2D] p-3 transition-all hover:translate-x-0.5 hover:bg-[#F8F9FA]/80 dark:hover:bg-[#2D2D2D]/80
+                        bg-[#F8F9FA] dark:bg-[#2D2D2D] p-3 transition-all hover:translate-x-0.5 hover:bg-[#F8F9FA]/80 dark:hover:bg-[#2D2D2D]/80 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                       `}
                     >
                       {/* Author row */}
@@ -933,7 +933,7 @@ function HomeTab() {
                         <span className="text-xs font-bold text-[#1A1A1A] dark:text-white">{tweet.author}</span>
                         <BadgeCheck className="size-3.5 text-[#6C2BD9] dark:text-[#8B5CF6]" />
                         <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">@{tweet.authorHandle}</span>
-                        <span className="ml-auto text-[9px] text-[#999] dark:text-gray-500">
+                        <span className="ml-auto text-[11px] text-[#6B7280] dark:text-gray-400">
                           {formatRelativeTime(tweet.postedAt)}
                         </span>
                       </div>
@@ -957,7 +957,7 @@ function HomeTab() {
 
               {/* Footer */}
               <div className="mt-3 border-t border-[#E0E0E0]/50 dark:border-white/5 pt-3">
-                <p className="text-[9px] text-[#999] dark:text-gray-500">
+                <p className="text-[11px] text-[#6B7280] dark:text-gray-400">
                   Powered by Tier 1 journalists — Romano, Ornstein, Plettenberg, Moretto, and others. No fabricated tweets.
                 </p>
               </div>
@@ -1000,7 +1000,7 @@ function HomeTab() {
                     <button
                       onClick={() => !submitting && setSelectedVoteTeam(null)}
                       aria-label="Close"
-                      className="rounded-full size-7 flex items-center justify-center text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] transition-colors"
+                      className="rounded-full size-7 flex items-center justify-center text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                     >
                       <X className="size-4" />
                     </button>
@@ -1017,7 +1017,7 @@ function HomeTab() {
                         whileTap={{ scale: 0.9 }}
                         disabled={submitting}
                         onClick={() => handleVote(selectedVoteTeam, opt.score)}
-                        className="flex flex-col items-center gap-1 rounded-xl border border-[#E0E0E0] dark:border-white/10 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-2 px-1 transition-all duration-200 hover:border-[#6C2BD9]/50 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#6C2BD9]/10 disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="flex flex-col items-center gap-1 rounded-xl border border-[#E0E0E0] dark:border-white/10 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-2 px-1 transition-all duration-200 hover:border-[#6C2BD9]/50 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#6C2BD9]/10 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                       >
                         <span className="text-2xl leading-none">{opt.emoji}</span>
                         <span className={`h-1 w-6 rounded-full ${opt.color}`} />
@@ -1025,7 +1025,7 @@ function HomeTab() {
                       </motion.button>
                     ))}
                   </div>
-                  <p className="mt-3 text-[10px] text-center text-[#666] dark:text-[#CCCCCC]">
+                  <p className="mt-3 text-[11px] text-center text-[#666] dark:text-[#CCCCCC]">
                     Tap an emoji to cast your vote — you can change it anytime.
                   </p>
                 </CardContent>
@@ -1067,7 +1067,7 @@ function HomeTab() {
               <span className="text-xs font-bold text-white dark:text-[#1A1A1A]">
                 Voted for {fanCardOffer.teamCode}!
               </span>
-              <span className="text-[10px] text-white/60 dark:text-[#666]">
+              <span className="text-[11px] text-white/60 dark:text-[#666]">
                 Share your fan mood
               </span>
             </div>
@@ -1078,7 +1078,7 @@ function HomeTab() {
             <button
               onClick={() => setFanCardOffer(null)}
               aria-label="Dismiss"
-              className="ml-1 rounded-full size-6 flex items-center justify-center text-white/40 dark:text-[#1A1A1A]/40 hover:text-white/70 dark:hover:text-[#1A1A1A]/70 transition-colors"
+              className="ml-1 rounded-full size-6 flex items-center justify-center text-white/40 dark:text-[#1A1A1A]/40 hover:text-white/70 dark:hover:text-[#1A1A1A]/70 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
             >
               <X className="size-3.5" />
             </button>
@@ -1171,7 +1171,7 @@ function SentimentsTab() {
               key={mood.id}
               onClick={() => setFilter(mood.id)}
               className={`
-                shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all duration-200
+                shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 ${isActive
                   ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
                   : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
@@ -1193,19 +1193,19 @@ function SentimentsTab() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="size-7 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                    <div className="size-7 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
                     <div className="space-y-1.5">
-                      <div className="h-3 w-24 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
-                      <div className="h-2 w-12 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                      <div className="h-3 w-24 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
+                      <div className="h-2 w-12 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
                     </div>
                   </div>
                   <div className="space-y-1.5 text-right">
-                    <div className="h-6 w-10 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse ml-auto" />
-                    <div className="h-2 w-8 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse ml-auto" />
+                    <div className="h-6 w-10 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer ml-auto" />
+                    <div className="h-2 w-8 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer ml-auto" />
                   </div>
                 </div>
-                <div className="mt-3 h-1.5 w-full rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
-                <div className="mt-2 h-2 w-20 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                <div className="mt-3 h-1.5 w-full rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
+                <div className="mt-2 h-2 w-20 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
               </CardContent>
             </Card>
           ))}
@@ -1451,7 +1451,7 @@ function RateTab() {
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-[#1A1A1A] dark:text-white truncate">{player.playerName}</p>
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                          <Badge variant="outline" className="text-[11px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
                             {player.position}
                           </Badge>
                           <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
@@ -1471,7 +1471,7 @@ function RateTab() {
                             onClick={() => handleRate(player.id, star)}
                             disabled={submittingId === player.id}
                             aria-label={`Rate ${star} out of 10`}
-                            className="transition-transform duration-150 hover:scale-125 disabled:opacity-50"
+                            className="transition-transform duration-150 hover:scale-125 disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                           >
                             <Star
                               className={`size-3.5 ${
@@ -1541,7 +1541,7 @@ function GoalsTab() {
             <CardContent className="p-3 text-center">
               <stat.icon className={`mx-auto size-4 mb-1 ${stat.color}`} />
               <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
-              <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
+              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
             </CardContent>
           </Card>
         ))}
@@ -1567,7 +1567,7 @@ function GoalsTab() {
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{goal.flag}</span>
                       <p className="truncate text-sm font-bold text-[#1A1A1A] dark:text-white">{goal.scorer}</p>
-                      <Badge variant="outline" className="shrink-0 text-[9px] font-bold border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                      <Badge variant="outline" className="shrink-0 text-[11px] font-bold border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
                         {goal.type}
                       </Badge>
                     </div>
@@ -1578,7 +1578,7 @@ function GoalsTab() {
                     {goal.tags.length > 0 && (
                       <div className="mt-1.5 flex items-center gap-1.5">
                         {goal.tags.map(tag => (
-                          <span key={tag} className="rounded bg-[#6C2BD9]/8 dark:bg-[#8B5CF6]/10 px-1.5 py-0.5 text-[9px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">
+                          <span key={tag} className="rounded bg-[#6C2BD9]/8 dark:bg-[#8B5CF6]/10 px-1.5 py-0.5 text-[11px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">
                             #{tag}
                           </span>
                         ))}
@@ -1593,7 +1593,7 @@ function GoalsTab() {
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <SharePulseButton className="flex-1" />
-                  <Badge variant="outline" className="text-[9px] font-bold border-[#E0E0E0] dark:border-white/10 text-[#666] dark:text-[#CCCCCC]">
+                  <Badge variant="outline" className="text-[11px] font-bold border-[#E0E0E0] dark:border-white/10 text-[#666] dark:text-[#CCCCCC]">
                     {goal.source}
                   </Badge>
                 </div>
@@ -1674,7 +1674,7 @@ function TOTWTab() {
                       {/* Match Rating — labelled chip, visually separated from position */}
                       {player && (
                         <div className="mt-0.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#6C2BD9] dark:bg-[#8B5CF6]">
-                          <span className="text-[9px] font-black text-white leading-none">
+                          <span className="text-[11px] font-black text-white leading-none">
                             {player.rating}
                           </span>
                           <span className="text-[6px] font-semibold text-white/70 uppercase tracking-wide leading-none">rtg</span>
@@ -1988,21 +1988,21 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
     switch (status) {
       case 'live':
         return (
-          <Badge className="bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30 gap-1 text-[9px] font-bold px-1.5 py-0">
+          <Badge className="bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30 gap-1 text-[11px] font-bold px-1.5 py-0">
             <span className="live-dot" style={{ width: 5, height: 5 }} />
             LIVE
           </Badge>
         )
       case 'completed':
         return (
-          <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[9px] font-bold px-1.5 py-0">
+          <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[11px] font-bold px-1.5 py-0">
             <Lock className="size-2.5" />
             COMPLETED
           </Badge>
         )
       default:
         return (
-          <Badge variant="outline" className="text-[#FF6B35] border-[#FF6B35]/30 gap-1 text-[9px] font-bold px-1.5 py-0">
+          <Badge variant="outline" className="text-[#FF6B35] border-[#FF6B35]/30 gap-1 text-[11px] font-bold px-1.5 py-0">
             <Clock className="size-2.5" />
             UPCOMING
           </Badge>
@@ -2057,7 +2057,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
               whileTap={{ scale: 0.95 }}
               onClick={() => setSelectedStageId(stage.id)}
               className={`
-                relative flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold
+                relative flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 transition-all duration-300
                 ${isActive
                   ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
@@ -2103,7 +2103,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
             <button
               onClick={() => setActiveView('elite')}
               className={`
-                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200
+                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 ${activeView === 'elite'
                   ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
                   : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
@@ -2115,7 +2115,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
             <button
               onClick={() => setActiveView('crisis')}
               className={`
-                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200
+                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 ${activeView === 'crisis'
                   ? 'bg-[#EF4444] text-white shadow-md shadow-[#EF4444]/20'
                   : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#EF4444]/30'
@@ -2180,7 +2180,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                       {/* R32 buzz badge — VERIFIED BUZZ (baseline) or LIVE BUZZ (live) */}
                       {isR32Live && (
                         <Badge
-                          className={`gap-1 text-[9px] px-1.5 py-0 border-0 ${
+                          className={`gap-1 text-[11px] px-1.5 py-0 border-0 ${
                             buzzSource === 'live'
                               ? 'bg-[#FF6B35]/15 text-[#FF6B35]'
                               : 'bg-[#6C2BD9]/15 text-[#6C2BD9] dark:text-[#8B5CF6]'
@@ -2211,16 +2211,16 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                       )}
                       {/* Flag/Emoji Toggle Switch */}
                       <div className="flex items-center gap-1.5">
-                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Emoji</span>
+                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#6B7280] dark:text-[#666]'}`}>Emoji</span>
                         <Switch
                           checked={flagMode === 'flag'}
                           onCheckedChange={() => toggleFlag()}
                           className="data-[state=checked]:bg-[#6C2BD9] data-[state=unchecked]:bg-[#6C2BD9]/40 scale-75"
                         />
-                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'flag' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Flag</span>
+                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'flag' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#6B7280] dark:text-[#666]'}`}>Flag</span>
                       </div>
                       {stageStatus === 'completed' && (
-                        <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[9px] px-1.5 py-0">
+                        <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[11px] px-1.5 py-0">
                           <Lock className="size-2.5" /> 🔒
                         </Badge>
                       )}
@@ -2229,7 +2229,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                   </div>
                   {/* R32 subtitle — ranked-by-real-web-buzz freshness line */}
                   {isR32Live && (
-                    <p className="mt-0.5 text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                    <p className="mt-0.5 text-[11px] text-[#666] dark:text-[#CCCCCC]">
                       Ranked by real web buzz —{' '}
                       {buzzSource === 'live'
                         ? `updated ${secondsAgo}s ago`
@@ -2254,7 +2254,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                           className="mb-2 overflow-hidden rounded-md bg-[#1A1A1A] dark:bg-black/60 py-1"
                           title="Live ticker — biggest buzz movers in the last refresh"
                         >
-                          <div className="ticker-scroll whitespace-nowrap text-[9px] font-bold text-[#FF6B35]">
+                          <div className="ticker-scroll whitespace-nowrap text-[11px] font-bold text-[#FF6B35]">
                             <span className="mx-2">📊 LIVE TICKER</span>
                             <span className="mx-2 text-white/90">{items}</span>
                             <span className="mx-2 text-white/90">{items}</span>
@@ -2308,7 +2308,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                   <CardContent className="p-3 text-center">
                     <stat.icon className={`mx-auto size-4 mb-1.5 ${stat.color}`} />
                     <p className={`text-lg font-black ${stat.color}`}>{stat.emoji} {stat.value}</p>
-                    <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
+                    <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -2351,7 +2351,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                             {pulseBreakdown.player.name}
                           </p>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                            <Badge variant="outline" className="text-[11px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
                               {pulseBreakdown.player.position}
                             </Badge>
                             <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
@@ -2363,10 +2363,10 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                       </>
                     ) : (
                       <div className="flex items-center gap-2.5">
-                        <div className="size-8 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                        <div className="size-8 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
                         <div className="space-y-1.5">
-                          <div className="h-3 w-24 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
-                          <div className="h-2 w-16 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                          <div className="h-3 w-24 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
+                          <div className="h-2 w-16 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
                         </div>
                       </div>
                     )}
@@ -2374,7 +2374,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                   <button
                     onClick={() => setSelectedPlayerId(null)}
                     aria-label="Close"
-                    className="shrink-0 rounded-full size-7 flex items-center justify-center text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] transition-colors"
+                    className="shrink-0 rounded-full size-7 flex items-center justify-center text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                   >
                     <X className="size-4" />
                   </button>
@@ -2389,9 +2389,9 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                       </div>
                       {Array.from({ length: 4 }).map((_, i) => (
                         <div key={i} className="space-y-1.5">
-                          <div className="h-3 w-32 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
-                          <div className="h-2 w-full rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
-                          <div className="h-2 w-48 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] animate-pulse" />
+                          <div className="h-3 w-32 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
+                          <div className="h-2 w-full rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
+                          <div className="h-2 w-48 rounded bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
                         </div>
                       ))}
                     </div>
@@ -2418,7 +2418,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                           <p className="text-[10px] font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
                             Overall Pulse Score
                           </p>
-                          <p className="text-[10px] text-[#999] dark:text-gray-500">
+                          <p className="text-[11px] text-[#6B7280] dark:text-gray-400">
                             Weighted blend of 4 components
                           </p>
                         </div>
@@ -2469,7 +2469,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                               <span className="text-xs font-bold text-[#1A1A1A] dark:text-white">
                                 {c.label}
                               </span>
-                              <Badge variant="outline" className="text-[9px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                              <Badge variant="outline" className="text-[11px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
                                 {Math.round(c.weight * 100)}%
                               </Badge>
                             </div>
@@ -2481,20 +2481,20 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                             value={c.value}
                             className="h-2 progress-purple"
                           />
-                          <p className="text-[10px] leading-relaxed text-[#666] dark:text-[#CCCCCC]">
+                          <p className="text-[11px] leading-relaxed text-[#666] dark:text-[#CCCCCC]">
                             {c.note}
                           </p>
                           {/* Real fan sentiment metadata — only shown when FeedMonitor data exists */}
                           {c.meta && c.meta.postCount > 0 && (
                             <div className="mt-1.5 rounded-md bg-[#10B981]/5 border border-[#10B981]/20 p-2 space-y-1.5">
-                              <div className="flex items-center gap-1.5 text-[9px] font-bold text-[#10B981] uppercase tracking-wider">
+                              <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#10B981] uppercase tracking-wider">
                                 <span className="inline-block size-1.5 rounded-full bg-[#10B981] animate-pulse" />
                                 Based on {c.meta.postCount} real fan post{c.meta.postCount === 1 ? '' : 's'} · {c.meta.freshnessLabel}
                               </div>
                               {c.meta.topQuotes && c.meta.topQuotes.length > 0 && (
                                 <div className="space-y-1">
                                   {c.meta.topQuotes.slice(0, 2).map((q, i) => (
-                                    <div key={i} className="text-[10px] italic text-[#1A1A1A] dark:text-white/80 leading-relaxed pl-2 border-l-2 border-[#10B981]/40">
+                                    <div key={i} className="text-[11px] italic text-[#1A1A1A] dark:text-white/80 leading-relaxed pl-2 border-l-2 border-[#10B981]/40">
                                       &ldquo;{q.quote}&rdquo;
                                     </div>
                                   ))}
@@ -2507,7 +2507,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
 
                       {/* Weights footnote */}
                       <div className="rounded-lg bg-[#6C2BD9]/5 dark:bg-[#6C2BD9]/10 border border-[#6C2BD9]/20 p-2.5">
-                        <p className="text-[9px] font-mono text-center text-[#6C2BD9] dark:text-[#8B5CF6]">
+                        <p className="text-[11px] font-mono text-center text-[#6C2BD9] dark:text-[#8B5CF6]">
                           Overall = 0.40×Match + 0.25×Fan + 0.20×AI + 0.15×Momentum
                         </p>
                       </div>

@@ -90,7 +90,7 @@ export default function HomeTab() {
           {/* Flag/Emoji Toggle */}
           <button
             onClick={toggleFlag}
-            className="ml-auto flex items-center gap-1.5 rounded-full bg-white/50 dark:bg-white/5 border border-[#E0E0E0]/50 dark:border-white/10 px-2.5 py-1.5 text-[10px] font-semibold text-[#666] dark:text-[#CCCCCC] hover:border-[#6C2BD9]/30 transition-colors"
+            className="ml-auto flex items-center gap-1.5 rounded-full bg-white/50 dark:bg-white/5 border border-[#E0E0E0]/50 dark:border-white/10 px-2.5 py-1.5 text-[10px] font-semibold text-[#666] dark:text-[#CCCCCC] hover:border-[#6C2BD9]/30 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
           >
             {flagMode === 'flag' ? (
               <>
@@ -168,7 +168,7 @@ export default function HomeTab() {
                           {getSentimentEmoji(match.homeTeam.sentiment)}
                         </span>
                       </div>
-                      <span className="text-[9px] font-bold uppercase tracking-widest text-[#999] dark:text-gray-500">
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-[#6B7280] dark:text-gray-400">
                         {t('home.fan_mood')}
                       </span>
                       <div className="flex items-center gap-2">

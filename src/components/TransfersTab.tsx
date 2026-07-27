@@ -181,7 +181,7 @@ export default function TransfersTab() {
               key={f.id}
               onClick={() => setFilter(f.id)}
               className={`
-                shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all duration-200
+                shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 ${isActive
                   ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
                   : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
@@ -197,7 +197,7 @@ export default function TransfersTab() {
       {/* ── Sort dropdown + refresh ─────────────────────────── */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#999] dark:text-gray-500">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] dark:text-gray-400">
             Sort
           </span>
           <div className="flex gap-1">
@@ -206,7 +206,7 @@ export default function TransfersTab() {
                 key={opt.id}
                 onClick={() => setSort(opt.id)}
                 className={`
-                  rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all
+                  rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                   ${sort === opt.id
                     ? 'bg-[#1A1A1A] dark:bg-white text-white dark:text-[#1A1A1A]'
                     : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] hover:bg-[#E0E0E0] dark:hover:bg-[#3D3D3D]'
@@ -259,7 +259,7 @@ export default function TransfersTab() {
             <p className="text-sm text-[#666] dark:text-[#CCCCCC]">
               No active transfer sagas match this filter right now.
             </p>
-            <p className="text-[11px] text-[#999] dark:text-gray-500 mt-1">
+            <p className="text-[11px] text-[#6B7280] dark:text-gray-400 mt-1">
               Sagas only appear when a Tier 1 journalist has reported them. Check back later.
             </p>
           </CardContent>

@@ -538,3 +538,50 @@
     transform: none;
   }
 }
+
+/* ── Premium skeleton shimmer (WCAG-friendly loading state) ───────────────────
+   Replaces the basic `animate-pulse` with a gradient sweep that reads as
+   "loading" more clearly. Uses the existing `shimmer` keyframe (defined above).
+   The light-mode gradient (#f0f0f0 → #e0e0e0) is swapped for dark grays in
+   dark mode so the shimmer stays visible on dark backgrounds. */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer {
+  background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
+  background-size: 200% 100%;
+}
+
+/* Respect reduced motion — freeze the shimmer on a solid fill so it still
+   reads as a placeholder without animating. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none;
+    background: #e8e8e8;
+  }
+  .dark .skeleton-shimmer {
+    background: #2f2f2f;
+  }
+}
+
+/* ── Global accessible focus indicator (WCAG 2.4.7 Focus Visible) ─────────────
+   Baseline outline for ALL focusable elements so keyboard users always see
+   where focus is — especially custom interactive elements (nav links, vote
+   buttons, filter pills, clickable cards) that don't inherit shadcn's ring.
+   Uses `outline` (not box-shadow/ring) so it never conflicts with the
+   component-level Tailwind `focus-visible:ring-*` styles; the two coexist.
+   Purple #6C2BD9 matches the Fan Pulse brand and passes AA contrast on both
+   light (#fff) and dark (#1A1A1A) backgrounds. */
+:focus-visible {
+  outline: 2px solid #6C2BD9;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Elements that render as links/buttons but are bare <a>/<button> without a
+   focus class still get the outline above. For wrappers that are focusable
+   via [tabindex] / role=button, the outline applies too. No override needed
+   for shadcn components — their ring is additive. */

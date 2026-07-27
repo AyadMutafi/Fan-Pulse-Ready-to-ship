@@ -30,8 +30,11 @@ export default function PulseScoreRing({ pulseScore, size = 80, showBreakdown = 
     <div className="flex flex-col items-center">
       {/* Circular Ring */}
       <div
-        className="relative cursor-pointer"
+        className="relative cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 rounded-full"
         style={{ width: size, height: size }}
+        role={showBreakdown ? 'button' : undefined}
+        tabIndex={showBreakdown ? 0 : undefined}
+        aria-expanded={showBreakdown ? expanded : undefined}
         onClick={() => showBreakdown && setExpanded(!expanded)}
       >
         {/* Background circle */}
@@ -94,7 +97,7 @@ export default function PulseScoreRing({ pulseScore, size = 80, showBreakdown = 
               >
                 <div className="flex items-center justify-between text-[10px] mb-0.5">
                   <span className="font-semibold text-[#666] dark:text-[#CCCCCC]">
-                    {w.label} <span className="text-[#999]">({w.weight})</span>
+                    {w.label} <span className="text-[#6B7280] dark:text-gray-400">({w.weight})</span>
                   </span>
                   <span className="font-bold" style={{ color: w.color }}>
                     {value}
@@ -116,7 +119,7 @@ export default function PulseScoreRing({ pulseScore, size = 80, showBreakdown = 
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="text-[9px] text-[#999] mt-1 leading-relaxed"
+                      className="text-[11px] text-[#6B7280] dark:text-gray-400 mt-1 leading-relaxed"
                     >
                       {note}
                     </motion.p>

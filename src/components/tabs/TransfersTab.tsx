@@ -90,7 +90,7 @@ export default function TransfersTab() {
         <button
           onClick={() => load(statusFilter, true)}
           disabled={refreshing}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 text-[11px] font-semibold text-[#666] dark:text-gray-300 hover:border-[#6C2BD9]/40 transition-colors disabled:opacity-50"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 text-[11px] font-semibold text-[#666] dark:text-gray-300 hover:border-[#6C2BD9]/40 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
           Refresh
@@ -124,10 +124,10 @@ export default function TransfersTab() {
             <button
               key={p.id}
               onClick={() => setStatusFilter(p.id)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 ${
                 statusFilter === p.id
                   ? 'bg-white dark:bg-[#2D2D2D] text-[#6C2BD9] dark:text-[#8B5CF6] shadow-sm'
-                  : 'text-[#999] dark:text-gray-500 hover:text-[#666] dark:hover:text-gray-300'
+                  : 'text-[#6B7280] dark:text-gray-400 hover:text-[#666] dark:hover:text-gray-300'
               }`}
             >
               {p.label}
@@ -139,10 +139,10 @@ export default function TransfersTab() {
             <button
               key={s.id}
               onClick={() => setSortKey(s.id)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 ${
                 sortKey === s.id
                   ? 'bg-white dark:bg-[#2D2D2D] text-[#6C2BD9] dark:text-[#8B5CF6] shadow-sm'
-                  : 'text-[#999] dark:text-gray-500 hover:text-[#666] dark:hover:text-gray-300'
+                  : 'text-[#6B7280] dark:text-gray-400 hover:text-[#666] dark:hover:text-gray-300'
               }`}
             >
               {s.label}
@@ -155,7 +155,7 @@ export default function TransfersTab() {
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-56 rounded-2xl bg-[#F0F0F0] dark:bg-white/5 animate-pulse" />
+            <div key={i} className="h-56 rounded-2xl bg-[#F0F0F0] dark:bg-white/5 skeleton-shimmer" />
           ))}
         </div>
       ) : error ? (
@@ -197,7 +197,7 @@ function MiniStat({
       </div>
       <div>
         <div className="text-sm font-extrabold text-[#1A1A1A] dark:text-white leading-none">{value}</div>
-        <div className="text-[9px] uppercase tracking-wider text-[#999] dark:text-gray-500 mt-0.5">{label}</div>
+        <div className="text-[11px] uppercase tracking-wider text-[#6B7280] dark:text-gray-400 mt-0.5">{label}</div>
       </div>
     </div>
   )
@@ -208,7 +208,7 @@ function EmptyState({ statusFilter }: { statusFilter: StatusFilter }) {
   return (
     <div className="rounded-2xl border border-dashed border-[#E0E0E0] dark:border-white/10 p-8 text-center">
       <div className="mx-auto size-12 rounded-full bg-[#F0F0F0] dark:bg-white/5 flex items-center justify-center mb-3">
-        <ShieldCheck className="size-6 text-[#999]" />
+        <ShieldCheck className="size-6 text-[#6B7280] dark:text-gray-400" />
       </div>
       <h3 className="text-sm font-bold text-[#1A1A1A] dark:text-white">
         {isDebunked ? 'No debunked rumors archived yet' : 'No transfer rumors verified yet'}

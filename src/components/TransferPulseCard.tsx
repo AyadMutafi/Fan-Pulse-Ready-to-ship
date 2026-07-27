@@ -43,7 +43,7 @@ interface TransferPulseCardProps {
 const TREND_ICON: Record<string, { icon: typeof TrendingUp; color: string; label: string }> = {
   rising: { icon: TrendingUp, color: 'text-[#10B981]', label: 'Rising' },
   falling: { icon: TrendingDown, color: 'text-[#EF4444]', label: 'Falling' },
-  stable: { icon: Minus, color: 'text-[#999]', label: 'Stable' },
+  stable: { icon: Minus, color: 'text-[#6B7280] dark:text-gray-400', label: 'Stable' },
 }
 
 function likelihoodColor(pct: number): { bg: string; text: string } {
@@ -77,7 +77,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
   return (
     <button
       onClick={() => onClick(saga)}
-      className="group relative w-full text-left rounded-2xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 p-4 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 hover:shadow-lg hover:shadow-[#6C2BD9]/5 transition-all duration-200"
+      className="group relative w-full text-left rounded-2xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 p-4 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 hover:shadow-lg hover:shadow-[#6C2BD9]/5 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
     >
       {/* RUMOR label — anti-hallucination, always visible */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5">
@@ -104,7 +104,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
           </span>
         </div>
         {saga.feeReported && (
-          <p className="mt-0.5 text-[10px] text-[#999] dark:text-gray-500">
+          <p className="mt-0.5 text-[10px] text-[#6B7280] dark:text-gray-400">
             Fee: <span className="font-semibold text-[#666] dark:text-gray-300">{saga.feeReported}</span>
           </p>
         )}
@@ -116,7 +116,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
         <span className="text-[10px] font-semibold text-[#6C2BD9] dark:text-[#8B5CF6]">
           {saga.tier1Count} Tier 1 {saga.tier1Count === 1 ? 'source' : 'sources'}
         </span>
-        <span className="text-[10px] text-[#999] dark:text-gray-500">
+        <span className="text-[10px] text-[#6B7280] dark:text-gray-400">
           · {timeAgo(saga.firstReportedAt)}
         </span>
       </div>
@@ -125,10 +125,10 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
       {hasFanPosts ? (
         <div className="mt-3">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[9px] font-semibold uppercase tracking-wider text-[#999] dark:text-gray-500">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-[#6B7280] dark:text-gray-400">
               Fan Sentiment
             </span>
-            <span className="text-[9px] text-[#999] dark:text-gray-500">
+            <span className="text-[11px] text-[#6B7280] dark:text-gray-400">
               {saga.buzzVolume} {saga.buzzVolume === 1 ? 'post' : 'posts'}
             </span>
           </div>
@@ -142,17 +142,17 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
               is 100% neutral. Show "Neutral X%" instead of "0% 0% 0%" which
               looks like empty data even though there are real posts. */}
           {saga.excitedPct === 0 && saga.skepticalPct === 0 && saga.dreadingPct === 0 ? (
-            <div className="flex items-center gap-2 mt-1.5 text-[9px]">
-              <span className="flex items-center gap-1 text-[#999] dark:text-gray-400">
+            <div className="flex items-center gap-2 mt-1.5 text-[11px]">
+              <span className="flex items-center gap-1 text-[#6B7280] dark:text-gray-400">
                 <span className="size-1.5 rounded-full bg-[#999]/60" />
                 Neutral {neutralPct.toFixed(0)}%
               </span>
-              <span className="text-[#999] dark:text-gray-500 italic">
+              <span className="text-[#6B7280] dark:text-gray-400 italic">
                 · fans haven't taken a strong stance
               </span>
             </div>
           ) : (
-            <div className="flex items-center gap-2.5 mt-1.5 text-[9px]">
+            <div className="flex items-center gap-2.5 mt-1.5 text-[11px]">
               <span className="flex items-center gap-1 text-[#10B981]">
                 <span className="size-1.5 rounded-full bg-[#10B981]" />
                 {saga.excitedPct.toFixed(0)}%
@@ -170,7 +170,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
         </div>
       ) : (
         <div className="mt-3 rounded-lg border border-dashed border-[#E0E0E0] dark:border-white/10 bg-[#F8F9FA]/50 dark:bg-white/[0.02] px-3 py-2">
-          <p className="text-[10px] text-[#999] dark:text-gray-500 leading-snug">
+          <p className="text-[11px] text-[#6B7280] dark:text-gray-400 leading-snug">
             No fan posts yet — sentiment will appear when fans react
           </p>
         </div>
@@ -185,13 +185,13 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
         </div>
         <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${lik.bg}`}>
           <span className={`text-[10px] font-bold ${lik.text}`}>{saga.fanReadLikelihood.toFixed(0)}%</span>
-          <span className="text-[8px] uppercase tracking-wider text-[#999] dark:text-gray-500">fan read</span>
+          <span className="text-[8px] uppercase tracking-wider text-[#6B7280] dark:text-gray-400">fan read</span>
         </div>
       </div>
 
       {/* Top Tier 1 source */}
       {topSrc && (
-        <div className="mt-2.5 text-[10px] text-[#999] dark:text-gray-500">
+        <div className="mt-2.5 text-[10px] text-[#6B7280] dark:text-gray-400">
           <span className="font-semibold text-[#666] dark:text-gray-300">{topSrc.journalistName}</span>
           <span className="mx-1">·</span>
           <span>{topSrc.outlet}</span>

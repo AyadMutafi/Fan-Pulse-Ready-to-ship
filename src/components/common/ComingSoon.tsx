@@ -30,7 +30,7 @@ export function ComingSoon({ tabName }: ComingSoonProps) {
           <p className="text-sm text-[#666] dark:text-[#CCCCCC] mb-4">
             This section is being built with care. It needs more work to match the FanPulse standard.
           </p>
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-1.5 text-xs font-semibold text-[#999] dark:text-gray-500 border border-[#E0E0E0] dark:border-white/10">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-1.5 text-xs font-semibold text-[#6B7280] dark:text-gray-400 border border-[#E0E0E0] dark:border-white/10">
             <Lock className="size-3" />
             COMING SOON
           </div>

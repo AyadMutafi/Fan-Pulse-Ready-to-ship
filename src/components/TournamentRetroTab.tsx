@@ -176,7 +176,7 @@ export function TournamentRetroModal({ open, onOpenChange }: TournamentRetroModa
               <div className="space-y-2 pt-1">
                 <div className="flex items-start gap-2 rounded-lg border border-[#F59E0B]/30 bg-[#F59E0B]/5 px-3 py-2">
                   <ShieldCheck className="size-3.5 shrink-0 mt-0.5 text-[#F59E0B]" />
-                  <p className="text-[10px] leading-relaxed text-[#666] dark:text-[#CCCCCC]">
+                  <p className="text-[11px] leading-relaxed text-[#666] dark:text-[#CCCCCC]">
                     <span className="font-bold text-[#1A1A1A] dark:text-white">Verified lineup.</span>{' '}
                     {data.disclaimer}
                   </p>
@@ -185,7 +185,7 @@ export function TournamentRetroModal({ open, onOpenChange }: TournamentRetroModa
                 <button
                   type="button"
                   onClick={() => setShowSources(v => !v)}
-                  className="flex w-full items-center justify-between rounded-lg border border-[#E0E0E0]/60 dark:border-white/10 bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2 text-left hover:bg-[#F0F1F2] dark:hover:bg-[#333] transition-colors"
+                  className="flex w-full items-center justify-between rounded-lg border border-[#E0E0E0]/60 dark:border-white/10 bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2 text-left hover:bg-[#F0F1F2] dark:hover:bg-[#333] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                   aria-expanded={showSources}
                 >
                   <span className="text-[10px] font-bold text-[#666] dark:text-[#CCCCCC] uppercase tracking-wide">
@@ -205,7 +205,7 @@ export function TournamentRetroModal({ open, onOpenChange }: TournamentRetroModa
                       className="overflow-hidden rounded-lg border border-[#E0E0E0]/60 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 space-y-1"
                     >
                       {data.tournamentFacts.sources.map((s, i) => (
-                        <li key={i} className="flex items-start gap-2 text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                        <li key={i} className="flex items-start gap-2 text-[11px] text-[#666] dark:text-[#CCCCCC]">
                           <span className="shrink-0 mt-0.5 size-1 rounded-full bg-[#F59E0B]" />
                           {s}
                         </li>
@@ -242,7 +242,7 @@ function TournamentFactsBanner({ facts }: { facts: TournamentFacts }) {
           <p className="text-sm font-black text-[#1A1A1A] dark:text-white">
             {facts.winner} won the 2026 World Cup
           </p>
-          <Badge className="bg-[#F59E0B] text-white border-0 text-[9px] font-bold px-1.5 py-0">
+          <Badge className="bg-[#F59E0B] text-white border-0 text-[11px] font-bold px-1.5 py-0">
             {facts.finalScore}
           </Badge>
         </div>
@@ -264,7 +264,7 @@ function FactPill({ icon, label, value }: { icon: React.ReactNode; label: string
         {icon}
         <span className="text-[8px] font-bold uppercase tracking-wide">{label}</span>
       </div>
-      <p className="mt-0.5 text-[9px] sm:text-[10px] font-bold text-[#1A1A1A] dark:text-white leading-tight">
+      <p className="mt-0.5 text-[11px] sm:text-[11px] font-bold text-[#1A1A1A] dark:text-white leading-tight">
         {value}
       </p>
     </div>
@@ -336,16 +336,16 @@ function RetroFormationCard({
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-black" style={{ color: accent }}>{label}</h3>
             <Badge
-              className={`${badgeBg} text-white border-0 text-[9px] font-bold px-1.5 py-0 gap-1`}
+              className={`${badgeBg} text-white border-0 text-[11px] font-bold px-1.5 py-0 gap-1`}
             >
               <Lock className="size-2.5" />
               {side.formation}
             </Badge>
           </div>
-          <p className="text-[10px] text-[#666] dark:text-[#CCCCCC] mt-0.5">{subtitle}</p>
+          <p className="text-[11px] text-[#666] dark:text-[#CCCCCC] mt-0.5">{subtitle}</p>
         </div>
         <div className="text-right">
-          <p className="text-[9px] font-bold text-[#666] dark:text-[#CCCCCC]">AVG</p>
+          <p className="text-[11px] font-bold text-[#666] dark:text-[#CCCCCC]">AVG</p>
           <p className="text-sm font-black" style={{ color: accent }}>{(avgScore / 10).toFixed(1)}</p>
         </div>
       </div>

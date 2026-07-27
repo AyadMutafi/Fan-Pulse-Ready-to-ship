@@ -128,7 +128,7 @@ export default function TOTWTab() {
                         </div>
                         {/* Player name — full name (no truncation), word-break keeps long names visible */}
                         <p
-                          className="mt-1 max-w-[72px] sm:max-w-[88px] text-[10px] font-bold text-[#1A1A1A] dark:text-white text-center leading-tight"
+                          className="mt-1 max-w-[72px] sm:max-w-[88px] text-[11px] font-bold text-[#1A1A1A] dark:text-white text-center leading-tight"
                           style={{ wordBreak: 'keep-all', overflowWrap: 'anywhere' }}
                         >
                           {player?.name ?? slot.pos}
@@ -140,7 +140,7 @@ export default function TOTWTab() {
                           </Badge>
                           {player && (
                             <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-[#6C2BD9] dark:bg-[#8B5CF6]">
-                              <span className="text-[9px] font-black text-white leading-none">
+                              <span className="text-[11px] font-black text-white leading-none">
                                 {(player.pulseScore / 10).toFixed(1)}
                               </span>
                               <span className="text-[6px] font-semibold text-white/70 uppercase tracking-wide leading-none">rtg</span>

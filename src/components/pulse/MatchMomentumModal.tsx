@@ -228,12 +228,12 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
             <span className="text-2xl shrink-0">{match.homeTeam.flag}</span>
             <div className="min-w-0">
               <p className="text-xs font-bold text-[#1A1A1A] dark:text-white truncate">{match.homeTeam.name}</p>
-              <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{match.league} · Group {match.group}</p>
+              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">{match.league} · Group {match.group}</p>
             </div>
           </div>
           <div className="flex flex-col items-center shrink-0">
             <span className="text-xl font-black tracking-wider text-[#1A1A1A] dark:text-white">{match.score}</span>
-            <span className={`text-[9px] font-bold px-1.5 py-px rounded-full ${
+            <span className={`text-[11px] font-bold px-1.5 py-px rounded-full ${
               match.status === 'live'
                 ? 'bg-[#EF4444]/10 text-[#EF4444]'
                 : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC]'
@@ -247,14 +247,14 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
           <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
             <div className="min-w-0 text-right">
               <p className="text-xs font-bold text-[#1A1A1A] dark:text-white truncate">{match.awayTeam.name}</p>
-              <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">&nbsp;</p>
+              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">&nbsp;</p>
             </div>
             <span className="text-2xl shrink-0">{match.awayTeam.flag}</span>
           </div>
           <button
             onClick={() => handleOpenChange(false)}
             aria-label="Close"
-            className="shrink-0 rounded-full size-8 flex items-center justify-center text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] transition-colors"
+            className="shrink-0 rounded-full size-8 flex items-center justify-center text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
           >
             <X className="size-4" />
           </button>
@@ -317,7 +317,7 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
               >
                 {overallFinal}%
               </motion.span>
-              <span className="text-[9px] font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC] mt-0.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC] mt-0.5">
                 {t('match_momentum.fan_pulse')}
               </span>
             </div>
@@ -427,7 +427,7 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
               {/* Tooltip */}
               {hoveredEvent && (
                 <div
-                  className="absolute z-30 pointer-events-none max-w-[200px] rounded-lg bg-[#1A1A1A] dark:bg-white text-white dark:text-[#1A1A1A] px-2.5 py-2 shadow-xl text-[10px] leading-tight"
+                  className="absolute z-30 pointer-events-none max-w-[200px] rounded-lg bg-[#1A1A1A] dark:bg-white text-white dark:text-[#1A1A1A] px-2.5 py-2 shadow-xl text-[11px] leading-tight"
                   style={{
                     left: `${(xForMin(hoveredEvent.minute) / CHART_W) * 100}%`,
                     top: `${(yForVal(valueAtMinute(
@@ -451,7 +451,7 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
               )}
 
               {/* Legend */}
-              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 mt-2 text-[9px] text-[#666] dark:text-[#CCCCCC]">
+              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 mt-2 text-[11px] text-[#666] dark:text-[#CCCCCC]">
                 <span className="flex items-center gap-1">
                   <span className="inline-block size-2 rounded-full bg-[#10B981]" />
                   {match.homeTeam.code}
@@ -490,7 +490,7 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
                   />
                 </div>
                 <div className="flex items-center justify-between mt-1.5">
-                  <span className="text-[9px] text-[#666] dark:text-[#CCCCCC]">momentum</span>
+                  <span className="text-[11px] text-[#666] dark:text-[#CCCCCC]">momentum</span>
                   <span className="text-xs font-black" style={{ color: s.color }}>{s.mom}%</span>
                 </div>
               </div>
@@ -506,7 +506,7 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
             }`}>
               <div className="flex items-center gap-1.5 mb-1">
                 <Zap className={`size-3.5 ${momentum.biggestSpike.sentimentDelta > 0 ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
-                <span className="text-[9px] font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
                   {t('match_momentum.biggest_spike')}
                 </span>
               </div>
@@ -528,7 +528,7 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
           <div className="rounded-xl border border-[#6C2BD9]/20 dark:border-[#8B5CF6]/20 bg-[#6C2BD9]/5 dark:bg-[#6C2BD9]/10 p-3 flex gap-2">
             <Info className="size-4 shrink-0 text-[#6C2BD9] dark:text-[#8B5CF6] mt-0.5" />
             <div>
-              <p className="text-[9px] font-bold uppercase tracking-wider text-[#6C2BD9] dark:text-[#8B5CF6] mb-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#6C2BD9] dark:text-[#8B5CF6] mb-1">
                 {t('match_momentum.story_so_far')}
               </p>
               <p className="text-[11px] italic text-[#1A1A1A]/80 dark:text-white/80 leading-relaxed">
@@ -557,7 +557,7 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
                       onClick={() => handleTimelineClick(e)}
                       onMouseEnter={() => setHoveredEventId(e.id)}
                       onMouseLeave={() => setHoveredEventId(null)}
-                      className={`relative z-10 w-full text-left flex items-start gap-3 rounded-lg p-2 pl-1 transition-all ${
+                      className={`relative z-10 w-full text-left flex items-start gap-3 rounded-lg p-2 pl-1 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 ${
                         isHovered
                           ? 'bg-[#6C2BD9]/10 dark:bg-[#6C2BD9]/20 ring-1 ring-[#6C2BD9]/30'
                           : 'hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D]'
@@ -581,7 +581,7 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
                             {positive ? '+' : ''}{e.sentimentDelta}%
                           </span>
                         </div>
-                        <p className="text-[10px] text-[#666] dark:text-[#CCCCCC] mt-1 leading-relaxed">{e.description}</p>
+                        <p className="text-[11px] text-[#666] dark:text-[#CCCCCC] mt-1 leading-relaxed">{e.description}</p>
                       </div>
                     </button>
                   )
@@ -597,7 +597,7 @@ export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
               shareTitle={`${match.homeTeam.name} ${match.score} ${match.awayTeam.name} — FANPULSE`}
               className="w-full sm:w-auto"
             />
-            <p className="text-[9px] text-[#999] dark:text-gray-500 leading-tight">
+            <p className="text-[11px] text-[#6B7280] dark:text-gray-400 leading-tight">
               Data: X + fan votes · {formatK(momentum.totalVolume)} {t('match_momentum.mentions')} · For fan engagement purposes only.
             </p>
           </div>

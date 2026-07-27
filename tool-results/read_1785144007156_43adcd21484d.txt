@@ -1,0 +1,985 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  RefreshCw, Heart, MessageCircle, Share2, ChevronDown, ChevronUp,
+     7→  Radio, TrendingUp, Globe2, BarChart3, Hash, ExternalLink,
+     8→  MessageSquare, Loader2, AlertCircle
+     9→} from 'lucide-react'
+    10→import { Card, CardContent } from '@/components/ui/card'
+    11→import { Badge } from '@/components/ui/badge'
+    12→import { Button } from '@/components/ui/button'
+    13→import { Skeleton } from '@/components/ui/skeleton'
+    14→import { useLanguage } from '@/context/LanguageContext'
+    15→import FlagImage from '@/components/common/FlagImage'
+    16→import { findNationalTeam } from '@/lib/national-teams'
+    17→
+    18→// ── Types ────────────────────────────────────────────────────
+    19→
+    20→interface SocialPost {
+    21→  id: string
+    22→  platform: 'twitter' | 'reddit'
+    23→  postId: string
+    24→  author: string
+    25→  content: string
+    26→  language: string
+    27→  sentiment: number
+    28→  likes: number
+    29→  replies: number
+    30→  shares: number
+    31→  teamTag: string
+    32→  matchTag: string
+    33→  searchQuery: string
+    34→  postedAt: string | null
+    35→  fetchedAt: string
+    36→}
+    37→
+    38→interface SentimentSummary {
+    39→  id: string
+    40→  teamCode: string
+    41→  language: string
+    42→  avgSentiment: number
+    43→  postCount: number
+    44→  positiveRatio: number
+    45→  topTopics: string
+    46→  platform: string
+    47→  period: string
+    48→  updatedAt: string
+    49→}
+    50→
+    51→// ── Language Config ───────────────────────────────────────────
+    52→
+    53→const LANGUAGES = [
+    54→  { code: 'en', name: 'English', nameAr: 'الإنجليزية', flag: '🇬🇧' },
+    55→  { code: 'ar', name: 'العربية', nameAr: 'العربية', flag: '🇸🇦' },
+    56→  { code: 'es', name: 'Español', nameAr: 'الإسبانية', flag: '🇪🇸' },
+    57→  { code: 'fr', name: 'Français', nameAr: 'الفرنسية', flag: '🇫🇷' },
+    58→  { code: 'pt', name: 'Português', nameAr: 'البرتغالية', flag: '🇧🇷' },
+    59→  { code: 'de', name: 'Deutsch', nameAr: 'الألمانية', flag: '🇩🇪' },
+    60→  { code: 'ja', name: '日本語', nameAr: 'اليابانية', flag: '🇯🇵' },
+    61→  { code: 'ko', name: '한국어', nameAr: 'الكورية', flag: '🇰🇷' },
+    62→  { code: 'tr', name: 'Türkçe', nameAr: 'التركية', flag: '🇹🇷' },
+    63→  { code: 'id', name: 'Bahasa', nameAr: 'الإندونيسية', flag: '🇮🇩' },
+    64→  { code: 'ur', name: 'اردو', nameAr: 'الأردية', flag: '🇵🇰' },
+    65→  { code: 'fa', name: 'فارسی', nameAr: 'الفارسية', flag: '🇮🇷' },
+    66→  { code: 'zh', name: '中文', nameAr: 'الصينية', flag: '🇨🇳' },
+    67→]
+    68→
+    69→type PlatformFilter = 'all' | 'twitter' | 'reddit'
+    70→type LanguageFilter = 'all' | string
+    71→
+    72→// ── Helpers ──────────────────────────────────────────────────
+    73→
+    74→function getSentimentColor(score: number): string {
+    75→  if (score > 60) return '#10B981'
+    76→  if (score >= 40) return '#F59E0B'
+    77→  return '#EF4444'
+    78→}
+    79→
+    80→function getSentimentTextClass(score: number): string {
+    81→  if (score > 60) return 'text-[#10B981]'
+    82→  if (score >= 40) return 'text-[#F59E0B]'
+    83→  return 'text-[#EF4444]'
+    84→}
+    85→
+    86→function getSentimentBgClass(score: number): string {
+    87→  if (score > 60) return 'bg-[#10B981]/10 text-[#10B981] border-[#10B981]/20'
+    88→  if (score >= 40) return 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20'
+    89→  return 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20'
+    90→}
+    91→
+    92→function getSentimentLabel(score: number, isAr: boolean): string {
+    93→  if (score > 60) return isAr ? 'إيجابي' : 'Positive'
+    94→  if (score >= 40) return isAr ? 'محايد' : 'Neutral'
+    95→  return isAr ? 'سلبي' : 'Negative'
+    96→}
+    97→
+    98→function timeAgo(dateStr: string | null, isAr: boolean): string {
+    99→  if (!dateStr) return ''
+   100→  const now = new Date()
+   101→  const date = new Date(dateStr)
+   102→  const diffMs = now.getTime() - date.getTime()
+   103→  const diffMin = Math.floor(diffMs / 60000)
+   104→  const diffHr = Math.floor(diffMs / 3600000)
+   105→  const diffDay = Math.floor(diffMs / 86400000)
+   106→
+   107→  if (isAr) {
+   108→    if (diffMin < 1) return 'الآن'
+   109→    if (diffMin < 60) return `منذ ${diffMin} د`
+   110→    if (diffHr < 24) return `منذ ${diffHr} س`
+   111→    return `منذ ${diffDay} ي`
+   112→  }
+   113→  if (diffMin < 1) return 'now'
+   114→  if (diffMin < 60) return `${diffMin}m ago`
+   115→  if (diffHr < 24) return `${diffHr}h ago`
+   116→  return `${diffDay}d ago`
+   117→}
+   118→
+   119→function formatNumber(n: number): string {
+   120→  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
+   121→  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
+   122→  return n.toString()
+   123→}
+   124→
+   125→function getLanguageFlag(code: string): string {
+   126→  const lang = LANGUAGES.find(l => l.code === code)
+   127→  return lang?.flag ?? '🌐'
+   128→}
+   129→
+   130→function getLanguageName(code: string, isAr: boolean): string {
+   131→  const lang = LANGUAGES.find(l => l.code === code)
+   132→  if (!lang) return code.toUpperCase()
+   133→  return isAr ? lang.nameAr : lang.name
+   134→}
+   135→
+   136→// Language-specific colors for sentiment bar segments
+   137→const LANG_COLORS: Record<string, string> = {
+   138→  en: '#6C2BD9',
+   139→  ar: '#8B5CF6',
+   140→  es: '#FF6B35',
+   141→  fr: '#3B82F6',
+   142→  pt: '#10B981',
+   143→  de: '#EF4444',
+   144→  ja: '#EC4899',
+   145→  ko: '#F59E0B',
+   146→  tr: '#F97316',
+   147→  id: '#14B8A6',
+   148→  ur: '#06B6D4',
+   149→  fa: '#8B5CF6',
+   150→  zh: '#DC2626',
+   151→}
+   152→
+   153→// ── Circular Gauge Component ─────────────────────────────────
+   154→
+   155→function CircularGauge({ value, size = 100 }: { value: number; size?: number }) {
+   156→  const strokeWidth = 8
+   157→  const radius = (size - strokeWidth) / 2
+   158→  const circumference = 2 * Math.PI * radius
+   159→  const progress = (value / 100) * circumference
+   160→  const color = getSentimentColor(value)
+   161→
+   162→  return (
+   163→    <div className="relative" style={{ width: size, height: size }}>
+   164→      <svg width={size} height={size} className="-rotate-90">
+   165→        <circle
+   166→          cx={size / 2}
+   167→          cy={size / 2}
+   168→          r={radius}
+   169→          fill="none"
+   170→          stroke="currentColor"
+   171→          strokeWidth={strokeWidth}
+   172→          className="text-[#E0E0E0] dark:text-white/10"
+   173→        />
+   174→        <motion.circle
+   175→          cx={size / 2}
+   176→          cy={size / 2}
+   177→          r={radius}
+   178→          fill="none"
+   179→          stroke={color}
+   180→          strokeWidth={strokeWidth}
+   181→          strokeLinecap="round"
+   182→          strokeDasharray={circumference}
+   183→          initial={{ strokeDashoffset: circumference }}
+   184→          animate={{ strokeDashoffset: circumference - progress }}
+   185→          transition={{ duration: 1.2, ease: 'easeOut' }}
+   186→        />
+   187→      </svg>
+   188→      <div className="absolute inset-0 flex flex-col items-center justify-center">
+   189→        <motion.span
+   190→          className="text-2xl font-black"
+   191→          style={{ color }}
+   192→          initial={{ opacity: 0, scale: 0.5 }}
+   193→          animate={{ opacity: 1, scale: 1 }}
+   194→          transition={{ delay: 0.3, duration: 0.4 }}
+   195→        >
+   196→          {Math.round(value)}
+   197→        </motion.span>
+   198→        <span className="text-[11px] font-medium text-[#666] dark:text-[#CCCCCC]">/ 100</span>
+   199→      </div>
+   200→    </div>
+   201→  )
+   202→}
+   203→
+   204→// ── Skeleton Components ──────────────────────────────────────
+   205→
+   206→function OverviewSkeleton() {
+   207→  return (
+   208→    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+   209→      {Array.from({ length: 4 }).map((_, i) => (
+   210→        <Card key={i} className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10">
+   211→          <CardContent className="p-4">
+   212→            <Skeleton className="h-3 w-20 mb-3" />
+   213→            <Skeleton className="h-10 w-16 mb-2" />
+   214→            <Skeleton className="h-2 w-full" />
+   215→          </CardContent>
+   216→        </Card>
+   217→      ))}
+   218→    </div>
+   219→  )
+   220→}
+   221→
+   222→function PostSkeleton() {
+   223→  return (
+   224→    <Card className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10">
+   225→      <CardContent className="p-4">
+   226→        <div className="flex items-center gap-2 mb-2">
+   227→          <Skeleton className="size-8 rounded-full" />
+   228→          <Skeleton className="h-3 w-24" />
+   229→          <Skeleton className="h-4 w-12 ml-auto" />
+   230→        </div>
+   231→        <Skeleton className="h-3 w-full mb-1" />
+   232→        <Skeleton className="h-3 w-3/4 mb-3" />
+   233→        <div className="flex gap-4">
+   234→          <Skeleton className="h-3 w-12" />
+   235→          <Skeleton className="h-3 w-12" />
+   236→          <Skeleton className="h-3 w-12" />
+   237→        </div>
+   238→      </CardContent>
+   239→    </Card>
+   240→  )
+   241→}
+   242→
+   243→// ── Main Component ───────────────────────────────────────────
+   244→
+   245→export default function FanPulseTab() {
+   246→  const { lang, t } = useLanguage()
+   247→  const isAr = lang === 'AR'
+   248→
+   249→  // ── State ──
+   250→  const [posts, setPosts] = useState<SocialPost[]>([])
+   251→  const [summaries, setSummaries] = useState<SentimentSummary[]>([])
+   252→  const [isLoading, setIsLoading] = useState(true)
+   253→  const [isRefreshing, setIsRefreshing] = useState(false)
+   254→  const [error, setError] = useState<string | null>(null)
+   255→  const [languageFilter, setLanguageFilter] = useState<LanguageFilter>('all')
+   256→  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
+   257→  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set())
+   258→  const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set())
+   259→  const [visiblePosts, setVisiblePosts] = useState(10)
+   260→
+   261→  // ── Fetch Data ──
+   262→  const fetchData = useCallback(async () => {
+   263→    try {
+   264→      setError(null)
+   265→      const params = new URLSearchParams()
+   266→      params.set('platform', platformFilter)
+   267→      params.set('period', '24h')
+   268→      if (languageFilter !== 'all') params.set('lang', languageFilter)
+   269→
+   270→      const res = await fetch(`/api/social-sentiment?${params.toString()}`)
+   271→      if (!res.ok) throw new Error('Failed to fetch data')
+   272→      const data = await res.json()
+   273→
+   274→      setPosts(data.posts || [])
+   275→      setSummaries(data.summaries || [])
+   276→    } catch (err) {
+   277→      console.error('Failed to fetch sentiment data:', err)
+   278→      setError(isAr ? 'فشل تحميل البيانات' : 'Failed to load data')
+   279→    } finally {
+   280→      setIsLoading(false)
+   281→      setIsRefreshing(false)
+   282→    }
+   283→  }, [platformFilter, languageFilter, isAr])
+   284→
+   285→  useEffect(() => {
+   286→    fetchData()
+   287→  }, [fetchData])
+   288→
+   289→  // ── Refresh Handler ──
+   290→  const handleRefresh = useCallback(async () => {
+   291→    setIsRefreshing(true)
+   292→    try {
+   293→      await fetch('/api/social-sentiment', {
+   294→        method: 'POST',
+   295→        headers: { 'Content-Type': 'application/json' },
+   296→        body: JSON.stringify({
+   297→          teamCode: '',
+   298→          language: languageFilter === 'all' ? '' : languageFilter,
+   299→        }),
+   300→      })
+   301→      await fetchData()
+   302→    } catch (err) {
+   303→      console.error('Refresh failed:', err)
+   304→      setIsRefreshing(false)
+   305→    }
+   306→  }, [languageFilter, fetchData])
+   307→
+   308→  // ── Computed Data ──
+   309→  const filteredPosts = useMemo(() => {
+   310→    let result = posts
+   311→    if (platformFilter !== 'all') {
+   312→      result = result.filter(p => p.platform === platformFilter)
+   313→    }
+   314→    if (languageFilter !== 'all') {
+   315→      result = result.filter(p => p.language === languageFilter)
+   316→    }
+   317→    // Sort by recency
+   318→    result = [...result].sort((a, b) => {
+   319→      const dateA = a.postedAt ? new Date(a.postedAt).getTime() : 0
+   320→      const dateB = b.postedAt ? new Date(b.postedAt).getTime() : 0
+   321→      return dateB - dateA
+   322→    })
+   323→    return result
+   324→  }, [posts, platformFilter, languageFilter])
+   325→
+   326→  const globalAvgSentiment = useMemo(() => {
+   327→    if (summaries.length === 0) return 0
+   328→    const total = summaries.reduce((sum, s) => sum + s.avgSentiment * s.postCount, 0)
+   329→    const count = summaries.reduce((sum, s) => sum + s.postCount, 0)
+   330→    return count > 0 ? total / count : 0
+   331→  }, [summaries])
+   332→
+   333→  const topTopics = useMemo(() => {
+   334→    const topicMap = new Map<string, number>()
+   335→    summaries.forEach(s => {
+   336→      try {
+   337→        const topics: string[] = JSON.parse(s.topTopics || '[]')
+   338→        topics.forEach(t => topicMap.set(t, (topicMap.get(t) || 0) + s.postCount))
+   339→      } catch { /* ignore */ }
+   340→    })
+   341→    return [...topicMap.entries()]
+   342→      .sort((a, b) => b[1] - a[1])
+   343→      .slice(0, 5)
+   344→      .map(([topic]) => topic)
+   345→  }, [summaries])
+   346→
+   347→  const mostActiveLanguage = useMemo(() => {
+   348→    if (summaries.length === 0) return null
+   349→    const langCounts = new Map<string, number>()
+   350→    summaries.forEach(s => {
+   351→      langCounts.set(s.language, (langCounts.get(s.language) || 0) + s.postCount)
+   352→    })
+   353→    let maxLang = ''
+   354→    let maxCount = 0
+   355→    langCounts.forEach((count, lang) => {
+   356→      if (count > maxCount) {
+   357→        maxCount = count
+   358→        maxLang = lang
+   359→      }
+   360→    })
+   361→    return { code: maxLang, count: maxCount }
+   362→  }, [summaries])
+   363→
+   364→  const sentimentSplit = useMemo(() => {
+   365→    if (filteredPosts.length === 0) return { positive: 33, neutral: 34, negative: 33 }
+   366→    const positive = filteredPosts.filter(p => p.sentiment > 60).length
+   367→    const neutral = filteredPosts.filter(p => p.sentiment >= 40 && p.sentiment <= 60).length
+   368→    const negative = filteredPosts.filter(p => p.sentiment < 40).length
+   369→    const total = filteredPosts.length
+   370→    return {
+   371→      positive: Math.round((positive / total) * 100),
+   372→      neutral: Math.round((neutral / total) * 100),
+   373→      negative: Math.round((negative / total) * 100),
+   374→    }
+   375→  }, [filteredPosts])
+   376→
+   377→  // Team sentiment data grouped by team
+   378→  const teamSentiments = useMemo(() => {
+   379→    const teamMap = new Map<string, {
+   380→      teamCode: string
+   381→      langSentiments: Map<string, { avg: number; count: number }>
+   382→      totalPosts: number
+   383→      overallSentiment: number
+   384→    }>()
+   385→
+   386→    summaries.forEach(s => {
+   387→      if (!teamMap.has(s.teamCode)) {
+   388→        teamMap.set(s.teamCode, {
+   389→          teamCode: s.teamCode,
+   390→          langSentiments: new Map(),
+   391→          totalPosts: 0,
+   392→          overallSentiment: 0,
+   393→        })
+   394→      }
+   395→      const team = teamMap.get(s.teamCode)!
+   396→      team.langSentiments.set(s.language, { avg: s.avgSentiment, count: s.postCount })
+   397→      team.totalPosts += s.postCount
+   398→      team.overallSentiment = (
+   399→        (team.overallSentiment * (team.totalPosts - s.postCount) + s.avgSentiment * s.postCount) /
+   400→        team.totalPosts
+   401→      )
+   402→    })
+   403→
+   404→    return [...teamMap.values()]
+   405→      .sort((a, b) => b.totalPosts - a.totalPosts)
+   406→      .slice(0, 10)
+   407→  }, [summaries])
+   408→
+   409→  const toggleTeam = (teamCode: string) => {
+   410→    setExpandedTeams(prev => {
+   411→      const next = new Set(prev)
+   412→      if (next.has(teamCode)) next.delete(teamCode)
+   413→      else next.add(teamCode)
+   414→      return next
+   415→    })
+   416→  }
+   417→
+   418→  const togglePost = (postId: string) => {
+   419→    setExpandedPosts(prev => {
+   420→      const next = new Set(prev)
+   421→      if (next.has(postId)) next.delete(postId)
+   422→      else next.add(postId)
+   423→      return next
+   424→    })
+   425→  }
+   426→
+   427→  const loadMore = () => {
+   428→    setVisiblePosts(prev => prev + 10)
+   429→  }
+   430→
+   431→  // ── Render ──
+   432→
+   433→  return (
+   434→    <div className="space-y-5">
+   435→      {/* ── 1. Header ──────────────────────────────────────── */}
+   436→      <motion.div
+   437→        initial={{ opacity: 0, y: 20 }}
+   438→        animate={{ opacity: 1, y: 0 }}
+   439→        className="flex items-start justify-between gap-3"
+   440→      >
+   441→        <div className="space-y-1">
+   442→          <div className="flex items-center gap-2.5">
+   443→            <h2 className="text-2xl font-bold tracking-tight text-[#1A1A1A] dark:text-white">
+   444→              {isAr ? 'نبض المشجعين' : 'FAN PULSE'}
+   445→            </h2>
+   446→            <span className="relative flex size-2.5">
+   447→              <span className="animate-live-pulse absolute inline-flex h-full w-full rounded-full bg-[#10B981] opacity-75" />
+   448→              <span className="relative inline-flex size-2.5 rounded-full bg-[#10B981] shadow-lg shadow-[#10B981]/50" />
+   449→            </span>
+   450→          </div>
+   451→          <p className="text-xs text-[#666] dark:text-[#CCCCCC]">
+   452→            {isAr
+   453→              ? 'مشاعر وسائل التواصل الاجتماعي في الوقت الحقيقي عبر 13 لغة'
+   454→              : 'Real-time social media sentiment across 13 languages'
+   455→            }
+   456→          </p>
+   457→        </div>
+   458→        <Button
+   459→          variant="outline"
+   460→          size="sm"
+   461→          onClick={handleRefresh}
+   462→          disabled={isRefreshing}
+   463→          className="shrink-0 gap-1.5 border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30 dark:hover:border-[#8B5CF6]/30"
+   464→        >
+   465→          <RefreshCw className={`size-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+   466→          <span className="text-xs">{isAr ? 'تحديث' : 'Refresh'}</span>
+   467→        </Button>
+   468→      </motion.div>
+   469→
+   470→      {/* ── 2. Language Filter Bar ──────────────────────────── */}
+   471→      <motion.div
+   472→        initial={{ opacity: 0, y: 10 }}
+   473→        animate={{ opacity: 1, y: 0 }}
+   474→        transition={{ delay: 0.1 }}
+   475→      >
+   476→        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+   477→          {/* ALL button */}
+   478→          <button
+   479→            onClick={() => setLanguageFilter('all')}
+   480→            className={`
+   481→              shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
+   482→              ${languageFilter === 'all'
+   483→                ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
+   484→                : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
+   485→              }
+   486→            `}
+   487→          >
+   488→            {isAr ? 'الكل' : 'ALL'}
+   489→          </button>
+   490→          {LANGUAGES.map(l => (
+   491→            <button
+   492→              key={l.code}
+   493→              onClick={() => setLanguageFilter(languageFilter === l.code ? 'all' : l.code)}
+   494→              className={`
+   495→                shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
+   496→                ${languageFilter === l.code
+   497→                  ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
+   498→                  : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
+   499→                }
+   500→              `}
+   501→            >
+   502→              <span className="text-sm">{l.flag}</span>
+   503→              <span>{isAr ? l.nameAr : l.name}</span>
+   504→            </button>
+   505→          ))}
+   506→        </div>
+   507→      </motion.div>
+   508→
+   509→      {/* ── 3. Platform Toggle ──────────────────────────────── */}
+   510→      <motion.div
+   511→        initial={{ opacity: 0, y: 10 }}
+   512→        animate={{ opacity: 1, y: 0 }}
+   513→        transition={{ delay: 0.15 }}
+   514→        className="flex gap-2"
+   515→      >
+   516→        {([
+   517→          { key: 'all' as PlatformFilter, label: isAr ? 'الكل' : 'All', icon: Globe2 },
+   518→          { key: 'twitter' as PlatformFilter, label: 'X.com', icon: MessageSquare },
+   519→          { key: 'reddit' as PlatformFilter, label: 'Reddit', icon: Hash },
+   520→        ]).map(({ key, label, icon: Icon }) => (
+   521→          <button
+   522→            key={key}
+   523→            onClick={() => setPlatformFilter(key)}
+   524→            className={`
+   525→              flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
+   526→              ${platformFilter === key
+   527→                ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
+   528→                : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
+   529→              }
+   530→            `}
+   531→          >
+   532→            <Icon className="size-3.5" />
+   533→            {label}
+   534→          </button>
+   535→        ))}
+   536→      </motion.div>
+   537→
+   538→      {/* ── Error State ────────────────────────────────────── */}
+   539→      {error && !isLoading && (
+   540→        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+   541→          <Card className="border-[#EF4444]/30 dark:border-[#EF4444]/20 rounded-xl">
+   542→            <CardContent className="p-4 text-center">
+   543→              <AlertCircle className="mx-auto size-6 text-[#EF4444] mb-2" />
+   544→              <p className="text-sm text-[#EF4444] mb-3">{error}</p>
+   545→              <Button variant="outline" size="sm" onClick={fetchData} className="gap-1.5">
+   546→                <RefreshCw className="size-3.5" />
+   547→                {isAr ? 'إعادة المحاولة' : 'Retry'}
+   548→              </Button>
+   549→            </CardContent>
+   550→          </Card>
+   551→        </motion.div>
+   552→      )}
+   553→
+   554→      {/* ── 4. Sentiment Overview Cards ─────────────────────── */}
+   555→      {isLoading ? (
+   556→        <OverviewSkeleton />
+   557→      ) : (
+   558→        <motion.div
+   559→          initial={{ opacity: 0, y: 15 }}
+   560→          animate={{ opacity: 1, y: 0 }}
+   561→          transition={{ delay: 0.2 }}
+   562→          className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+   563→        >
+   564→          {/* Global Pulse */}
+   565→          <Card className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10">
+   566→            <CardContent className="p-4 flex flex-col items-center">
+   567→              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC] mb-2">
+   568→                {isAr ? 'النبض العام' : 'Global Pulse'}
+   569→              </p>
+   570→              <CircularGauge value={globalAvgSentiment} size={90} />
+   571→              <p className="mt-1 text-[11px] text-[#666] dark:text-[#CCCCCC]">
+   572→                {filteredPosts.length} {isAr ? 'منشور' : 'posts'}
+   573→              </p>
+   574→            </CardContent>
+   575→          </Card>
+   576→
+   577→          {/* Hot Topics */}
+   578→          <Card className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10">
+   579→            <CardContent className="p-4">
+   580→              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC] mb-2.5">
+   581→                {isAr ? 'المواضيع الرائجة' : 'Hot Topics'}
+   582→              </p>
+   583→              <div className="flex flex-wrap gap-1.5">
+   584→                {topTopics.length > 0 ? topTopics.map(topic => (
+   585→                  <Badge
+   586→                    key={topic}
+   587→                    variant="outline"
+   588→                    className="text-[10px] bg-[#6C2BD9]/5 border-[#6C2BD9]/20 text-[#6C2BD9] dark:text-[#8B5CF6] dark:bg-[#8B5CF6]/10 dark:border-[#8B5CF6]/20"
+   589→                  >
+   590→                    <Hash className="size-2.5 mr-0.5" />
+   591→                    {topic}
+   592→                  </Badge>
+   593→                )) : (
+   594→                  <span className="text-[10px] text-[#6B7280] dark:text-gray-400">—</span>
+   595→                )}
+   596→              </div>
+   597→            </CardContent>
+   598→          </Card>
+   599→
+   600→          {/* Most Active Language */}
+   601→          <Card className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10">
+   602→            <CardContent className="p-4">
+   603→              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC] mb-2.5">
+   604→                {isAr ? 'الأكثر نشاطاً' : 'Most Active'}
+   605→              </p>
+   606→              {mostActiveLanguage ? (
+   607→                <div className="flex items-center gap-2">
+   608→                  <span className="text-2xl">{getLanguageFlag(mostActiveLanguage.code)}</span>
+   609→                  <div>
+   610→                    <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">
+   611→                      {getLanguageName(mostActiveLanguage.code, isAr)}
+   612→                    </p>
+   613→                    <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+   614→                      {formatNumber(mostActiveLanguage.count)} {isAr ? 'منشور' : 'posts'}
+   615→                    </p>
+   616→                  </div>
+   617→                </div>
+   618→              ) : (
+   619→                <span className="text-[10px] text-[#6B7280] dark:text-gray-400">—</span>
+   620→              )}
+   621→            </CardContent>
+   622→          </Card>
+   623→
+   624→          {/* Sentiment Split */}
+   625→          <Card className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10">
+   626→            <CardContent className="p-4">
+   627→              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC] mb-2.5">
+   628→                {isAr ? 'توزيع المشاعر' : 'Sentiment Split'}
+   629→              </p>
+   630→              <div className="space-y-2">
+   631→                {/* Stacked bar */}
+   632→                <div className="flex h-3 w-full overflow-hidden rounded-full bg-[#E0E0E0]/30 dark:bg-white/10">
+   633→                  <motion.div
+   634→                    className="bg-[#10B981]"
+   635→                    initial={{ width: 0 }}
+   636→                    animate={{ width: `${sentimentSplit.positive}%` }}
+   637→                    transition={{ duration: 0.8, delay: 0.3 }}
+   638→                  />
+   639→                  <motion.div
+   640→                    className="bg-[#F59E0B]"
+   641→                    initial={{ width: 0 }}
+   642→                    animate={{ width: `${sentimentSplit.neutral}%` }}
+   643→                    transition={{ duration: 0.8, delay: 0.5 }}
+   644→                  />
+   645→                  <motion.div
+   646→                    className="bg-[#EF4444]"
+   647→                    initial={{ width: 0 }}
+   648→                    animate={{ width: `${sentimentSplit.negative}%` }}
+   649→                    transition={{ duration: 0.8, delay: 0.7 }}
+   650→                  />
+   651→                </div>
+   652→                <div className="flex justify-between text-[11px]">
+   653→                  <span className="text-[#10B981] font-semibold">
+   654→                    {isAr ? 'إيجابي' : 'Pos'} {sentimentSplit.positive}%
+   655→                  </span>
+   656→                  <span className="text-[#F59E0B] font-semibold">
+   657→                    {isAr ? 'محايد' : 'Neu'} {sentimentSplit.neutral}%
+   658→                  </span>
+   659→                  <span className="text-[#EF4444] font-semibold">
+   660→                    {isAr ? 'سلبي' : 'Neg'} {sentimentSplit.negative}%
+   661→                  </span>
+   662→                </div>
+   663→              </div>
+   664→            </CardContent>
+   665→          </Card>
+   666→        </motion.div>
+   667→      )}
+   668→
+   669→      {/* ── 5. Team Sentiment Bars ──────────────────────────── */}
+   670→      {!isLoading && teamSentiments.length > 0 && (
+   671→        <motion.div
+   672→          initial={{ opacity: 0, y: 15 }}
+   673→          animate={{ opacity: 1, y: 0 }}
+   674→          transition={{ delay: 0.3 }}
+   675→        >
+   676→          <Card className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10">
+   677→            <CardContent className="p-4">
+   678→              <div className="flex items-center gap-2 mb-3">
+   679→                <BarChart3 className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+   680→                <h3 className="text-sm font-bold text-[#1A1A1A] dark:text-white">
+   681→                  {isAr ? 'مشاعر الفرق' : 'Team Sentiment'}
+   682→                </h3>
+   683→              </div>
+   684→              <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+   685→                {teamSentiments.map(team => {
+   686→                  const teamInfo = findNationalTeam(team.teamCode)
+   687→                  const isExpanded = expandedTeams.has(team.teamCode)
+   688→                  const langEntries = [...team.langSentiments.entries()]
+   689→                    .sort((a, b) => b[1].count - a[1].count)
+   690→                    .slice(0, 6)
+   691→
+   692→                  return (
+   693→                    <div key={team.teamCode}>
+   694→                      <button
+   695→                        onClick={() => toggleTeam(team.teamCode)}
+   696→                        className="w-full flex items-center gap-2.5 py-1.5 group focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 rounded-md"
+   697→                      >
+   698→                        <FlagImage nationCode={team.teamCode} size={22} />
+   699→                        <span className="text-xs font-semibold text-[#1A1A1A] dark:text-white min-w-[60px] text-left">
+   700→                          {teamInfo?.name ?? team.teamCode}
+   701→                        </span>
+   702→                        {/* Multi-language sentiment bar */}
+   703→                        <div className="flex-1 flex h-2.5 overflow-hidden rounded-full bg-[#E0E0E0]/30 dark:bg-white/10">
+   704→                          {langEntries.map(([langCode, data]) => {
+   705→                            const width = (data.count / team.totalPosts) * 100
+   706→                            return (
+   707→                              <motion.div
+   708→                                key={langCode}
+   709→                                className="first:rounded-l-full last:rounded-r-full"
+   710→                                style={{ backgroundColor: LANG_COLORS[langCode] || '#6C2BD9' }}
+   711→                                initial={{ width: 0 }}
+   712→                                animate={{ width: `${width}%` }}
+   713→                                transition={{ duration: 0.6 }}
+   714→                                title={`${getLanguageName(langCode, isAr)}: ${Math.round(data.avg)} (${data.count} posts)`}
+   715→                              />
+   716→                            )
+   717→                          })}
+   718→                        </div>
+   719→                        <span className={`text-xs font-bold min-w-[28px] text-right ${getSentimentTextClass(team.overallSentiment)}`}>
+   720→                          {Math.round(team.overallSentiment)}
+   721→                        </span>
+   722→                        {isExpanded
+   723→                          ? <ChevronUp className="size-3.5 text-[#666] dark:text-[#CCCCCC]" />
+   724→                          : <ChevronDown className="size-3.5 text-[#666] dark:text-[#CCCCCC]" />
+   725→                        }
+   726→                      </button>
+   727→
+   728→                      {/* Expanded detail */}
+   729→                      <AnimatePresence>
+   730→                        {isExpanded && (
+   731→                          <motion.div
+   732→                            initial={{ height: 0, opacity: 0 }}
+   733→                            animate={{ height: 'auto', opacity: 1 }}
+   734→                            exit={{ height: 0, opacity: 0 }}
+   735→                            transition={{ duration: 0.2 }}
+   736→                            className="overflow-hidden"
+   737→                          >
+   738→                            <div className="ml-8 mb-2 space-y-1.5">
+   739→                              {langEntries.map(([langCode, data]) => (
+   740→                                <div key={langCode} className="flex items-center gap-2 text-[10px]">
+   741→                                  <span>{getLanguageFlag(langCode)}</span>
+   742→                                  <span className="text-[#666] dark:text-[#CCCCCC] min-w-[50px]">
+   743→                                    {getLanguageName(langCode, isAr)}
+   744→                                  </span>
+   745→                                  <div className="flex-1 h-1.5 rounded-full bg-[#E0E0E0]/30 dark:bg-white/10 overflow-hidden">
+   746→                                    <motion.div
+   747→                                      className="h-full rounded-full"
+   748→                                      style={{ backgroundColor: LANG_COLORS[langCode] || '#6C2BD9' }}
+   749→                                      initial={{ width: 0 }}
+   750→                                      animate={{ width: `${data.avg}%` }}
+   751→                                      transition={{ duration: 0.5 }}
+   752→                                    />
+   753→                                  </div>
+   754→                                  <span className={`font-bold ${getSentimentTextClass(data.avg)}`}>
+   755→                                    {Math.round(data.avg)}
+   756→                                  </span>
+   757→                                </div>
+   758→                              ))}
+   759→                            </div>
+   760→                          </motion.div>
+   761→                        )}
+   762→                      </AnimatePresence>
+   763→                    </div>
+   764→                  )
+   765→                })}
+   766→              </div>
+   767→
+   768→              {/* Language legend */}
+   769→              <div className="mt-3 pt-2 border-t border-[#E0E0E0] dark:border-white/10 flex flex-wrap gap-x-3 gap-y-1">
+   770→                {teamSentiments.length > 0 && [...teamSentiments[0].langSentiments.keys()].slice(0, 8).map(code => (
+   771→                  <div key={code} className="flex items-center gap-1 text-[11px] text-[#666] dark:text-[#CCCCCC]">
+   772→                    <span
+   773→                      className="size-2 rounded-full"
+   774→                      style={{ backgroundColor: LANG_COLORS[code] || '#6C2BD9' }}
+   775→                    />
+   776→                    {getLanguageName(code, isAr)}
+   777→                  </div>
+   778→                ))}
+   779→              </div>
+   780→            </CardContent>
+   781→          </Card>
+   782→        </motion.div>
+   783→      )}
+   784→
+   785→      {/* ── 6. Social Posts Feed ────────────────────────────── */}
+   786→      {!isLoading && (
+   787→        <motion.div
+   788→          initial={{ opacity: 0, y: 15 }}
+   789→          animate={{ opacity: 1, y: 0 }}
+   790→          transition={{ delay: 0.4 }}
+   791→        >
+   792→          <div className="flex items-center gap-2 mb-3">
+   793→            <Radio className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+   794→            <h3 className="text-sm font-bold text-[#1A1A1A] dark:text-white">
+   795→              {isAr ? 'آخر المنشورات' : 'Live Feed'}
+   796→            </h3>
+   797→            {filteredPosts.length > 0 && (
+   798→              <Badge variant="outline" className="text-[10px] bg-[#6C2BD9]/5 border-[#6C2BD9]/20 text-[#6C2BD9] dark:text-[#8B5CF6]">
+   799→                {filteredPosts.length}
+   800→              </Badge>
+   801→            )}
+   802→          </div>
+   803→
+   804→          {filteredPosts.length === 0 ? (
+   805→            /* ── 7. Empty State ──────────────────────────────── */
+   806→            <Card className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10">
+   807→              <CardContent className="py-12 text-center">
+   808→                <div className="mx-auto size-12 rounded-full bg-[#F3EEFF] dark:bg-[#8B5CF6]/10 flex items-center justify-center mb-3">
+   809→                  <TrendingUp className="size-5 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+   810→                </div>
+   811→                <p className="text-sm font-semibold text-[#1A1A1A] dark:text-white mb-1">
+   812→                  {isAr ? 'لا توجد منشورات بعد' : 'No social posts yet'}
+   813→                </p>
+   814→                <p className="text-xs text-[#666] dark:text-[#CCCCCC] mb-4">
+   815→                  {isAr ? 'اجمع بيانات المشاعر من وسائل التواصل الاجتماعي' : 'Fetch sentiment data from social media'}
+   816→                </p>
+   817→                <Button
+   818→                  onClick={handleRefresh}
+   819→                  disabled={isRefreshing}
+   820→                  className="bg-[#6C2BD9] hover:bg-[#5B1FBF] text-white gap-1.5"
+   821→                  size="sm"
+   822→                >
+   823→                  {isRefreshing ? (
+   824→                    <Loader2 className="size-3.5 animate-spin" />
+   825→                  ) : (
+   826→                    <ExternalLink className="size-3.5" />
+   827→                  )}
+   828→                  {isAr ? 'جلب الآن' : 'Fetch Now'}
+   829→                </Button>
+   830→              </CardContent>
+   831→            </Card>
+   832→          ) : (
+   833→            <div className="max-h-96 overflow-y-auto space-y-2.5 pr-1">
+   834→              <AnimatePresence>
+   835→                {filteredPosts.slice(0, visiblePosts).map((post, i) => {
+   836→                  const isExpanded = expandedPosts.has(post.id)
+   837→                  const teamInfo = findNationalTeam(post.teamTag)
+   838→
+   839→                  return (
+   840→                    <motion.div
+   841→                      key={post.id}
+   842→                      initial={{ opacity: 0, y: 10 }}
+   843→                      animate={{ opacity: 1, y: 0 }}
+   844→                      transition={{ delay: i * 0.03 }}
+   845→                    >
+   846→                      <Card className="rounded-xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 hover:shadow-md transition-shadow">
+   847→                        <CardContent className="p-4">
+   848→                          {/* Top row: platform + author + time */}
+   849→                          <div className="flex items-center gap-2 mb-2">
+   850→                            {/* Platform badge */}
+   851→                            <Badge
+   852→                              variant="outline"
+   853→                              className={`text-[11px] font-bold px-1.5 py-0 h-5 ${
+   854→                                post.platform === 'twitter'
+   855→                                  ? 'bg-[#1DA1F2]/15 text-[#1DA1F2] border-[#1DA1F2]/20'
+   856→                                  : 'bg-[#FF4500]/15 text-[#FF4500] border-[#FF4500]/20'
+   857→                              }`}
+   858→                            >
+   859→                              {post.platform === 'twitter' ? 'X.com' : 'Reddit'}
+   860→                            </Badge>
+   861→
+   862→                            {/* Author avatar + name */}
+   863→                            <div className="flex items-center gap-1.5 min-w-0">
+   864→                              <div className={`shrink-0 size-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
+   865→                                post.platform === 'twitter' ? 'bg-[#1DA1F2]' : 'bg-[#FF4500]'
+   866→                              }`}>
+   867→                                {post.author.charAt(0).toUpperCase()}
+   868→                              </div>
+   869→                              <span className="text-xs font-semibold text-[#1A1A1A] dark:text-white truncate">
+   870→                                @{post.author}
+   871→                              </span>
+   872→                            </div>
+   873→
+   874→                            {/* Language flag */}
+   875→                            <span className="text-xs shrink-0" title={getLanguageName(post.language, isAr)}>
+   876→                              {getLanguageFlag(post.language)}
+   877→                            </span>
+   878→
+   879→                            {/* Sentiment badge */}
+   880→                            <Badge
+   881→                              variant="outline"
+   882→                              className={`ml-auto text-[11px] font-bold px-1.5 py-0 h-5 ${getSentimentBgClass(post.sentiment)}`}
+   883→                            >
+   884→                              {Math.round(post.sentiment)}
+   885→                            </Badge>
+   886→
+   887→                            {/* Time */}
+   888→                            <span className="text-[11px] text-[#6B7280] dark:text-gray-400 shrink-0">
+   889→                              {timeAgo(post.postedAt, isAr)}
+   890→                            </span>
+   891→                          </div>
+   892→
+   893→                          {/* Team tag */}
+   894→                          {post.teamTag && (
+   895→                            <div className="flex items-center gap-1.5 mb-1.5">
+   896→                              <FlagImage nationCode={post.teamTag} size={14} />
+   897→                              <span className="text-[10px] font-medium text-[#6C2BD9] dark:text-[#8B5CF6]">
+   898→                                {teamInfo?.name ?? post.teamTag}
+   899→                              </span>
+   900→                            </div>
+   901→                          )}
+   902→
+   903→                          {/* Content */}
+   904→                          <p className={`text-xs text-[#1A1A1A] dark:text-[#CCCCCC] leading-relaxed ${!isExpanded ? 'line-clamp-3' : ''}`}>
+   905→                            {post.content}
+   906→                          </p>
+   907→                          {post.content.length > 150 && (
+   908→                            <button
+   909→                              onClick={() => togglePost(post.id)}
+   910→                              className="text-[10px] text-[#6C2BD9] dark:text-[#8B5CF6] font-semibold mt-0.5 hover:underline focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 rounded-md"
+   911→                            >
+   912→                              {isExpanded
+   913→                                ? (isAr ? 'عرض أقل' : 'Show less')
+   914→                                : (isAr ? 'عرض المزيد' : 'Read more')
+   915→                              }
+   916→                            </button>
+   917→                          )}
+   918→
+   919→                          {/* Engagement stats */}
+   920→                          <div className="flex items-center gap-4 mt-2.5 pt-2 border-t border-[#E0E0E0]/50 dark:border-white/5">
+   921→                            <span className="flex items-center gap-1 text-[10px] text-[#666] dark:text-[#CCCCCC]">
+   922→                              <Heart className="size-3" />
+   923→                              {formatNumber(post.likes)}
+   924→                            </span>
+   925→                            <span className="flex items-center gap-1 text-[10px] text-[#666] dark:text-[#CCCCCC]">
+   926→                              <MessageCircle className="size-3" />
+   927→                              {formatNumber(post.replies)}
+   928→                            </span>
+   929→                            <span className="flex items-center gap-1 text-[10px] text-[#666] dark:text-[#CCCCCC]">
+   930→                              <Share2 className="size-3" />
+   931→                              {formatNumber(post.shares)}
+   932→                            </span>
+   933→                            <span className={`ml-auto text-[11px] font-semibold ${getSentimentTextClass(post.sentiment)}`}>
+   934→                              {getSentimentLabel(post.sentiment, isAr)}
+   935→                            </span>
+   936→                          </div>
+   937→                        </CardContent>
+   938→                      </Card>
+   939→                    </motion.div>
+   940→                  )
+   941→                })}
+   942→              </AnimatePresence>
+   943→
+   944→              {/* Load More */}
+   945→              {visiblePosts < filteredPosts.length && (
+   946→                <div className="py-2 text-center">
+   947→                  <Button
+   948→                    variant="outline"
+   949→                    size="sm"
+   950→                    onClick={loadMore}
+   951→                    className="gap-1.5 border-[#E0E0E0] dark:border-white/10"
+   952→                  >
+   953→                    {isAr ? 'تحميل المزيد' : 'Load More'}
+   954→                    <ChevronDown className="size-3.5" />
+   955→                  </Button>
+   956→                </div>
+   957→              )}
+   958→            </div>
+   959→          )}
+   960→        </motion.div>
+   961→      )}
+   962→
+   963→      {/* ── Loading state for posts ── */}
+   964→      {isLoading && (
+   965→        <div className="space-y-2.5">
+   966→          <div className="flex items-center gap-2 mb-3">
+   967→            <Radio className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+   968→            <Skeleton className="h-4 w-24" />
+   969→          </div>
+   970→          {Array.from({ length: 5 }).map((_, i) => (
+   971→            <motion.div
+   972→              key={i}
+   973→              initial={{ opacity: 0, y: 10 }}
+   974→              animate={{ opacity: 1, y: 0 }}
+   975→              transition={{ delay: i * 0.05 }}
+   976→            >
+   977→              <PostSkeleton />
+   978→            </motion.div>
+   979→          ))}
+   980→        </div>
+   981→      )}
+   982→    </div>
+   983→  )
+   984→}
+   985→

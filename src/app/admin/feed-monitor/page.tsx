@@ -157,7 +157,7 @@ export default function FeedMonitorAdminPage() {
           )}
           <button
             onClick={handleAuth}
-            className="mt-4 w-full bg-gradient-to-r from-[#6C2BD9] to-[#8B5CF6] text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+            className="mt-4 w-full bg-gradient-to-r from-[#6C2BD9] to-[#8B5CF6] text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
           >
             <Lock className="size-4" /> Unlock Admin
           </button>
@@ -283,13 +283,13 @@ function MonitorDashboard({ onLogout }: { onLogout: () => void }) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowCreateForm(true)}
-              className="bg-gradient-to-r from-[#6C2BD9] to-[#8B5CF6] text-white text-xs font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1.5"
+              className="bg-gradient-to-r from-[#6C2BD9] to-[#8B5CF6] text-white text-xs font-bold px-4 py-2 rounded-lg hover:opacity-90 transition-opacity flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
             >
               <Plus className="size-3.5" /> New Monitor
             </button>
             <button
               onClick={onLogout}
-              className="text-white/60 hover:text-white text-xs font-bold px-3 py-2 rounded-lg border border-white/10 hover:border-white/20 transition-colors"
+              className="text-white/60 hover:text-white text-xs font-bold px-3 py-2 rounded-lg border border-white/10 hover:border-white/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
             >
               Logout
             </button>
@@ -320,7 +320,7 @@ function MonitorDashboard({ onLogout }: { onLogout: () => void }) {
             <p className="text-white/50 text-sm mb-4">Create a feed monitor to start scraping real fan sentiment.</p>
             <button
               onClick={() => setShowCreateForm(true)}
-              className="bg-gradient-to-r from-[#6C2BD9] to-[#8B5CF6] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-2"
+              className="bg-gradient-to-r from-[#6C2BD9] to-[#8B5CF6] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity inline-flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
             >
               <Plus className="size-4" /> Create First Monitor
             </button>
@@ -428,7 +428,7 @@ function MonitorCard({
   return (
     <div className="bg-[#1A1A1A] border border-white/10 rounded-xl overflow-hidden">
       <div className="p-4 flex items-center gap-3">
-        <button onClick={onToggle} className="text-white/40 hover:text-white transition-colors">
+        <button onClick={onToggle} className="text-white/40 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 rounded">
           {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
         </button>
         <div className="flex-1 min-w-0">
@@ -459,7 +459,7 @@ function MonitorCard({
             onClick={onRefresh}
             disabled={refreshing || monitor.status === 'ended'}
             title="Manual refresh"
-            className="p-2 rounded-lg hover:bg-white/5 text-white/60 hover:text-white disabled:opacity-30 transition-colors"
+            className="p-2 rounded-lg hover:bg-white/5 text-white/60 hover:text-white disabled:opacity-30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
           >
             <RefreshCw className={`size-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
@@ -467,7 +467,7 @@ function MonitorCard({
             <button
               onClick={() => onStatusChange('paused')}
               title="Pause"
-              className="p-2 rounded-lg hover:bg-white/5 text-white/60 hover:text-white transition-colors"
+              className="p-2 rounded-lg hover:bg-white/5 text-white/60 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
             >
               <Pause className="size-4" />
             </button>
@@ -475,7 +475,7 @@ function MonitorCard({
             <button
               onClick={() => onStatusChange('active')}
               title="Resume"
-              className="p-2 rounded-lg hover:bg-white/5 text-[#10B981] transition-colors"
+              className="p-2 rounded-lg hover:bg-white/5 text-[#10B981] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
             >
               <Play className="size-4" />
             </button>
@@ -484,14 +484,14 @@ function MonitorCard({
             onClick={() => onStatusChange('ended')}
             disabled={monitor.status === 'ended'}
             title="End monitor"
-            className="p-2 rounded-lg hover:bg-white/5 text-white/60 hover:text-white disabled:opacity-30 transition-colors"
+            className="p-2 rounded-lg hover:bg-white/5 text-white/60 hover:text-white disabled:opacity-30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
           >
             <Square className="size-4" />
           </button>
           <button
             onClick={onDelete}
             title="Delete"
-            className="p-2 rounded-lg hover:bg-[#EF4444]/10 text-white/60 hover:text-[#EF4444] transition-colors"
+            className="p-2 rounded-lg hover:bg-[#EF4444]/10 text-white/60 hover:text-[#EF4444] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
           >
             <Trash2 className="size-4" />
           </button>
@@ -648,7 +648,7 @@ function PostRow({ post }: { post: Post }) {
       {post.content.length > 200 && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-[#8B5CF6] hover:underline mt-1"
+          className="text-xs text-[#8B5CF6] hover:underline mt-1 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
         >
           {expanded ? 'show less' : 'show more'}
         </button>
@@ -775,7 +775,7 @@ function CreateMonitorModal({
             <h2 className="font-bold text-base">Create Feed Monitor</h2>
             <p className="text-xs text-white/50">Scrape real fan sentiment for a match</p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/5 text-white/60">
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/5 text-white/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2">
             <X className="size-5" />
           </button>
         </div>
@@ -851,14 +851,14 @@ function CreateMonitorModal({
         <div className="sticky bottom-0 bg-[#1A1A1A] border-t border-white/10 px-6 py-4 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="text-sm font-bold px-4 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition-colors"
+            className="text-sm font-bold px-4 py-2.5 rounded-lg text-white/60 hover:text-white hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="bg-gradient-to-r from-[#6C2BD9] to-[#8B5CF6] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+            className="bg-gradient-to-r from-[#6C2BD9] to-[#8B5CF6] text-white text-sm font-bold px-5 py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
           >
             {submitting ? (
               <>

@@ -53,7 +53,7 @@ const SENTIMENT_COLOR: Record<string, string> = {
   excited: 'text-[#10B981] bg-[#10B981]/10',
   skeptical: 'text-[#F59E0B] bg-[#F59E0B]/10',
   dreading: 'text-[#EF4444] bg-[#EF4444]/10',
-  neutral: 'text-[#999] bg-[#999]/10',
+  neutral: 'text-[#6B7280] dark:text-gray-400 bg-[#999]/10',
 }
 
 export default function TransferSagaDetail({ saga, onClose }: TransferSagaDetailProps) {
@@ -142,16 +142,16 @@ function TransferSagaDetailContent({
       <div className="flex items-start justify-between p-5 pb-3 border-b border-[#E0E0E0]/60 dark:border-white/5">
         <div className="pr-8">
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-1.5 py-0.5 rounded bg-[#FF6B35]/10 text-[#FF6B35] text-[9px] font-extrabold tracking-wider border border-[#FF6B35]/20">
+            <span className="px-1.5 py-0.5 rounded bg-[#FF6B35]/10 text-[#FF6B35] text-[11px] font-extrabold tracking-wider border border-[#FF6B35]/20">
               RUMOR
             </span>
             {saga.status === 'completed' && (
-              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#10B981]/15 text-[#10B981] text-[9px] font-bold">
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#10B981]/15 text-[#10B981] text-[11px] font-bold">
                 <CheckCircle2 className="size-3" /> DONE
               </span>
             )}
             {saga.status === 'debunked' && (
-              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#EF4444]/15 text-[#EF4444] text-[9px] font-bold line-through">
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#EF4444]/15 text-[#EF4444] text-[11px] font-bold line-through">
                 <XCircle className="size-3" /> DEBUNKED
               </span>
             )}
@@ -169,14 +169,14 @@ function TransferSagaDetailContent({
             </span>
           </div>
           {saga.feeReported && (
-            <p className="mt-1 text-xs text-[#999] dark:text-gray-500">
+            <p className="mt-1 text-xs text-[#6B7280] dark:text-gray-400">
               Reported fee: <span className="font-semibold text-[#666] dark:text-gray-300">{saga.feeReported}</span>
             </p>
           )}
         </div>
         <button
           onClick={onClose}
-          className="shrink-0 size-8 rounded-full flex items-center justify-center text-[#999] hover:bg-[#F0F0F0] dark:hover:bg-white/10 transition-colors"
+          className="shrink-0 size-8 rounded-full flex items-center justify-center text-[#6B7280] dark:text-gray-400 hover:bg-[#F0F0F0] dark:hover:bg-white/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
           aria-label="Close"
         >
           <X className="size-5" />
@@ -198,7 +198,7 @@ function TransferSagaDetailContent({
                 href={detail.saga.resolutionUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold underline hover:no-underline"
+                className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold underline hover:no-underline focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
               >
                 <ExternalLink className="size-3" />
                 View debunk source
@@ -220,7 +220,7 @@ function TransferSagaDetailContent({
                 href={detail.saga.resolutionUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold underline hover:no-underline"
+                className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold underline hover:no-underline focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
               >
                 <ExternalLink className="size-3" />
                 View official confirmation
@@ -235,7 +235,7 @@ function TransferSagaDetailContent({
         {loading && (
           <div className="space-y-2">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-12 rounded-xl bg-[#F0F0F0] dark:bg-white/5 animate-pulse" />
+              <div key={i} className="h-12 rounded-xl bg-[#F0F0F0] dark:bg-white/5 skeleton-shimmer" />
             ))}
           </div>
         )}
@@ -269,7 +269,7 @@ function TransferSagaDetailContent({
             {/* Timeline */}
             {detail.timeline.length > 0 && (
               <section>
-                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[#999] dark:text-gray-500 mb-2">
+                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] dark:text-gray-400 mb-2">
                   Sentiment Timeline
                 </h3>
                 <TimelineChart timeline={detail.timeline} />
@@ -279,7 +279,7 @@ function TransferSagaDetailContent({
             {/* Tier 1 sources */}
             {detail.sources.length > 0 && (
               <section>
-                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[#999] dark:text-gray-500 mb-2">
+                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] dark:text-gray-400 mb-2">
                   Tier 1 Reports ({detail.sources.length})
                 </h3>
                 <div className="space-y-2">
@@ -295,7 +295,7 @@ function TransferSagaDetailContent({
                       <Wrapper
                         key={s.id}
                         {...wrapperProps}
-                        className="block rounded-xl border border-[#E0E0E0] dark:border-white/10 p-3 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 transition-colors"
+                        className="block rounded-xl border border-[#E0E0E0] dark:border-white/10 p-3 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -303,14 +303,14 @@ function TransferSagaDetailContent({
                             <span className="text-xs font-semibold text-[#1A1A1A] dark:text-white truncate">
                               {s.journalistName}
                             </span>
-                            <span className="text-[10px] text-[#999] dark:text-gray-500 shrink-0">
+                            <span className="text-[10px] text-[#6B7280] dark:text-gray-400 shrink-0">
                               @{s.journalistHandle} · {s.outlet}
                             </span>
                           </div>
                           {s.url ? (
-                            <ExternalLink className="size-3 shrink-0 text-[#999]" />
+                            <ExternalLink className="size-3 shrink-0 text-[#6B7280] dark:text-gray-400" />
                           ) : (
-                            <span className="text-[8px] text-[#999] dark:text-gray-500 shrink-0 italic">report archived</span>
+                            <span className="text-[8px] text-[#6B7280] dark:text-gray-400 shrink-0 italic">report archived</span>
                           )}
                         </div>
                         {s.headline && (
@@ -318,7 +318,7 @@ function TransferSagaDetailContent({
                             {s.headline}
                           </p>
                         )}
-                        <p className="mt-1 text-[9px] text-[#999] dark:text-gray-500">
+                        <p className="mt-1 text-[11px] text-[#6B7280] dark:text-gray-400">
                           {new Date(s.reportedAt).toLocaleString(undefined, {
                             dateStyle: 'medium',
                             timeStyle: 'short',
@@ -333,11 +333,11 @@ function TransferSagaDetailContent({
 
             {/* Fan posts */}
             <section>
-              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[#999] dark:text-gray-500 mb-2">
+              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] dark:text-gray-400 mb-2">
                 What Fans Are Saying ({detail.posts.length})
               </h3>
               {detail.posts.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[#E0E0E0] dark:border-white/10 p-4 text-center text-[11px] text-[#999] dark:text-gray-500">
+                <div className="rounded-xl border border-dashed border-[#E0E0E0] dark:border-white/10 p-4 text-center text-[11px] text-[#6B7280] dark:text-gray-400">
                   No fan posts yet — sentiment will appear when fans react.
                   Ingestion runs on the cron, or on-demand from the admin
                   dashboard. We never show fabricated posts.
@@ -358,7 +358,7 @@ function TransferSagaDetailContent({
                       <Wrapper
                         key={p.id}
                         {...wrapperProps}
-                        className="block rounded-xl border border-[#E0E0E0] dark:border-white/10 p-3 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 transition-colors"
+                        className="block rounded-xl border border-[#E0E0E0] dark:border-white/10 p-3 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                       >
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -368,7 +368,7 @@ function TransferSagaDetailContent({
                             </span>
                           </div>
                           <span
-                            className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold capitalize ${
+                            className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] font-bold capitalize ${
                               SENTIMENT_COLOR[p.sentimentLabel] ?? SENTIMENT_COLOR.neutral
                             }`}
                           >
@@ -386,7 +386,7 @@ function TransferSagaDetailContent({
             </section>
 
             {/* Anti-hallucination disclaimer */}
-            <div className="rounded-xl bg-[#FF6B35]/5 border border-[#FF6B35]/15 p-3 text-[10px] text-[#666] dark:text-gray-400">
+            <div className="rounded-xl bg-[#FF6B35]/5 border border-[#FF6B35]/15 p-3 text-[11px] text-[#666] dark:text-gray-400">
               <strong className="text-[#FF6B35]">RUMOR.</strong> This saga
               exists only because a Tier 1 journalist reported it. The
               &ldquo;fan-read&rdquo; likelihood reflects what fans THINK —
@@ -419,7 +419,7 @@ function Stat({
         {icon}
         <span className="text-base font-extrabold text-[#1A1A1A] dark:text-white">{value}</span>
       </div>
-      <span className="text-[9px] uppercase tracking-wider text-[#999] dark:text-gray-500">
+      <span className="text-[11px] uppercase tracking-wider text-[#6B7280] dark:text-gray-400">
         {label}
       </span>
     </div>
@@ -429,7 +429,7 @@ function Stat({
 function TrendIcon({ trend }: { trend: string }) {
   if (trend === 'rising') return <TrendingUp className="size-3.5 text-[#10B981]" />
   if (trend === 'falling') return <TrendingDown className="size-3.5 text-[#EF4444]" />
-  return <Minus className="size-3.5 text-[#999]" />
+  return <Minus className="size-3.5 text-[#6B7280] dark:text-gray-400" />
 }
 
 function TimelineChart({
@@ -456,14 +456,14 @@ function TimelineChart({
                 <div style={{ height: `${t.dreadingPct}%` }} className="bg-[#EF4444]" />
                 <div style={{ height: `${neutral}%` }} className="bg-[#999]/40" />
               </div>
-              <span className="text-[8px] text-[#999] dark:text-gray-500">
+              <span className="text-[8px] text-[#6B7280] dark:text-gray-400">
                 {t.date.slice(5)}
               </span>
             </div>
           )
         })}
       </div>
-      <div className="flex items-center gap-3 mt-2 text-[9px]">
+      <div className="flex items-center gap-3 mt-2 text-[11px]">
         <span className="flex items-center gap-1 text-[#10B981]"><span className="size-1.5 rounded-full bg-[#10B981]" />Excited</span>
         <span className="flex items-center gap-1 text-[#F59E0B]"><span className="size-1.5 rounded-full bg-[#F59E0B]" />Skeptical</span>
         <span className="flex items-center gap-1 text-[#EF4444]"><span className="size-1.5 rounded-full bg-[#EF4444]" />Dreading</span>

@@ -83,7 +83,7 @@ export default function GoalsTab() {
             <CardContent className="p-3 text-center">
               <stat.icon className={`mx-auto size-4 mb-1 ${stat.color}`} />
               <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
-              <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
+              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
             </CardContent>
           </Card>
         ))}
@@ -137,7 +137,7 @@ export default function GoalsTab() {
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{goal.teamFlag || getFlag(goal.teamCode)}</span>
                         <p className="truncate text-sm font-bold text-[#1A1A1A] dark:text-white">{goal.scorer}</p>
-                        <Badge variant="outline" className="shrink-0 text-[9px] font-bold border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                        <Badge variant="outline" className="shrink-0 text-[11px] font-bold border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
                           {goal.type}
                         </Badge>
                       </div>
@@ -148,7 +148,7 @@ export default function GoalsTab() {
                       {goal.tags.length > 0 && (
                         <div className="mt-1.5 flex items-center gap-1.5">
                           {goal.tags.map(tag => (
-                            <span key={tag} className="rounded bg-[#6C2BD9]/8 dark:bg-[#8B5CF6]/10 px-1.5 py-0.5 text-[9px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">
+                            <span key={tag} className="rounded bg-[#6C2BD9]/8 dark:bg-[#8B5CF6]/10 px-1.5 py-0.5 text-[11px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">
                               #{tag}
                             </span>
                           ))}
@@ -163,7 +163,7 @@ export default function GoalsTab() {
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     <SharePulseButton className="flex-1" />
-                    <Badge variant="outline" className="text-[9px] font-bold border-[#E0E0E0] dark:border-white/10 text-[#666] dark:text-[#CCCCCC]">
+                    <Badge variant="outline" className="text-[11px] font-bold border-[#E0E0E0] dark:border-white/10 text-[#666] dark:text-[#CCCCCC]">
                       {goal.source}
                     </Badge>
                   </div>

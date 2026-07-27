@@ -66,14 +66,14 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
         return <LiveBadge />
       case 'completed':
         return (
-          <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[9px] font-bold px-1.5 py-0">
+          <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[11px] font-bold px-1.5 py-0">
             <Lock className="size-2.5" />
             COMPLETED
           </Badge>
         )
       default:
         return (
-          <Badge variant="outline" className="text-[#FF6B35] border-[#FF6B35]/30 gap-1 text-[9px] font-bold px-1.5 py-0">
+          <Badge variant="outline" className="text-[#FF6B35] border-[#FF6B35]/30 gap-1 text-[11px] font-bold px-1.5 py-0">
             <Clock className="size-2.5" />
             UPCOMING
           </Badge>
@@ -116,7 +116,7 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
               onClick={() => setSelectedStageId(stage.id)}
               className={`
                 relative flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-xs font-bold
-                transition-all duration-300
+                transition-all duration-300 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 ${isActive
                   ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
                   : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
@@ -162,7 +162,7 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
             <button
               onClick={() => { setActiveView('elite'); setSelectedPlayerId(null) }}
               className={`
-                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200
+                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 ${activeView === 'elite'
                   ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
                   : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
@@ -174,7 +174,7 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
             <button
               onClick={() => { setActiveView('crisis'); setSelectedPlayerId(null) }}
               className={`
-                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200
+                rounded-lg px-5 py-2.5 text-sm font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 ${activeView === 'crisis'
                   ? 'bg-[#EF4444] text-white shadow-md shadow-[#EF4444]/20'
                   : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#EF4444]/30'
@@ -194,7 +194,7 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
             >
               <span className="size-2 rounded-full bg-[#10B981] animate-live-pulse" />
               Updated {Math.round((Date.now() - new Date(eliteCrisisData.lastUpdated).getTime()) / 60000)} min ago
-              <span className="text-[#999]">· Auto-refresh 60s</span>
+              <span className="text-[#6B7280] dark:text-gray-400">· Auto-refresh 60s</span>
             </motion.div>
           )}
 
@@ -218,16 +218,16 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
                     <div className="ml-auto flex items-center gap-2">
                       {/* Flag/Emoji Toggle Switch */}
                       <div className="flex items-center gap-1.5">
-                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Emoji</span>
+                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'emoji' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#6B7280] dark:text-[#666]'}`}>Emoji</span>
                         <Switch
                           checked={flagMode === 'flag'}
                           onCheckedChange={() => toggleFlag()}
                           className="data-[state=checked]:bg-[#6C2BD9] data-[state=unchecked]:bg-[#6C2BD9]/40 scale-75"
                         />
-                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'flag' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#999] dark:text-[#666]'}`}>Flag</span>
+                        <span className={`text-[10px] font-bold transition-colors ${flagMode === 'flag' ? 'text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#6B7280] dark:text-[#666]'}`}>Flag</span>
                       </div>
                       {stageStatus === 'completed' && (
-                        <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[9px] px-1.5 py-0">
+                        <Badge className="bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border-[#E0E0E0] dark:border-white/10 gap-1 text-[11px] px-1.5 py-0">
                           <Lock className="size-2.5" /> 🔒
                         </Badge>
                       )}
@@ -249,9 +249,11 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
                             {col.map((player) => (
                               <motion.div
                                 key={player.id}
-                                className="flex flex-col items-center cursor-pointer"
+                                className="flex flex-col items-center cursor-pointer rounded-lg focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                                 onClick={() => setSelectedPlayerId(player.id === selectedPlayerId ? null : player.id)}
                                 whileHover={{ scale: 1.08 }}
+                                role="button"
+                                tabIndex={0}
                               >
                                 <FormationPlayerCardInline
                                   player={player}
@@ -289,7 +291,7 @@ export default function WorldCupTab({ stages }: WorldCupTabProps) {
                   <CardContent className="p-3 text-center">
                     <stat.icon className={`mx-auto size-4 mb-1.5 ${stat.color}`} />
                     <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
-                    <p className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
+                    <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
                   </CardContent>
                 </Card>
               ))}

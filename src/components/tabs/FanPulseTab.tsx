@@ -195,7 +195,7 @@ function CircularGauge({ value, size = 100 }: { value: number; size?: number }) 
         >
           {Math.round(value)}
         </motion.span>
-        <span className="text-[9px] font-medium text-[#666] dark:text-[#CCCCCC]">/ 100</span>
+        <span className="text-[11px] font-medium text-[#666] dark:text-[#CCCCCC]">/ 100</span>
       </div>
     </div>
   )
@@ -478,7 +478,7 @@ export default function FanPulseTab() {
           <button
             onClick={() => setLanguageFilter('all')}
             className={`
-              shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200
+              shrink-0 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
               ${languageFilter === 'all'
                 ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
                 : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
@@ -492,7 +492,7 @@ export default function FanPulseTab() {
               key={l.code}
               onClick={() => setLanguageFilter(languageFilter === l.code ? 'all' : l.code)}
               className={`
-                shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 flex items-center gap-1.5
+                shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all duration-200 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                 ${languageFilter === l.code
                   ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
                   : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
@@ -522,7 +522,7 @@ export default function FanPulseTab() {
             key={key}
             onClick={() => setPlatformFilter(key)}
             className={`
-              flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-all duration-200
+              flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
               ${platformFilter === key
                 ? 'bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20'
                 : 'bg-[#F8F9FA] dark:bg-[#2D2D2D] text-[#666] dark:text-[#CCCCCC] border border-[#E0E0E0] dark:border-white/10 hover:border-[#6C2BD9]/30'
@@ -568,7 +568,7 @@ export default function FanPulseTab() {
                 {isAr ? 'النبض العام' : 'Global Pulse'}
               </p>
               <CircularGauge value={globalAvgSentiment} size={90} />
-              <p className="mt-1 text-[10px] text-[#666] dark:text-[#CCCCCC]">
+              <p className="mt-1 text-[11px] text-[#666] dark:text-[#CCCCCC]">
                 {filteredPosts.length} {isAr ? 'منشور' : 'posts'}
               </p>
             </CardContent>
@@ -591,7 +591,7 @@ export default function FanPulseTab() {
                     {topic}
                   </Badge>
                 )) : (
-                  <span className="text-[10px] text-[#999] dark:text-gray-500">—</span>
+                  <span className="text-[10px] text-[#6B7280] dark:text-gray-400">—</span>
                 )}
               </div>
             </CardContent>
@@ -610,13 +610,13 @@ export default function FanPulseTab() {
                     <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">
                       {getLanguageName(mostActiveLanguage.code, isAr)}
                     </p>
-                    <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                    <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
                       {formatNumber(mostActiveLanguage.count)} {isAr ? 'منشور' : 'posts'}
                     </p>
                   </div>
                 </div>
               ) : (
-                <span className="text-[10px] text-[#999] dark:text-gray-500">—</span>
+                <span className="text-[10px] text-[#6B7280] dark:text-gray-400">—</span>
               )}
             </CardContent>
           </Card>
@@ -649,7 +649,7 @@ export default function FanPulseTab() {
                     transition={{ duration: 0.8, delay: 0.7 }}
                   />
                 </div>
-                <div className="flex justify-between text-[9px]">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-[#10B981] font-semibold">
                     {isAr ? 'إيجابي' : 'Pos'} {sentimentSplit.positive}%
                   </span>
@@ -693,7 +693,7 @@ export default function FanPulseTab() {
                     <div key={team.teamCode}>
                       <button
                         onClick={() => toggleTeam(team.teamCode)}
-                        className="w-full flex items-center gap-2.5 py-1.5 group"
+                        className="w-full flex items-center gap-2.5 py-1.5 group focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 rounded-md"
                       >
                         <FlagImage nationCode={team.teamCode} size={22} />
                         <span className="text-xs font-semibold text-[#1A1A1A] dark:text-white min-w-[60px] text-left">
@@ -768,7 +768,7 @@ export default function FanPulseTab() {
               {/* Language legend */}
               <div className="mt-3 pt-2 border-t border-[#E0E0E0] dark:border-white/10 flex flex-wrap gap-x-3 gap-y-1">
                 {teamSentiments.length > 0 && [...teamSentiments[0].langSentiments.keys()].slice(0, 8).map(code => (
-                  <div key={code} className="flex items-center gap-1 text-[9px] text-[#666] dark:text-[#CCCCCC]">
+                  <div key={code} className="flex items-center gap-1 text-[11px] text-[#666] dark:text-[#CCCCCC]">
                     <span
                       className="size-2 rounded-full"
                       style={{ backgroundColor: LANG_COLORS[code] || '#6C2BD9' }}
@@ -850,7 +850,7 @@ export default function FanPulseTab() {
                             {/* Platform badge */}
                             <Badge
                               variant="outline"
-                              className={`text-[9px] font-bold px-1.5 py-0 h-5 ${
+                              className={`text-[11px] font-bold px-1.5 py-0 h-5 ${
                                 post.platform === 'twitter'
                                   ? 'bg-[#1DA1F2]/15 text-[#1DA1F2] border-[#1DA1F2]/20'
                                   : 'bg-[#FF4500]/15 text-[#FF4500] border-[#FF4500]/20'
@@ -879,13 +879,13 @@ export default function FanPulseTab() {
                             {/* Sentiment badge */}
                             <Badge
                               variant="outline"
-                              className={`ml-auto text-[9px] font-bold px-1.5 py-0 h-5 ${getSentimentBgClass(post.sentiment)}`}
+                              className={`ml-auto text-[11px] font-bold px-1.5 py-0 h-5 ${getSentimentBgClass(post.sentiment)}`}
                             >
                               {Math.round(post.sentiment)}
                             </Badge>
 
                             {/* Time */}
-                            <span className="text-[9px] text-[#999] dark:text-gray-500 shrink-0">
+                            <span className="text-[11px] text-[#6B7280] dark:text-gray-400 shrink-0">
                               {timeAgo(post.postedAt, isAr)}
                             </span>
                           </div>
@@ -907,7 +907,7 @@ export default function FanPulseTab() {
                           {post.content.length > 150 && (
                             <button
                               onClick={() => togglePost(post.id)}
-                              className="text-[10px] text-[#6C2BD9] dark:text-[#8B5CF6] font-semibold mt-0.5 hover:underline"
+                              className="text-[10px] text-[#6C2BD9] dark:text-[#8B5CF6] font-semibold mt-0.5 hover:underline focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 rounded-md"
                             >
                               {isExpanded
                                 ? (isAr ? 'عرض أقل' : 'Show less')
@@ -930,7 +930,7 @@ export default function FanPulseTab() {
                               <Share2 className="size-3" />
                               {formatNumber(post.shares)}
                             </span>
-                            <span className={`ml-auto text-[9px] font-semibold ${getSentimentTextClass(post.sentiment)}`}>
+                            <span className={`ml-auto text-[11px] font-semibold ${getSentimentTextClass(post.sentiment)}`}>
                               {getSentimentLabel(post.sentiment, isAr)}
                             </span>
                           </div>

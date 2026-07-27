@@ -45,7 +45,7 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
 
           {/* Navigation label */}
           <div className="px-5 pt-5 pb-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#999] dark:text-gray-500">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#6B7280] dark:text-gray-400">
               Navigation
             </p>
           </div>
@@ -66,7 +66,7 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                   onClick={() => onTabChange(tab.id)}
                   aria-current={isActive ? 'page' : undefined}
                   className={`
-                    sidebar-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium
+                    sidebar-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                     ${isActive
                       ? 'active text-[#6C2BD9] dark:text-[#8B5CF6] font-bold'
                       : 'text-[#666] dark:text-gray-400 hover:text-[#1A1A1A] dark:hover:text-gray-300'
@@ -105,26 +105,26 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
               {/* Individual awards strip — full award names (Golden Ball / Boot /
                   Glove, Best Young). Names truncate gracefully (min-w-0 flex-1) so
                   the award label is always fully readable. */}
-              <div className="mt-2.5 grid grid-cols-2 gap-1 text-[9px]">
+              <div className="mt-2.5 grid grid-cols-2 gap-1 text-[11px]">
                 <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
                   <span className="shrink-0">🥇</span>
                   <span className="min-w-0 flex-1 font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Rodri</span>
-                  <span className="shrink-0 whitespace-nowrap text-[#999] dark:text-gray-500">Golden Ball</span>
+                  <span className="shrink-0 whitespace-nowrap text-[#6B7280] dark:text-gray-400">Golden Ball</span>
                 </div>
                 <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
                   <span className="shrink-0">⚽</span>
                   <span className="min-w-0 flex-1 font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Mbappé</span>
-                  <span className="shrink-0 whitespace-nowrap text-[#999] dark:text-gray-500">Golden Boot</span>
+                  <span className="shrink-0 whitespace-nowrap text-[#6B7280] dark:text-gray-400">Golden Boot</span>
                 </div>
                 <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
                   <span className="shrink-0">🧤</span>
                   <span className="min-w-0 flex-1 font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">U. Simón</span>
-                  <span className="shrink-0 whitespace-nowrap text-[#999] dark:text-gray-500">Golden Glove</span>
+                  <span className="shrink-0 whitespace-nowrap text-[#6B7280] dark:text-gray-400">Golden Glove</span>
                 </div>
                 <div className="rounded bg-[#F59E0B]/10 px-1.5 py-1 flex items-center gap-1">
                   <span className="shrink-0">🌱</span>
                   <span className="min-w-0 flex-1 font-semibold text-[#1A1A1A] dark:text-gray-200 truncate">Cubarsí</span>
-                  <span className="shrink-0 whitespace-nowrap text-[#999] dark:text-gray-500">Best Young</span>
+                  <span className="shrink-0 whitespace-nowrap text-[#6B7280] dark:text-gray-400">Best Young</span>
                 </div>
               </div>
             </div>
@@ -146,11 +146,11 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                 onClick={() => onTabChange(tab.id)}
                 aria-current={isActive ? 'page' : undefined}
                 className={`
-                  relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg min-w-[48px]
+                  relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg min-w-[48px] focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
                   transition-colors duration-200
                   ${isActive
                     ? 'text-[#6C2BD9] dark:text-[#8B5CF6]'
-                    : 'text-[#999] dark:text-gray-500'
+                    : 'text-[#6B7280] dark:text-gray-400'
                   }
                 `}
               >
@@ -160,7 +160,7 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
                     <span className="absolute -top-1 -right-1.5 size-1.5 rounded-full bg-[#6C2BD9]" />
                   )}
                 </div>
-                <span className={`text-[9px] ${isActive ? 'font-bold' : 'font-semibold'}`}>{t(tab.labelKey)}</span>
+                <span className={`text-[11px] ${isActive ? 'font-bold' : 'font-semibold'}`}>{t(tab.labelKey)}</span>
                 {isActive && (
                   <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-0.5 w-4 rounded-full bg-[#6C2BD9] dark:bg-[#8B5CF6]" />
                 )}

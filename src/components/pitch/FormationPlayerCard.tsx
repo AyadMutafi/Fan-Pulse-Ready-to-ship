@@ -55,7 +55,7 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
         )}
       </div>
       <p
-        className="mt-1 max-w-[90px] sm:max-w-[110px] text-[10px] sm:text-xs font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] leading-tight"
+        className="mt-1 max-w-[90px] sm:max-w-[110px] text-[11px] sm:text-xs font-bold text-white text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] leading-tight"
         style={{ wordBreak: 'keep-all', overflowWrap: 'anywhere' }}
       >
         {player.name}
@@ -64,7 +64,7 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
       <div className="mt-1">
         <Badge
           variant="outline"
-          className={`text-[8px] sm:text-[9px] font-bold px-1.5 py-0 bg-white/95 backdrop-blur-sm ${
+          className={`text-[8px] sm:text-[11px] font-bold px-1.5 py-0 bg-white/95 backdrop-blur-sm ${
             isElite ? 'border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]' : 'border-[#EF4444]/30 text-[#EF4444] dark:border-[#F87171]/30 dark:text-[#F87171]'
           }`}
         >
