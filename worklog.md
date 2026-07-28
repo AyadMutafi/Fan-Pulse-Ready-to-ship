@@ -4475,3 +4475,29 @@ Stage Summary:
 - 4 files changed: `package.json` (build script removes .env from standalone), `prisma/schema.prisma` (removed musl binaryTarget), `next.config.ts` (specific outputFileTracingIncludes instead of broad globs), `db/` directory (cleaned up WAL/backup files).
 - Package size: 83MB → 59MB (29% smaller, faster upload, less likely to hit size limits).
 - The user should now click "Deploy" / "Preview" again in the Z.ai interface. The build will succeed, the package will be smaller, and the deployed container will use the correct `DATABASE_URL` from the environment (not the stale `.env`).
+
+---
+Task ID: 15 (External Preview URL "Failed" — Diagnosis & Build Verification)
+Agent: main
+Task: User reported that the external preview URL `https://e1v0s5v6hje1-d.space-z.ai` is "not working" when shared with a partner. User wants the partner to be able to check the app via this link.
+
+Work Log:
+- Verified dev server health: `curl http://localhost:3000/` → HTTP 200, 52KB HTML, 54ms. All APIs return 200. Dev server has been up for 2h45m (PID 1127, started at 13:33).
+- Tested the external URL `https://e1v0s5v6hje1-d.space-z.ai/` from inside the sandbox → HTTP 500, 2854 bytes, 34ms response time. The response is a Z.ai edge "Failed" page (HTML titled "Failed"), NOT a response from my Next.js app.
+- Verified the 500 is cached at the Z.ai edge ALB layer (Alibaba Cloud Function Compute, Hong Kong region — confirmed by DNS: `alb-1i2q34bllrtyl61zig.cn-hongkong.alb.aliyuncsslbintl.com`). The 34ms response time means the edge is NOT even attempting to forward to my sandbox — it's serving a cached failure page.
+- Confirmed requests never reach my Next.js server: marked dev.log position before hitting the external URL, hit it twice, checked dev.log after — zero new lines. The edge is short-circuiting.
+- Tested the in-sandbox Caddy gateway (port 81) directly: `curl -H "Host: e1v0s5v6hje1-d.space-z.ai" http://127.0.0.1:81/` → HTTP 200, 52KB valid HTML. Caddy → Next.js chain is fully healthy.
+- Read the worklog from Task 14: the previous deploy to Z.ai Function Compute FAILED with "Sorry, there was a problem deploying the code". Root cause was `.env` with sandbox-specific `DATABASE_URL=file:/home/z/my-project/db/custom.db` leaking into the standalone build. Fix was applied in Task 14 (`package.json` build script now does `rm -f .next/standalone/.env`).
+- Verified the fix is still in place: `ls .next/standalone/.env` → not found. ✅
+- Ran the full `.zscripts/build.sh` end-to-end: succeeded, 59MB package at `/tmp/build_fullstack_verify-1785255891.tar.gz`. Package contains: `next-service-dist/` (standalone Next.js), `db/custom.db` (production DB), `Caddyfile`, `start.sh`, `mini-services-start.sh`. NO `.env` in the package. ✅
+- Tested the standalone server with deployed configuration: `DATABASE_URL=file:/tmp/test-deploy/app/db/custom.db NODE_ENV=production PORT=3999 bun server.js` → Ready in 77ms, HTTP 200 on `/` (37KB), HTTP 200 on `/api/health`, HTTP 200 on `/api/matches?league=WC`. ✅
+- Verified dev server via agent-browser: page title "Fan Pulse — Real-Time Fan Sentiment for World Cup 2026", zero page errors, zero console errors (only React DevTools info + HMR connected), full content rendered (nav, hero "Spain 1-0 Argentina", Golden Ball/Boot/Glove awards, fan mood, matches, transfers). ✅
+- Checked the `z-ai` CLI: has commands for chat/vision/tts/asr/image/video, but NO deploy command. The deploy is triggered by the user from the Z.ai web interface (a "Deploy" / "Publish" / "Preview" button), NOT from inside the sandbox.
+
+Stage Summary:
+- **DIAGNOSIS**: The external URL `e1v0s5v6hje1-d.space-z.ai` returns a cached "Failed" page from the Z.ai edge ALB because a PREVIOUS deploy attempt failed (before the `.env` leak fix from Task 14 was applied). The edge has cached this failure and is serving it without retrying.
+- **THE APP IS HEALTHY**: Dev server (HTTP 200, 54ms), in-sandbox Caddy gateway (HTTP 200), standalone production build (starts in 77ms, all APIs 200), full build package (59MB, no `.env`, DB included). Everything is ready to deploy.
+- **THE FIX IS ALREADY IN PLACE**: Task 14's fix (remove `.env` from standalone build) is verified working. The build package is clean.
+- **REQUIRED USER ACTION**: The user must trigger a NEW deploy from the Z.ai web interface (click the "Deploy" / "Publish" / "Preview" button in the Z.ai chat UI). This will rebuild the package with the fix and redeploy to the Function Compute platform. Once the new deploy succeeds, the edge ALB will mark the container as healthy and the URL `https://e1v0s5v6hje1-d.space-z.ai` will work for the partner.
+- **CANNOT trigger deploy from inside the sandbox**: The `z-ai` CLI has no deploy command. The deploy is a user-initiated action in the Z.ai web interface.
+- The dev server (visible in the Z.ai preview panel on the right side of the chat) is fully functional and can be used to preview the app immediately — but this preview is only visible to the user inside the Z.ai chat, NOT to external partners.
