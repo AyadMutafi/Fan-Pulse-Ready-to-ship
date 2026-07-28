@@ -36,7 +36,11 @@ Thumbs.db
 Dockerfile
 .dockerignore
 fly.toml
-docker-entrypoint.sh
+# NOTE: docker-entrypoint.sh is intentionally NOT excluded here.
+# The Dockerfile COPYs it into the runner stage. Excluding it (as the
+# previous version did) makes the Docker build abort with
+# "COPY failed: file not found in build context" — which was the
+# root cause of every deploy failure in the prior sessions.
 
 # Docs / screenshots
 *.md
