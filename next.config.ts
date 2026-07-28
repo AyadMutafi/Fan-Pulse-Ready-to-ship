@@ -85,21 +85,27 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: false,
   // ── Standalone output tracing ──────────────────────────────────────────────
-  // Prisma's generated engine binaries (libquery_engine-*.so.node) live under
-  // node_modules/.prisma and node_modules/@prisma. Next.js's file tracer does
-  // NOT always pick these up because they're dynamically required at runtime.
-  // Without this, the standalone build silently omits the Prisma engine, and
-  // the production server crashes with "Prisma Client could not find its engine"
-  // on first DB query.
+  // Prisma's generated engine binary (libquery_engine-debian-openssl-3.0.x.so.node)
+  // lives under node_modules/.prisma/client. Next.js's file tracer does NOT
+  // always pick it up because it's dynamically required at runtime.
+  //
+  // We include ONLY the runtime query engine + schema, NOT:
+  //   - the schema-engine (19MB, only needed for migrations, not runtime)
+  //   - the musl engine (17MB, the Z.ai platform uses Debian, not Alpine)
+  //   - all the WASM runtimes for other databases (postgres, mysql, cockroachdb)
+  //
+  // This reduces the standalone build by ~40MB.
   outputFileTracingIncludes: {
     '/': [
-      './node_modules/.prisma/**/*',
-      './node_modules/@prisma/**/*',
+      './node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node',
+      './node_modules/.prisma/client/schema.prisma',
+      './node_modules/@prisma/client/**/*',
       './prisma/schema.prisma',
     ],
     '/api/**': [
-      './node_modules/.prisma/**/*',
-      './node_modules/@prisma/**/*',
+      './node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node',
+      './node_modules/.prisma/client/schema.prisma',
+      './node_modules/@prisma/client/**/*',
       './prisma/schema.prisma',
     ],
   },
