@@ -32,7 +32,13 @@ import { scanTier1Feeds } from './feed-scan'
 import { TRACKED_PLAYERS } from './tracked-players'
 
 /** A saga is considered stale if its lastUpdatedAt is older than this. */
-export const STALE_MS = 30 * 60 * 1000 // 30 minutes
+// TEMPORARILY set to 1 year so the background feed-scan does NOT trigger
+// during preview. The feed-scan was consuming the entire shared Z.ai API
+// quota (32 journalists × multiple web_search calls = hundreds of 429s),
+// which blocked VLM and degraded the preview experience. Existing DB data
+// is still served — only the background refresh is paused.
+// Restore to `30 * 60 * 1000` (30 min) once the deploy is live.
+export const STALE_MS = 365 * 24 * 60 * 60 * 1000 // 1 year (temp)
 
 /** How many players to discover per background refresh. */
 const DISCOVERY_BATCH = 4
