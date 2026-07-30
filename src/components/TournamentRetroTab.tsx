@@ -14,9 +14,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SharePulseButton } from '@/components/common/SharePulseButton'
 import FlagImage from '@/components/common/FlagImage'
+import PlayerCard from '@/components/PlayerCard'
 import { findNationalTeam } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
 import { getPulseFaceEmoji, type Trend } from '@/types'
+import { getCardTier, VERIFIED_YOUNG_BREAKOUT_NAMES } from '@/lib/player-card-tiers'
+import type { PlayerCardData } from '@/lib/player-card-data'
+import { useCardCollection } from '@/hooks/use-card-collection'
 import { toast } from 'sonner'
 
 // ── Types (mirrors src/app/api/tournament-retro/route.ts verified response) ───
@@ -298,6 +302,32 @@ function RetroFormationCard({
       ? Math.round(realPlayers.reduce((s, p) => s + p.tournamentScore, 0) / realPlayers.length)
       : 0
 
+  const { markSeen: markCardSeen } = useCardCollection()
+
+  // Convert RetroPick (API response) → PlayerCardData using verified tier logic.
+  // Uses pulseScore if present (verified Elite XI), falls back to tournamentScore.
+  const retroToCardData = (p: RetroPick): PlayerCardData => {
+    const score = p.pulseScore ?? p.tournamentScore
+    const isAwardWinner = !!p.isAwardWinner
+    const isYoungBreakout = VERIFIED_YOUNG_BREAKOUT_NAMES.has(p.name)
+    return {
+      id: `retro:${variant}:${p.name}`,
+      name: p.name,
+      nationCode: p.nationCode,
+      position: p.position || '—',
+      pulseScore: score,
+      scoreLabel: 'Pulse Score',
+      trend: p.trend,
+      isAwardWinner,
+      awardName: p.awardName,
+      isYoungBreakout,
+      tier: getCardTier(score, p.trend, isAwardWinner, isYoungBreakout),
+      verifiedNote: p.matchInfo ?? `Tournament score ${p.tournamentScore}`,
+      source: isElite ? 'Team of Tournament' : 'Crisis XI',
+      fanSentiment: p.sentiment,
+    }
+  }
+
   // Organize into formation columns: GK | DEF | MID | FWD (landscape, like WC tab)
   const gk = side.players.filter(p => p.position === 'GK' || p.name === 'N/A' && side.players.indexOf(p) === 0)
   const def = side.players.filter(p => ['CB', 'LB', 'RB'].includes(p.position))
@@ -365,6 +395,20 @@ function RetroFormationCard({
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Player Cards — FUT-style collectible cards (tap to flip) */}
+      <div className="px-4 py-3 bg-white dark:bg-[#1A1A1A] border-t border-[#E0E0E0]/50 dark:border-white/5">
+        <p className="text-[10px] font-bold text-[#666] dark:text-[#CCCCCC] mb-2 uppercase tracking-wide">
+          {isElite ? 'Elite Player Cards' : 'Crisis Player Cards'} · tap to flip
+        </p>
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
+          {realPlayers.map((player) => (
+            <div key={`card-${player.id}`} className="shrink-0">
+              <PlayerCard data={retroToCardData(player)} size="compact" onView={markCardSeen} />
+            </div>
+          ))}
         </div>
       </div>
 

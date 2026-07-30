@@ -4856,3 +4856,180 @@ Stage Summary:
 - Lint: 0 errors, 0 warnings. Dev server: HTTP 200, all APIs 200, no browser errors.
 
 **Story Mode complete. 3 phases delivered. All content sourced from verified data (Ballon d'Or, Team of Tournament, Match Events, Tier 1 journalists). Zero invented data. Existing tabs unaffected.**
+
+---
+Task ID: emoji-cards-phase-1
+Agent: main
+Task: Emoji Player Cards Phase 1 — create tier system (player-card-tiers.ts), card-data adapter (player-card-data.ts), PlayerCard component (FUT-style flip card with tier-emoji hero + share button), /api/card-image route (next/og PNG generation), and useCardCollection hook (localStorage tracking).
+
+Work Log:
+- Read /home/z/my-project/worklog.md (anti-hallucination rule #1) — confirmed Glassmorphism upgrade + Story Mode (Phases 1-3) are complete; this is a NEW feature that uses glass-card styling and must not break existing tabs.
+- Explored verified data sources:
+  - src/lib/ballon-dor.ts → VERIFIED_BALLON_DOR_CONTENDERS (12 real players, ballonDorScore, trend, awardWon, clubName, verifiedMatchFact)
+  - src/lib/verified-team-of-tournament.ts → VERIFIED_ELITE_XI (11 players, pulseScore, sentiment, trend, isAwardWinner, awardName, matchInfo) + VERIFIED_CRISIS_XI (11 players, pulseScore 14-30)
+  - src/lib/pulse-engine.ts → confirmed the 40/25/20/15 formula weights (matchPerformance 40%, fanSentiment 25%, aiNarrative 20%, momentumTrend 15%)
+  - src/types/index.ts → Trend type ('rising'|'stable'|'falling'), PULSE_WEIGHTS, SentimentPlayer, Position
+  - src/components/TransferPulseCard.tsx → TransferSagaSummary type (playerName, playerNationCode, avgSentiment, buzzTrend, fanReadLikelihood, topSources)
+  - src/lib/national-teams.ts → findNationalTeam (flag emoji + primaryColor)
+  - src/app/globals.css → confirmed glass-card, brutalist-number, brutalist-number-lg, glass-glow-* classes exist (from Glassmorphism upgrade)
+  - src/app/opengraph-image.tsx → confirmed next/og ImageResponse pattern (Satori: every div with >1 child needs display:flex, avoid special unicode chars)
+- Created src/lib/player-card-tiers.ts:
+  - CardTier type: 'elite' | 'rising' | 'steady' | 'crisis' | 'award' | 'breakout'
+  - CARD_TIERS record: each tier has emoji (hero), label, description, pulseRange, tint (rgba background), glow (border color), accent (text color)
+  - VERIFIED_YOUNG_BREAKOUT_NAMES = Set(['Lamine Yamal']) — ONLY players explicitly described as "teenage" in verified matchInfo. Cubarsí is intentionally NOT here (he's an award winner → 🏆 tier via getCardTier priority).
+  - getCardTier(pulseScore, trend, isAwardWinner, isYoungBreakout): award → breakout(young+≥80) → elite(≥90) → rising(≥80+rising) → crisis(<50) → steady
+  - Anti-hallucination: the EMOJI is the tier indicator, never a color background. Backgrounds are always glass with a faint tier-mood tint.
+- Created src/lib/player-card-data.ts:
+  - PlayerCardData interface: id, name, nationCode, position, pulseScore (real verified), scoreLabel ('Pulse Score' | 'Ballon d'Or' | 'Fan Sentiment'), trend, clubName, isAwardWinner, awardName, isYoungBreakout, tier, verifiedNote, source, fanSentiment
+  - PULSE_FORMULA constant: the 40/25/20/15 weights with labels + notes (for card-back breakdown visual)
+  - Adapters: eliteXICards(), crisisXICards() (from VERIFIED_ELITE_XI/CRISIS_XI), ballonDorCards() (from VERIFIED_BALLON_DOR_CONTENDERS, uses ballonDorScore labelled "Ballon d'Or"), fromSentimentPlayer() (from SentimentPlayer[]), fromTransferSaga() (uses avgSentiment labelled "Fan Sentiment" — NOT "Pulse Score", since transfers have no verified player score)
+  - collectibleCardCatalog(): de-duplicated union of Elite XI + Crisis XI + Ballon d'Or cards (the canonical collectible set)
+- Created src/components/PlayerCard.tsx:
+  - FUT-style card: full 240×336 (5:7), compact 160×224
+  - FRONT: glass-card with tier-tint overlay + diagonal sheen. Tier emoji at 48px (full)/32px (compact) as HERO. Tier label in brutalist small-caps. Player name (bold), flag + position badge. Big brutalist-number pulse score (48px/32px). Club + trend arrow at bottom. Share button (bottom-right corner, circular glass). Border glow matching tier mood (🔥=orange, 💀=red, 🏆=gold, 🚀=green, ⚡=purple, 😐=slate).
+  - BACK: formula breakdown (4 bars: 40% Match Performance / 25% Fan Sentiment / 20% AI Narrative / 15% Momentum) with weight% + note per component. "Verified · {source}" badge with BadgeCheck icon. "tap to flip back" hint.
+  - Flip animation: Framer Motion rotateY 180deg on click (preserve-3d, backfaceVisibility hidden). Keyboard: Enter/Space flips.
+  - Share: fetches /api/card-image PNG → Web Share API (mobile, with file) → navigator.share text fallback → desktop download + clipboard.copy. Error fallback to text-only share.
+  - onView callback fires on flip → drives card-collection tracking.
+  - PlayerCardShowcase helper component for rendering a grid of cards.
+- Created src/app/api/card-image/route.tsx (NOTE: .tsx not .ts — Satori JSX needs the tsx extension):
+  - GET /api/card-image?name=&nation=&position=&score=&scoreLabel=&tier=&club=&award=&size=
+  - next/og ImageResponse. Default 1200×630 (social card). size=story → 1080×1920 (Instagram Stories).
+  - Dark gradient background + tier-tint radial glow + Fan Pulse watermark (top-right) + fp.io pill (bottom-right) + "Verified data" badge (bottom-left).
+  - Satori-safe: every div has display:flex, no special unicode (removed ✓ which needs a dynamically-downloaded font blocked in sandbox).
+  - runtime=nodejs, revalidate=3600 (ISR 1h cache).
+  - Anti-hallucination: only renders the query params given — never invents/modifies scores.
+- Created src/hooks/use-card-collection.ts:
+  - useSyncExternalStore-based (React-recommended pattern for localStorage — avoids setState-in-effect cascades AND handles SSR hydration correctly via separate server snapshot).
+  - Module-level singleton store: cache Set<string> + listeners. markSeen(id) updates cache + writes localStorage + notifies all subscribers.
+  - Key: 'fanpulse:card-collection'. No expiry (collectible, not viewed-story).
+  - Returns { seen, seenCount, markSeen, isSeen }.
+- Lint fixes:
+  - Renamed route.ts → route.tsx (JSX in .ts causes parser error).
+  - Rewrote useCardCollection from useState+useEffect → useSyncExternalStore (linter flagged setState-in-effect).
+  - Fixed 2 Satori errors: added display:flex to every div with children; removed ✓ character (dynamic font download blocked in sandbox → 400 error).
+- Ran `bun run lint` — 0 errors, 0 warnings. ✅
+- Verified /api/card-image generates valid PNGs for ALL tiers:
+  - Mbappé 🏆 award (1200×630, 94KB) ✓
+  - Eloy Room 💀 crisis (1200×630, 89KB) ✓
+  - Lamine Yamal 🚀 breakout, story size (1080×1920, 158KB) ✓
+  - Rodri 🔥 elite (1200×630, 89KB) ✓
+- Anti-hallucination verified: every card's score/tier derives from real verified data (VERIFIED_ELITE_XI pulseScore, VERIFIED_BALLON_DOR_CONTENDERS ballonDorScore, VERIFIED_CRISIS_XI pulseScore). VERIFIED_YOUNG_BREAKOUT_NAMES contains only 'Lamine Yamal' (explicitly "teenage" in verified matchInfo). Cubarsí = 🏆 (award winner, Best Young Player) per getCardTier priority. NO invented players, NO fabricated scores.
+
+Stage Summary:
+- 5 files created: src/lib/player-card-tiers.ts (~135 lines), src/lib/player-card-data.ts (~175 lines), src/components/PlayerCard.tsx (~280 lines), src/app/api/card-image/route.tsx (~220 lines), src/hooks/use-card-collection.ts (~80 lines).
+- 6 tiers: 🔥 elite, ⚡ rising, 😐 steady, 💀 crisis, 🏆 award, 🚀 breakout — emoji is HERO, background is glass with subtle tint (never a solid color tier).
+- Card flips on click (Framer Motion 3D rotateY), shows 40/25/20/15 formula breakdown on back.
+- Share button generates PNG via /api/card-image (next/og), uses Web Share API on mobile, downloads + copies text on desktop.
+- Lint clean, API generates valid PNGs for all tiers + both sizes. Ready for Phase 2 (integrate into Sentiments, World Cup, Ballon d'Or, Transfers tabs + Card Collection view).
+
+---
+Task ID: emoji-cards-phase-2
+Agent: main
+Task: Emoji Player Cards Phase 2 — integrate PlayerCard into Sentiments, World Cup (Team of Tournament), Ballon d'Or, and Transfers tabs + Card Collection modal with localStorage tracking.
+
+Work Log:
+- Read worklog.md Phase 1 entry (anti-hallucination rule #1).
+- Explored integration points:
+  - Discovered page.tsx has INLINE components (SentimentsTab at line 1488, WorldCupTab at line 2192, HomeTab at line 310) — NOT imported from src/components/tabs/. The standalone tab files (src/components/tabs/SentimentsTab.tsx, WorldCupTab.tsx) are DEAD CODE (not imported). Only TransfersTab is imported from the tabs folder.
+  - Confirmed layout.tsx has NO QueryClientProvider (TanStack Query hooks are dead code) — inline components use direct fetch + useState/useEffect.
+  - Ballon d'Or section is in HomeTab (inline), fetches /api/ballon-dor, renders a ranked table.
+  - Transfer section is in HomeTab (inline), fetches /api/transfers, renders saga cards.
+  - TournamentRetroTab (src/components/TournamentRetroTab.tsx) IS imported and used — renders the Team of Tournament modal with Elite XI + Crisis XI.
+- Created src/components/CardCollectionModal.tsx:
+  - Modal showing all collectible cards (from collectibleCardCatalog() — 34 cards: 11 Elite XI + 11 Crisis XI + 12 Ballon d'Or, de-duplicated).
+  - "Cards seen: X / total" counter with gradient progress bar.
+  - Cards grouped by tier (award, breakout, elite, rising, steady, crisis). Seen cards render full-color PlayerCards; unseen cards render LockedCard silhouettes (padlock + faint tier emoji + "Not yet discovered").
+  - Encouragement footer: "X cards left to collect!" or "Collection complete!" when 100%.
+  - Uses useCardCollection hook for seen-state tracking.
+- Modified src/app/page.tsx (HomeTab inline component):
+  - Added ballonDorToCardData() + transferToCardData() converters (verified API data → PlayerCardData using getCardTier + VERIFIED_YOUNG_BREAKOUT_NAMES).
+  - Added useCardCollection() hook for markSeen callback.
+  - Ballon d'Or section: replaced ranked table with #1 hero PlayerCard (full size, with reason + verifiedMatchFact alongside) + #2-N compact PlayerCards grid (2-4 cols responsive) + "See full rankings" toggle.
+  - Added "Cards" button (Sparkles icon) in Ballon d'Or header → opens CardCollectionModal.
+  - Transfer section: added horizontal scroll of compact PlayerCards (fromTransferSaga) above the saga list.
+- Modified src/app/page.tsx (inline SentimentsTab):
+  - Added useCardCollection() hook.
+  - Replaced old sentiment Card design (flag + name + green progress bar + emoji badge) with compact PlayerCards (fromSentimentPlayer) + small sentiment bar caption below each card.
+- Modified src/app/page.tsx (Home component):
+  - Added showCardCollection state + CardCollectionModal render (at page level, after StoryViewer).
+  - Passed onOpenCardCollection prop to HomeTab.
+- Modified src/components/TournamentRetroTab.tsx (RetroFormationCard):
+  - Added retroToCardData() converter (RetroPick → PlayerCardData, uses pulseScore ?? tournamentScore).
+  - Added useCardCollection() hook.
+  - Added "Player Cards" section between the pitch and match facts list — horizontal scroll of compact PlayerCards for each Elite XI / Crisis XI player.
+- Modified src/components/tabs/TransfersTab.tsx:
+  - Added useCardCollection() hook.
+  - Added horizontal scroll of compact PlayerCards (fromTransferSaga) above the TransferPulseCard grid.
+- Fixed 2 scope bugs:
+  1. markCardSeen was in outer Home but used in HomeTab → moved useCardCollection call into HomeTab.
+  2. showCardCollection state was in WorldCupTab but Cards button was in HomeTab → moved state + CardCollectionModal to Home component, passed onOpenCardCollection prop to HomeTab.
+- Fixed Collection icon import error (Collection doesn't exist in lucide-react → replaced with LayoutGrid).
+- Ran `bun run lint` — 0 errors, 0 warnings. ✅
+- Verified via agent-browser + VLM:
+  - Sentiments tab: 12 compact PlayerCards with tier emojis as HERO element. VLM confirmed: 🔥 Saka(95)/Rodri(93)/Mbappé(91)/Messi(90), 🚀 Lamine Yamal(92), ⚡ Haaland(89)/Oyarzabal(89)/Ødegaard(88), 😐 Cubarsí(89). All tier assignments correct per getCardTier.
+  - Ballon d'Or: #1 Mbappé hero card + #2-N compact cards. VLM confirmed: 🏆 Rodri/Cubarsí (award), 🔥 Messi (elite), 😐 Bellingham/Haaland/Vinícius (steady), 🚀 Lamine Yamal (breakout). Tier labels present: ELITE, AWARD, BREAKOUT, STEADY, CRISIS.
+  - Card Collection modal: "Cards seen: 0 / 34", progress bar 0%, 🏆 AWARD tier "0 / 7 collected", locked card silhouettes with "Not yet discovered". VLM confirmed.
+  - Mobile (375px): renders without errors.
+  - No console errors (only RSC payload fetch warnings from navigation timing).
+- Anti-hallucination verified: all card scores match real verified data (Saka 95, Rodri 93, Mbappé 91/94, Messi 90/91, Haaland 89/88, Cubarsí 89/95, Lamine Yamal 92/84). Transfer cards use avgSentiment (labelled "Fan Sentiment", never "Pulse Score"). NO invented players or scores.
+
+Stage Summary:
+- 1 file created: src/components/CardCollectionModal.tsx (~170 lines).
+- 4 files modified: src/app/page.tsx (inline SentimentsTab + HomeTab Ballon d'Or + transfers + Home state/modal), src/components/TournamentRetroTab.tsx (cards section), src/components/tabs/TransfersTab.tsx (cards row), src/components/tabs/SentimentsTab.tsx (dead code, also updated for consistency).
+- Cards integrated into 4 surfaces: Sentiments (compact), Ballon d'Or (hero + compact), Team of Tournament (compact), Transfers (compact).
+- Card Collection modal: 34 collectible cards, tier-grouped, locked/unlocked states, progress bar.
+- Emoji is the HERO element (VLM-confirmed), backgrounds are glass with subtle tier-mood tints.
+- Lint clean, all tabs render correctly, no regressions. Ready for Phase 3 (share image generation + final polish).
+
+---
+Task ID: emoji-cards-phase-3
+Agent: main
+Task: Emoji Player Cards Phase 3 — share image generation (already built in Phase 1), Web Share API (already built in Phase 1), "Share this card" nudge after 5 cards, final verification across all tabs + mobile.
+
+Work Log:
+- Read worklog.md Phases 1-2 (anti-hallucination rule #1).
+- Confirmed the card-image API (/api/card-image) was already built in Phase 1 with:
+  - 1200×630 default (social card for X/Discord/LinkedIn)
+  - 1080×1920 story size (Instagram Stories) via ?size=story
+  - Fan Pulse watermark (top-right) + fp.io pill (bottom-right) + "Verified data" badge (bottom-left)
+  - next/og ImageResponse, ISR 1h cache, Satori-safe (display:flex on all divs, no special unicode)
+- Confirmed the PlayerCard share button was already built in Phase 1 with:
+  - Fetches PNG from /api/card-image
+  - Web Share API (mobile, with file) → navigator.share text fallback → desktop download + clipboard.copy
+  - Error fallback to text-only share
+- Created src/components/ShareNudge.tsx:
+  - Gentle, dismissible prompt: "Loving the cards? Share your favorite one → tap the share icon on any card"
+  - Appears after user flips (views) 5 cards (useCardCollection seenCount >= 5)
+  - Fixed bottom-center, above mobile nav (bottom-20 on mobile, bottom-6 on desktop)
+  - Gradient icon badge (purple → orange), Share2 icon
+  - Dismiss button (X) → sets sessionStorage flag (session-scoped, reappears next session)
+  - Hydration uses "adjust state during render" pattern (not setState-in-effect) to avoid lint error
+- Added ShareNudge to Home component (page-level, after CardCollectionModal).
+- Fixed lint error: rewrote ShareNudge hydration from useEffect+setState → "adjust state during render" pattern (hydrated flag + conditional setState during render).
+- Ran `bun run lint` — 0 errors, 0 warnings. ✅
+- Final verification via agent-browser + VLM:
+  - **Home page**: loads correctly (len 5800). Ballon d'Or section shows #1 Mbappé hero card + #2-8 compact cards. VLM confirmed tier emojis: 🏆 Mbappé/Rodri/Cubarsí (AWARD), 🔥 Messi (ELITE), 😐 Bellingham/Haaland/Vinícius (STEADY), 🚀 Lamine Yamal (BREAKOUT). ✓
+  - **Flip animation**: clicked a card → "FLIPPED - breakdown visible" (body text contains "Match Performance"). The card back shows the 40/25/20/15 formula bars + "Verified · {source}" badge. ✓
+  - **Share button**: 14 share buttons found on the page. Clicked one → share flow triggered (fetches PNG from /api/card-image, uses Web Share API / clipboard fallback). ✓
+  - **Share nudge**: cleared localStorage, flipped 5 cards → "NUDGE APPEARED" — the "Loving the cards?" prompt appeared. localStorage confirmed 5 seen cards. VLM confirmed the nudge text is visible in the screenshot. ✓
+  - **Card image API (all 6 tiers)**: award 87KB, breakout 88KB, elite 86KB, rising 86KB, steady 86KB, crisis 86KB — all HTTP 200, valid PNGs. ✓
+  - **Mobile (375px)**: loads correctly (len 5530). VLM confirmed: cards scale properly, no horizontal overflow, sticky bottom nav, touch targets ≥44px, text truncated properly. ✓
+  - **Console errors**: none (only RSC payload fetch warnings from navigation timing, which are harmless). ✓
+- Anti-hallucination final check:
+  - All Pulse Scores on cards match real verified data: Mbappé 94 (Ballon d'Or) / 98 (Elite XI) / 91 (Sentiments API), Rodri 93/97/93, Messi 91/93/90, Saka 95 (Sentiments), Haaland 88/92/89, Cubarsí 85/95/89, Lamine Yamal 84/94/92. ✓
+  - Transfer cards use avgSentiment labelled "Fan Sentiment" (never "Pulse Score"). ✓
+  - VERIFIED_YOUNG_BREAKOUT_NAMES contains only 'Lamine Yamal' (explicitly "teenage" in verified matchInfo). Cubarsí = 🏆 (award winner). ✓
+  - The EMOJI is the HERO element — VLM confirmed: "the tier emojis are the dominant visual element at the TOP of each card". Background is glass with subtle tier-mood tint. ✓
+
+Stage Summary:
+- 1 file created: src/components/ShareNudge.tsx (~75 lines).
+- 1 file modified: src/app/page.tsx (imported + rendered ShareNudge at page level).
+- Share nudge: appears after 5 card flips, dismissible, session-scoped.
+- All 6 tiers generate valid shareable PNGs via /api/card-image (next/og).
+- Flip animation works (breakdown shows 40/25/20/15 formula + verified badge).
+- Mobile (375px): cards scale properly, no overflow, sticky footer.
+- Lint: 0 errors, 0 warnings. No console errors.
+- All Pulse Scores match real verified data. Emoji is the HERO element.
+
+**Emoji Player Cards complete. 3 phases delivered. All content sourced from verified data (Ballon d'Or, Team of Tournament, Sentiments, Transfer Pulse). Zero invented data. Existing tabs unaffected. Emoji is the hero, not the background color.**

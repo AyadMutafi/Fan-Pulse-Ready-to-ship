@@ -5,6 +5,9 @@ import { motion } from 'framer-motion'
 import { ArrowLeftRight, RefreshCw, ShieldCheck, Zap, TrendingUp } from 'lucide-react'
 import TransferPulseCard, { type TransferSagaSummary } from '@/components/TransferPulseCard'
 import TransferSagaDetail from '@/components/TransferSagaDetail'
+import PlayerCard from '@/components/PlayerCard'
+import { fromTransferSaga } from '@/lib/player-card-data'
+import { useCardCollection } from '@/hooks/use-card-collection'
 
 type StatusFilter = 'active' | 'completed' | 'debunked' | 'all'
 type SortKey = 'buzz' | 'likelihood' | 'recent'
@@ -69,6 +72,7 @@ export default function TransfersTab() {
 
   const totalBuzz = sagas.reduce((s, x) => s + x.buzzVolume, 0)
   const hotCount = sagas.filter((s) => s.buzzTrend === 'rising').length
+  const { markSeen: markCardSeen } = useCardCollection()
 
   return (
     <div className="space-y-5">
@@ -165,13 +169,24 @@ export default function TransfersTab() {
       ) : sorted.length === 0 ? (
         <EmptyState statusFilter={statusFilter} />
       ) : (
-        <motion.div
-          layout
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
-        >
+        <motion.div layout className="space-y-4">
+          {/* Transfer target cards — horizontal scroll of collectible cards */}
+          {sorted.length > 0 && (
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
+              {sorted.map((saga) => (
+                <div key={`card-${saga.id}`} className="shrink-0">
+                  <PlayerCard data={fromTransferSaga(saga)} size="compact" onView={markCardSeen} />
+                </div>
+              ))}
+            </div>
+          )}
+          <div
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+          >
           {sorted.map((saga) => (
             <TransferPulseCard key={saga.id} saga={saga} onClick={setSelected} />
           ))}
+          </div>
         </motion.div>
       )}
 

@@ -9,6 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useLanguage } from '@/context/LanguageContext'
 import { findNationalTeam } from '@/lib/national-teams'
 import { useSentiments } from '@/hooks/queries/use-sentiments'
+import PlayerCard from '@/components/PlayerCard'
+import { fromSentimentPlayer } from '@/lib/player-card-data'
+import { useCardCollection } from '@/hooks/use-card-collection'
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -102,6 +105,7 @@ export default function SentimentsTab() {
   const [filter, setFilter] = useState<LeagueFilter>('ALL')
   const apiLeague = LEAGUE_API_MAP[filter]
   const { data: players, isLoading, error } = useSentiments(apiLeague || undefined)
+  const { markSeen } = useCardCollection()
 
   return (
     <div className="space-y-6">
@@ -164,53 +168,34 @@ export default function SentimentsTab() {
         </div>
       )}
 
-      {/* Player sentiment cards */}
+      {/* Player sentiment cards — FUT-style emoji cards */}
       {players && players.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {players.map((player, i) => (
-            <motion.div
-              key={player.id}
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.05 }}
-            >
-              <Card className={`card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${getSentimentBg(player.sentiment)}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-xl">{getFlag(player.nationCode)}</span>
-                      <div>
-                        <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">{player.name}</p>
-                        <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">{player.nationCode}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-2xl font-black ${getSentimentColor(player.sentiment)}`}>
-                        {player.sentiment}
-                      </p>
-                      <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">pulse</p>
-                    </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 place-items-center">
+          {players.map((player, i) => {
+            const cardData = fromSentimentPlayer(player)
+            return (
+              <motion.div
+                key={player.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+                className="flex flex-col items-center gap-1.5"
+              >
+                <PlayerCard data={cardData} size="compact" onView={markSeen} />
+                <div className="flex items-center gap-1.5">
+                  <div className="sentiment-bar w-20">
+                    <div
+                      className={`sentiment-bar-fill ${getSentimentBarClass(player.sentiment)}`}
+                      style={{ width: `${player.sentiment}%` }}
+                    />
                   </div>
-                  <div className="mt-3">
-                    <div className="sentiment-bar">
-                      <div
-                        className={`sentiment-bar-fill ${getSentimentBarClass(player.sentiment)}`}
-                        style={{ width: `${player.sentiment}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-2 flex items-center gap-1">
-                    <span className="text-sm">
-                      {getSentimentEmoji(player.sentiment)}
-                    </span>
-                    <span className={`text-[10px] font-semibold ${getSentimentColor(player.sentiment)}`}>
-                      {t(getLabelKey(player.sentiment))}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                  <span className={`text-[10px] font-semibold ${getSentimentColor(player.sentiment)}`}>
+                    {t(getLabelKey(player.sentiment))}
+                  </span>
+                </div>
+              </motion.div>
+            )
+          })}
         </div>
       )}
 

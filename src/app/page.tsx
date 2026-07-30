@@ -27,6 +27,14 @@ import { useFlagMode } from '@/lib/flag-mode'
 import FlagImage from '@/components/common/FlagImage'
 import { FanTalkPanel } from '@/components/FanTalkPanel'
 import { TournamentRetroModal } from '@/components/TournamentRetroTab'
+import { CardCollectionModal } from '@/components/CardCollectionModal'
+import { ShareNudge } from '@/components/ShareNudge'
+import PlayerCard from '@/components/PlayerCard'
+import { getCardTier } from '@/lib/player-card-tiers'
+import { VERIFIED_YOUNG_BREAKOUT_NAMES } from '@/lib/player-card-tiers'
+import type { PlayerCardData } from '@/lib/player-card-data'
+import { fromSentimentPlayer } from '@/lib/player-card-data'
+import { useCardCollection } from '@/hooks/use-card-collection'
 import { getPulseScoreColor, getPulseScoreColorClass } from '@/types'
 import { toast } from 'sonner'
 
@@ -301,12 +309,61 @@ interface TransferSagaSummary {
   }[]
 }
 
-function HomeTab({ stories, viewedIds, onOpenStories }: {
+function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
   stories: PulseStory[]
   viewedIds: Set<string>
   onOpenStories: (startIndex: number) => void
+  onOpenCardCollection: () => void
 }) {
+  // ── Card data converters (verified data → PlayerCardData) ──────────────────
+  // These map the API responses to the unified PlayerCardData shape using the
+  // verified tier logic from player-card-tiers.ts. NO scores are invented.
+  const ballonDorToCardData = (c: BallonDorContender): PlayerCardData => {
+    const isAwardWinner = !!c.awardWon
+    const isYoungBreakout = VERIFIED_YOUNG_BREAKOUT_NAMES.has(c.name)
+    return {
+      id: `ballon-dor:${c.name}`,
+      name: c.name,
+      nationCode: c.nationCode,
+      position: c.position,
+      pulseScore: c.ballonDorScore,
+      scoreLabel: "Ballon d'Or",
+      trend: c.trend,
+      clubName: c.clubName,
+      clubCode: c.clubCode,
+      isAwardWinner,
+      awardName: c.awardWon,
+      isYoungBreakout,
+      tier: getCardTier(c.ballonDorScore, c.trend, isAwardWinner, isYoungBreakout),
+      verifiedNote: c.verifiedMatchFact,
+      source: "Ballon d'Or Race",
+    }
+  }
+
+  const transferToCardData = (s: TransferSagaSummary): PlayerCardData => {
+    const score = Math.round(s.avgSentiment)
+    const trend = (s.buzzTrend === 'rising' || s.buzzTrend === 'falling' ? s.buzzTrend : 'stable') as 'rising' | 'stable' | 'falling'
+    const isYoungBreakout = VERIFIED_YOUNG_BREAKOUT_NAMES.has(s.playerName)
+    const topSrc = s.topSources[0]
+    return {
+      id: `transfer:${s.id}`,
+      name: s.playerName,
+      nationCode: s.playerNationCode,
+      position: '—',
+      pulseScore: score,
+      scoreLabel: 'Fan Sentiment',
+      trend,
+      clubName: s.toClubName || s.fromClubName,
+      clubCode: s.toClubCode || s.fromClubCode,
+      isAwardWinner: false,
+      isYoungBreakout,
+      tier: getCardTier(score, trend, false, isYoungBreakout),
+      verifiedNote: topSrc ? `${topSrc.journalistName} (${topSrc.outlet})` : `Fan-read ${s.fanReadLikelihood}%`,
+      source: 'Transfer Pulse',
+    }
+  }
   const { t } = useLanguage()
+  const { markSeen: markCardSeen } = useCardCollection()
   const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('WC')
   const [apiMatches, setApiMatches] = useState<Array<{
     id: string; home: string; away: string; homeFlag: string; awayFlag: string
@@ -1038,7 +1095,17 @@ function HomeTab({ stories, viewedIds, onOpenStories }: {
                 No active transfer sagas right now — check back soon.
               </p>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
+                {/* Transfer target cards — horizontal scroll of collectible cards */}
+                {transferSagas.length > 0 && (
+                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none -mx-1 px-1">
+                    {transferSagas.map((saga) => (
+                      <div key={`card-${saga.id}`} className="shrink-0">
+                        <PlayerCard data={transferToCardData(saga)} size="compact" onView={markCardSeen} />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {transferSagas.map((saga, i) => {
                   const revealed = revealedSagas.has(saga.id)
                   const hasFanPosts = saga.buzzVolume > 0
@@ -1174,6 +1241,16 @@ function HomeTab({ stories, viewedIds, onOpenStories }: {
               {ballonDor?.framing.subtitle ?? 'Who fans think should win — not a forecast of the actual award'}
             </p>
           </div>
+          {/* Card Collection button — opens the gamification modal */}
+          <Button
+            onClick={onOpenCardCollection}
+            variant="outline"
+            size="sm"
+            className="ml-auto gap-1.5 border-[#6C2BD9]/20 text-[#6C2BD9] dark:text-[#8B5CF6] dark:border-[#8B5CF6]/20 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#8B5CF6]/10 text-[11px] h-7"
+          >
+            <Sparkles className="size-3.5" />
+            Cards
+          </Button>
         </div>
 
         <Card className="glass-card glass-hover border-[#E0E0E0]/50 dark:border-white/5">
@@ -1194,7 +1271,7 @@ function HomeTab({ stories, viewedIds, onOpenStories }: {
               </div>
             )}
 
-            {/* Ranked table */}
+            {/* Ranked cards — #1 hero + compact cards grid */}
             {ballonDorLoading ? (
               <div className="grid gap-2 sm:grid-cols-2">
                 {Array.from({ length: 8 }).map((_, i) => (
@@ -1203,59 +1280,52 @@ function HomeTab({ stories, viewedIds, onOpenStories }: {
               </div>
             ) : ballonDorVisible.length === 0 ? (
               <p className="py-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
-                Ballon d'Or data unavailable — check back soon.
+                Ballon d&rsquo;Or data unavailable — check back soon.
               </p>
             ) : (
-              <div className="grid gap-1 sm:grid-cols-2">
-                {ballonDorVisible.map((c, i) => {
-                  const rank = i + 1
-                  const isTop3 = rank <= 3
-                  return (
-                    <motion.div
-                      key={c.name}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.25, delay: i * 0.04 }}
-                      title={c.verifiedMatchFact}
-                      className={`
-                        flex items-center gap-2 rounded-lg px-2 py-2 transition-colors
-                        ${rank === 1 ? 'glass-rank-1 glass-glow-purple' : isTop3 ? 'bg-[#F59E0B]/5 dark:bg-[#F59E0B]/10' : 'hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D]'}
-                      `}
-                    >
-                      {/* Rank */}
-                      <span className={`w-5 text-center text-xs font-black ${isTop3 ? 'text-[#F59E0B]' : 'text-[#6B7280] dark:text-gray-400'}`}>
-                        {rank}
-                      </span>
-                      {/* Flag */}
-                      <FlagImage nationCode={c.nationCode} size={18} fallbackEmoji="" />
-                      {/* Name + club */}
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-bold text-[#1A1A1A] dark:text-white">
-                          {c.name}
-                        </p>
-                        <p className="truncate text-[10px] text-[#666] dark:text-[#CCCCCC]">
-                          {c.clubName} · {c.position}
-                        </p>
+              <div className="space-y-3">
+                {/* #1 hero card — displayed prominently */}
+                {ballonDorVisible[0] && (
+                  <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-center sm:gap-4">
+                    <PlayerCard data={ballonDorToCardData(ballonDorVisible[0])} size="full" onView={markCardSeen} />
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="brutalist-number text-2xl font-black text-[#F59E0B]">#{1}</span>
+                        <span className="text-xs font-bold text-[#666] dark:text-[#CCCCCC]">contender</span>
                       </div>
-                      {/* Score */}
-                      <span className={`brutalist-number ${rank === 1 ? 'brutalist-number-lg' : ''} text-[#6C2BD9] dark:text-[#8B5CF6]`}>
-                        {c.ballonDorScore}
-                      </span>
-                      {/* Trend */}
-                      <span className="w-4 text-center">
-                        {c.trend === 'rising' && <TrendingUp className="size-3.5 text-[#10B981]" />}
-                        {c.trend === 'falling' && <TrendingDown className="size-3.5 text-[#EF4444]" />}
-                        {c.trend === 'stable' && <Minus className="size-3.5 text-[#FF6B35]" />}
-                      </span>
-                    </motion.div>
-                  )
-                })}
+                      <p className="text-xs text-[#666] dark:text-[#CCCCCC] leading-relaxed line-clamp-3">
+                        {ballonDorVisible[0].reason}
+                      </p>
+                      <p className="text-[10px] italic text-[#6B7280] dark:text-gray-400 line-clamp-2">
+                        {ballonDorVisible[0].verifiedMatchFact}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* #2-N compact cards grid */}
+                {ballonDorVisible.length > 1 && (
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 place-items-center pt-2 border-t border-[#E0E0E0]/50 dark:border-white/5">
+                    {ballonDorVisible.slice(1).map((c, i) => (
+                      <motion.div
+                        key={c.name}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, delay: i * 0.04 }}
+                        className="flex flex-col items-center gap-1"
+                      >
+                        <span className="text-[10px] font-black text-[#F59E0B]">#{i + 2}</span>
+                        <PlayerCard data={ballonDorToCardData(c)} size="compact" onView={markCardSeen} />
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
 
                 {/* See full rankings toggle */}
                 {ballonDorHiddenCount > 0 && (
                   <button
                     onClick={() => setShowAllBallonDor(!showAllBallonDor)}
-                    className="mt-2 sm:col-span-2 w-full rounded-lg border border-[#E0E0E0]/50 dark:border-white/10 py-1.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/5 dark:hover:bg-[#8B5CF6]/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+                    className="w-full rounded-lg border border-[#E0E0E0]/50 dark:border-white/10 py-1.5 text-[10px] font-bold text-[#6C2BD9] dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/5 dark:hover:bg-[#8B5CF6]/10 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
                   >
                     {showAllBallonDor ? '▲ Show top 8' : `▼ See full rankings (+${ballonDorHiddenCount} more)`}
                   </button>
@@ -1422,6 +1492,7 @@ function SentimentsTab() {
   const [players, setPlayers] = useState<SentimentPlayer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { markSeen: markCardSeen } = useCardCollection()
 
   const moods: { id: MoodFilter; labelKey: string; emoji: string }[] = [
     { id: 'ALL', labelKey: 'sentiments.all', emoji: '🌐' },
@@ -1538,7 +1609,7 @@ function SentimentsTab() {
         </div>
       )}
 
-      {/* Player sentiment cards */}
+      {/* Player sentiment cards — FUT-style emoji cards */}
       {!loading && !error && (
         <>
           {filtered.length === 0 ? (
@@ -1547,64 +1618,34 @@ function SentimentsTab() {
               <p className="text-sm font-semibold text-[#666] dark:text-[#CCCCCC]">No players match this filter.</p>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 place-items-center">
               {filtered.map((player, i) => {
-                const score = player.pulseScore
+                const cardData = fromSentimentPlayer(player)
                 const labelKey = player.label === 'on_fire'
                   ? 'sentiments.on_fire'
                   : player.label === 'under_pressure'
                     ? 'sentiments.under_pressure'
                     : 'sentiments.crisis'
-                const emoji = player.label === 'on_fire' ? '🔥' : player.label === 'under_pressure' ? '😤' : '😰'
                 return (
                   <motion.div
                     key={player.id}
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: i * 0.05 }}
+                    className="flex flex-col items-center gap-1.5"
                   >
-                    <Card className={`glass-card glass-hover glass-card-mobile-flat card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${getSentimentBg(score)}`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-xl">
-                              <FlagImage nationCode={player.nationCode} size={28} fallbackEmoji={getFlag(player.nationCode)} />
-                            </span>
-                            <div>
-                              <p className="text-sm font-bold text-[#1A1A1A] dark:text-white">{player.name}</p>
-                              <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">{player.nationCode}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <p className={`brutalist-number text-2xl font-black ${getSentimentColor(score)}`}>
-                              {score}
-                            </p>
-                            <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">pulse</p>
-                          </div>
-                        </div>
-                        <div className="mt-3">
-                          <div className="sentiment-bar">
-                            <div
-                              className={`sentiment-bar-fill ${score >= 80 ? 'sentiment-positive' : score >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
-                              style={{ width: `${score}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-2 flex items-center gap-1">
-                          <span className="text-sm">{emoji}</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getSentimentColor(score)} ${
-                            player.label === 'on_fire' ? 'glass-glow-green' : player.label === 'crisis' ? 'glass-glow-red' : ''
-                          }`}>
-                            {t(labelKey)}
-                          </span>
-                          {player.trend && (
-                            <span className="ml-auto">
-                              {getTrendIcon(player.trend)}
-                            </span>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <PlayerCard data={cardData} size="compact" onView={markCardSeen} />
+                    <div className="flex items-center gap-1.5">
+                      <div className="sentiment-bar w-20">
+                        <div
+                          className={`sentiment-bar-fill ${player.pulseScore >= 80 ? 'sentiment-positive' : player.pulseScore >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
+                          style={{ width: `${player.sentiment}%` }}
+                        />
+                      </div>
+                      <span className={`text-[10px] font-semibold ${getSentimentColor(player.pulseScore)}`}>
+                        {t(labelKey)}
+                      </span>
+                    </div>
                   </motion.div>
                 )
               })}
@@ -2912,6 +2953,8 @@ export default function Home() {
   // a new UTC day's stories appear without a manual reload.
   const [storiesOpen, setStoriesOpen] = useState(false)
   const [storyStartIndex, setStoryStartIndex] = useState(0)
+  // Card Collection modal state (gamification — tracks flipped cards via localStorage).
+  const [showCardCollection, setShowCardCollection] = useState(false)
   const { data: stories = [], dayKey } = useStories()
   const { viewedIds, markViewed } = useViewedStories(dayKey)
 
@@ -2977,6 +3020,7 @@ export default function Home() {
                     stories={stories}
                     viewedIds={viewedIds}
                     onOpenStories={openStories}
+                    onOpenCardCollection={() => setShowCardCollection(true)}
                   />
                 )}
                 {activeTab === 'sentiments' && <SentimentsTab />}
@@ -3030,6 +3074,12 @@ export default function Home() {
           onNavigate={(tabId) => setActiveTab(tabId as TabId)}
         />
       )}
+
+      {/* ── Card Collection modal (gamification) ──────────────────────────── */}
+      <CardCollectionModal open={showCardCollection} onOpenChange={setShowCardCollection} />
+
+      {/* ── Share nudge (appears after viewing 5 cards) ──────────────────── */}
+      <ShareNudge />
     </div>
   )
 }
