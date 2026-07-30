@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { useLanguage } from '@/context/LanguageContext'
-import { Home, Activity, Globe, Zap, ArrowLeftRight, Trophy } from 'lucide-react'
+import { Home, Activity, Globe, Zap, ArrowLeftRight, Trophy, Clapperboard } from 'lucide-react'
 
 export type TabId = 'home' | 'sentiments' | 'rate' | 'goals' | 'totw' | 'worldcup' | 'transfers'
 
 interface NavigationProps {
   activeTab: TabId
   onTabChange: (tab: TabId) => void
+  /** Opens the full-screen Story viewer. Optional — only wired on the main page. */
+  onOpenStories?: () => void
 }
 
 // Each tab maps to an in-page anchor link (href="#…"). The hash uses a
@@ -23,7 +25,7 @@ const tabs: { id: TabId; icon: typeof Home; labelKey: string; href: string; isNe
   { id: 'transfers', icon: ArrowLeftRight, labelKey: 'nav.transfers', href: '#transfers', isNew: true },
 ]
 
-export default function Navigation({ activeTab, onTabChange }: NavigationProps) {
+export default function Navigation({ activeTab, onTabChange, onOpenStories }: NavigationProps) {
   const { t } = useLanguage()
 
   return (
@@ -49,6 +51,26 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
               Navigation
             </p>
           </div>
+
+          {/* Stories button — featured action above the tab list. Opens the
+              full-screen Story viewer (Story Mode). Styled with a gradient
+              accent to distinguish it from regular nav items. */}
+          {onOpenStories && (
+            <div className="px-3 pb-2">
+              <button
+                onClick={onOpenStories}
+                className="sidebar-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-bold text-[#1A1A1A] dark:text-white bg-gradient-to-r from-[#6C2BD9]/8 to-[#FF6B35]/8 dark:from-[#6C2BD9]/12 dark:to-[#FF6B35]/8 border border-[#6C2BD9]/15 dark:border-[#6C2BD9]/20 hover:from-[#6C2BD9]/12 hover:to-[#FF6B35]/12 transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+              >
+                <span className="flex size-[18px] items-center justify-center bg-gradient-to-br from-[#6C2BD9] to-[#FF6B35] rounded-md">
+                  <Clapperboard className="size-3 text-white" />
+                </span>
+                <span>Stories</span>
+                <span className="ml-auto inline-flex items-center rounded-full bg-[#FF6B35]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#FF6B35]">
+                  New
+                </span>
+              </button>
+            </div>
+          )}
 
           {/* Nav items — rendered as Next.js <Link> anchor links (#home, #sentiments,
               #world-cup, #transfers) for proper routing semantics + accessibility.
@@ -136,6 +158,22 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
       {/* ── Mobile Bottom Tab Bar ────────────────────────────── */}
       <nav role="navigation" aria-label="Main navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-[#1A1A1A]/80 border-t border-black/5 dark:border-white/5 safe-area-bottom">
         <div className="flex items-center justify-around py-1.5 px-1">
+          {/* Stories button — featured first item with gradient accent */}
+          {onOpenStories && (
+            <button
+              onClick={onOpenStories}
+              aria-label="Open Stories"
+              className="relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg min-w-[48px] focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 transition-colors duration-200 text-[#FF6B35]"
+            >
+              <div className="relative">
+                <span className="flex size-[18px] items-center justify-center bg-gradient-to-br from-[#6C2BD9] to-[#FF6B35] rounded-md">
+                  <Clapperboard className="size-3 text-white" />
+                </span>
+                <span className="absolute -top-1 -right-1.5 size-1.5 rounded-full bg-[#FF6B35]" />
+              </div>
+              <span className="text-[11px] font-bold">Stories</span>
+            </button>
+          )}
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id
             const Icon = tab.icon

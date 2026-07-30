@@ -4685,3 +4685,174 @@ Stage Summary:
 - Lint: 0 errors, 0 warnings.
 
 **Glassmorphism upgrade complete. No data or functionality changed. Visual treatment only.**
+
+---
+Task ID: story-mode-phase-1
+Agent: main
+Task: Story Mode Phase 1 — create src/lib/story-generator.ts (generates daily Pulse Stories from verified data) + src/app/api/stories/route.ts (GET /api/stories, cached 1h, rate-limited 20/min/IP).
+
+Work Log:
+- Read /home/z/my-project/worklog.md (anti-hallucination rule #1) — confirmed Glassmorphism upgrade (Phases 1-5) is complete; this is a NEW feature that must not break existing tabs.
+- Explored verified data sources to source story content:
+  - src/lib/ballon-dor.ts → VERIFIED_BALLON_DOR_CONTENDERS (12 real WC 2026 players, ballonDorScore, verifiedMatchFact, trend)
+  - src/lib/verified-team-of-tournament.ts → VERIFIED_ELITE_XI (11 players), VERIFIED_TOURNAMENT_FACTS (Golden Ball/Boot/Glove/Best Young)
+  - src/lib/match-events-data.ts → MATCH_EVENTS (16 verified Matchday 1 goals/cards with sentimentDelta)
+  - src/lib/transfer-pulse/tier1-sources.ts → TIER1_SOURCES (32 real verified journalist handles)
+  - src/lib/national-teams.ts → findNationalTeam (primaryColor for nation-gradient backgrounds)
+- Created src/lib/story-generator.ts:
+  - PulseStory interface with id, type, title, emoji, content, backgroundImage, durationMs, source, verifiedEvent, cta, + type-specific render payloads (player, moodShift, transferBuzz, rankingChange, award, archiveMoment).
+  - 6 story builders, one per type: buildPlayerSpikeStories, buildMoodShiftStories, buildTransferBuzzStories, buildRankingChangeStories, buildAwardStories, buildArchiveMomentStories.
+  - Each builder pulls ONLY from verified arrays — never invents a fact.
+  - Name matching fix: VERIFIED_ELITE_XI uses full names ("Kylian Mbappé") while MATCH_EVENTS uses short names ("Mbappé"). Added findEliteForEvent() that normalizes (lowercase, strip accents) and matches by last-name token. Now correctly pairs Mbappé/Haaland/Messi/Bellingham/Hakimi.
+  - dailyRotation<T>() — deterministic seeded pick (date-string hash → stable offset). Same day = same stories; new day = new rotation. No Math.random().
+  - nationGradient() — builds CSS linear-gradient from a team's primaryColor (via findNationalTeam) with a dark scrim overlay for text readability. Falls back to purple gradient.
+  - HERO GUARANTEE: generateDailyStories() ALWAYS includes the #1 Ballon d'Or contender (Mbappé) as the first story AND the Golden Boot award as the second story. buildAwardStories() always returns [Golden Boot, <1 rotating award>]. The remaining 6 slots are filled by daily-rotating supporting stories (2 player-spikes, 2 mood-shifts, 1 transfer-buzz, 1 archive-moment, + optional riser ranking + rotating award).
+  - Type interleaving: supporting stories are ordered [playerSpike, transferBuzz, moodShift, archiveMoment, playerSpike, moodShift, riser, rotatingAward] so no two same-type stories are back-to-back (except the hero pair at top).
+  - De-duplication by id + cap at 8 stories.
+- Created src/app/api/stories/route.ts:
+  - GET /api/stories — returns { stories, dayKey, cachedAt, cached }.
+  - Rate limit: 20 req/min/IP via rateLimit('stories:'+ip, 20, 60_000).
+  - In-memory cache: 1 hour TTL, keyed by UTC dayKey (cache invalidates at midnight UTC so new day's stories generate fresh).
+  - CORS via setCorsHeaders + handleOptions (same pattern as /api/ballon-dor).
+  - force-dynamic (no static caching — stories are time-sensitive).
+- Ran `bun run lint` — 0 errors, 0 warnings. ✅
+- Verified API: curl http://localhost:3000/api/stories returns 8 stories with real verified data:
+  1. [ranking-change] 👑 #1 Kylian Mbappé — source: Ballon d'Or Race
+  2. [award] 🏆 Golden Boot — source: FIFA.com official awards
+  3. [player-spike] ⚡ Kylian Mbappé spike (pulse=98, delta=+35) — source: Match Events · VERIFIED_DATA.md
+  4. [transfer-buzz] 🔁 Marco Conterio (Tuttomercatoweb, reliability 82%) — source: Transfer Pulse · Tuttomercatoweb
+  5. [mood-shift] 🙂 Norway (😟→🙂 after Haaland 61' goal) — source: Match Events · NOR 4-1 IRQ
+  6. [archive-moment] ⚽ MEX 2-0 RSA (Quiñones 14') — source: VERIFIED_DATA.md
+  7. [player-spike] ⚡ Erling Haaland spike (pulse=92, delta=+32) — source: Match Events · VERIFIED_DATA.md
+  8. [mood-shift] 🙂 Argentina (😟→🙂 after Messi 12' goal) — source: Match Events · ARG 3-0 ALG
+- Anti-hallucination verified: every story's `source` cites a real origin (Ballon d'Or Race, FIFA.com, VERIFIED_DATA.md, Transfer Pulse tier1-sources.ts). Every `verifiedEvent` carries the specific backing fact. NO invented data — the transfer-buzz stories honestly frame the journalists as "Tier 1 sources Fan Pulse is tracking" rather than fabricating a {Player → Club} rumor (which would require a live X post).
+
+Stage Summary:
+- 2 files created: src/lib/story-generator.ts (~575 lines), src/app/api/stories/route.ts (~95 lines).
+- 8 stories generated per day, deterministic by UTC date, hero pair (Mbappé #1 + Golden Boot) always leads.
+- All content traces to existing verified data sources — zero invented facts.
+- API rate-limited (20/min/IP), cached (1h TTL, day-keyed), CORS-protected.
+- Lint clean, API returns 200 with 8 verified stories. Ready for Phase 2 (StoryViewer + StoryCircle UI components).
+
+---
+Task ID: story-mode-phase-2
+Agent: main
+Task: Story Mode Phase 2 — create src/components/Stories/StoryViewer.tsx (full-screen story viewer with progress bars, tap zones, swipe-down-to-close, auto-advance, Framer Motion transitions, per-type rendering) + src/components/Stories/StoryCircle.tsx (horizontal row of circular story thumbnails). Plus src/hooks/queries/use-stories.ts (fetch hook + viewed-state tracking).
+
+Work Log:
+- Read worklog.md Phase 1 entry (anti-hallucination rule #1).
+- Created src/hooks/queries/use-stories.ts:
+  - useStories() — TanStack Query hook, fetches /api/stories, staleTime 10min, refetchInterval 10min (crosses midnight UTC for fresh daily stories).
+  - useViewedStories(dayKey) — tracks viewed story IDs in localStorage keyed by day. Uses the "adjust state when a prop changes" pattern (React docs) instead of setState-in-effect to avoid cascading renders. Prunes to last 7 days.
+  - ctaTargetToTab(target) — maps StoryCtaTarget → tab id. 'ballon-dor' → 'home' (Ballon d'Or Race is a Home-tab section, no separate tab).
+- Created src/components/Stories/StoryViewer.tsx:
+  - Full-screen overlay (100vw × 100vh mobile, max-width 420px / 90vh centered desktop with rounded-3xl).
+  - Progress bars at top (one per story, white fill on white/30 track).
+  - Auto-advance after durationMs (default 5000ms) via requestAnimationFrame tick.
+  - Tap zones: left 35% = previous, right 65% = next (mobile touch + desktop mouse).
+  - Hold = pause (progress freezes, "Paused" indicator shows). Touch-hold via onTouchStart/onTouchEnd; mouse-hold via onMouseDown/onMouseUp.
+  - Swipe down > 80px = close (container translates down during drag for visual feedback).
+  - Keyboard: Escape = close, ArrowLeft/Right = prev/next, Space = pause toggle.
+  - Framer Motion: AnimatePresence on the viewer (fade in/out) + per-story slide transition (x: ±40px based on direction).
+  - Per-type content rendering (6 components):
+    * PlayerSpikeContent: nation flag bg, hero emoji, player name, nation, brutalist-number-lg Pulse Score, green ↑delta pill, verified event text.
+    * MoodShiftContent: two giant emojis (old → new), team name, match name, time delta.
+    * TransferBuzzContent: journalist avatar circle, name, @handle + outlet, rumor headline card, "32 Tier 1 journalists" context.
+    * RankingChangeContent: crown emoji, "Ballon d'Or Race" label, brutalist-number-lg rank #1, player name, brutalist-number score + trend arrow.
+    * AwardContent: giant 🏆 trophy, "FIFA Official Award" label, award name, player name, match fact.
+    * ArchiveMomentContent: ⚽ emoji, "WC 2026 Archive Moment" label, brutalist match score, scorer + minute, description.
+  - Bottom action bar: CTA button (white pill, navigates to target tab) + Share button (circular, frosted). Verified-event citation footer below.
+  - Top bar: source label pill (black/40 backdrop-blur) + close button.
+  - Desktop arrow nav (hidden on touch): left/right chevron buttons at vertical center.
+  - Share: Web Share API (mobile) → falls back to clipboard.copy (desktop) with "Link copied" toast.
+  - Body scroll lock while open (overflow:hidden on body).
+- Created src/components/Stories/StoryCircle.tsx:
+  - Horizontal scrollable row of circular thumbnails.
+  - Header: "Today's Pulse Stories" + "Tap to play · auto-refresh daily" subtitle + "{N} stories" count.
+  - Each circle: gradient border (purple → orange) for unviewed, gray border for viewed. Emoji inside on frosted-glass inner circle. Short label below (truncated).
+  - Unviewed indicator: orange dot top-right with white ring.
+  - Framer Motion: scale-in animation with staggered delay (0.05s per circle).
+  - Hover: scale-105. Active: scale-95. Focus-visible ring.
+- Lint fixes:
+  - Reordered goNext/goPrev useCallback declarations ABOVE the rAF effect (linter flagged "accessed before declared").
+  - Converted swipeDownOffset from useRef to useState (linter flagged "Cannot access ref value during render" when reading the ref in the style prop).
+  - Replaced setProgress(0) in effects with the "adjust state during render" pattern (lastResetIndex tracking) to satisfy react-hooks/set-state-in-effect rule.
+  - Removed redundant reset effect.
+- Ran `bun run lint` — 0 errors, 0 warnings. ✅
+- Verified dev server: HTTP 200 in 239ms. /api/stories returns 200. Components compile cleanly (Next.js hot-reloaded without errors).
+
+Stage Summary:
+- 3 files created: src/hooks/queries/use-stories.ts (~135 lines), src/components/Stories/StoryViewer.tsx (~515 lines), src/components/Stories/StoryCircle.tsx (~75 lines).
+- StoryViewer: full-screen, rAF-driven progress bars, tap/hold/swipe/keyboard gestures, 6 per-type content layouts, share + CTA.
+- StoryCircle: gradient-border circles, viewed-state (gray) vs unviewed (purple→orange), staggered entrance animation.
+- useViewedStories: localStorage-persisted, day-keyed, 7-day prune, cascading-render-safe hydration.
+- Lint clean, dev server healthy. Ready for Phase 3 (integrate circles into Home tab + add nav icon + share + daily refresh).
+
+---
+Task ID: story-mode-phase-3
+Agent: main
+Task: Story Mode Phase 3 — integrate story circles into the Home tab (above Match Sentiments), add "Stories" nav icon (desktop sidebar + mobile bottom nav), wire StoryViewer overlay at page level, viewed-state persistence, daily refresh, share feature.
+
+Work Log:
+- Read worklog.md Phases 1-2 (anti-hallucination rule #1).
+- Modified src/components/Navigation.tsx:
+  - Added `onOpenStories?: () => void` optional prop.
+  - Imported `Clapperboard` icon from lucide-react.
+  - Desktop sidebar: added a featured "Stories" button ABOVE the nav items list, with a gradient-accent style (bg-gradient-to-r from-[#6C2BD9]/8 to-[#FF6B35]/8, gradient icon badge, "NEW" pill badge). Visually distinct from regular nav items.
+  - Mobile bottom nav: added "Stories" as the FIRST item (before Home), with the gradient icon badge + orange dot indicator. 5 items fit in 375px (each min-w-48px = 240px total).
+- Modified src/app/page.tsx (main Home component):
+  - Imported StoryCircle, StoryViewer, useStories, useViewedStories, PulseStory type.
+  - Added story state to Home(): storiesOpen (boolean), storyStartIndex (number).
+  - Called useStories() → { data: stories, dayKey, isLoading }. Discovered the app does NOT wrap pages in a QueryClientProvider (TanStack Query hooks in src/hooks/queries/* are dead code). Rewrote useStories to use direct fetch + useState/useEffect (matching the existing inline HomeTab/SentimentsTab/WorldCupTab pattern), with 10-min refetch interval.
+  - Called useViewedStories(dayKey) → { viewedIds, markViewed }. dayKey comes from the API response (matches server's actual UTC day).
+  - Added openStories(startIndex) + closeStories callbacks.
+  - Passed onOpenStories={() => openStories(0)} to Navigation.
+  - Passed stories + viewedIds + onOpenStories to the inline HomeTab.
+  - Rendered <StoryViewer> overlay at page level (after the main content div, inside root) — conditional on storiesOpen && stories.length > 0. onNavigate switches the active tab.
+- Modified src/app/page.tsx (inline HomeTab function):
+  - Added props: { stories, viewedIds, onOpenStories }.
+  - Inserted <StoryCircle> as POSITION 0 (before the hero narrative banner), conditional on stories.length > 0.
+- Fixed critical auto-advance timing bug:
+  - Initial implementation used the "adjust state during render" pattern with `useState(currentIndex)` initializer — but on first mount, currentIndex === lastResetIndex (both 0), so the reset block didn't run, leaving lastTickRef.current = 0. The first rAF tick computed elapsed = now - 0 = huge number, instantly auto-advancing through all stories.
+  - First fix: added `if (lastTickRef.current === 0)` guard in the effect. This fixed the first story, but subsequent stories advanced too fast due to a race between the adjust-block's setProgress and the rAF tick's setProgress.
+  - Final fix: combined approach — (1) adjust-state-during-render block with `useState(-1)` initializer so the reset ALWAYS fires on first mount (0 !== -1), setting setProgress(0) synchronously to avoid one-frame flash; (2) the rAF effect unconditionally sets `lastTickRef.current = performance.now()` (a ref mutation, not setState, so no lint issue). This cleanly separates concerns: progress is reset during render (no flash), tick reference is reset in the effect (no race).
+  - Verified: 5s per story, 8 stories = 40s total. Measured progress bar: 21% at t=1s, 99% at t=5s (story 0 → 1), advancing correctly through all 8 stories.
+- Ran `bun run lint` — 0 errors, 0 warnings. ✅
+- Verified via agent-browser (desktop 1440×900):
+  - Story circles render at top of Home tab (above hero, above Fan Mood, above Match Sentiments). 8 circles with gradient borders + emojis (👑🏆⚡🔁😊⚽).
+  - "TODAY'S PULSE STORIES" header + "Tap to play · auto-refresh daily" subtitle + "8 stories" count.
+  - "Stories NEW" button in desktop sidebar (gradient accent, above nav items).
+  - Clicking a circle opens the full-screen StoryViewer overlay.
+  - Clicking the nav "Stories" button also opens the viewer (starts at index 0).
+  - Auto-advance works at exactly 5s per story.
+  - Escape key closes the viewer.
+  - Tab switching works (Sentiments, World Cup render correctly — no regression).
+  - All Home sections present: Pulse Stories ✓, Fan Mood ✓, Ballon d'Or ✓, Match Sentiments ✓.
+- Verified via agent-browser (mobile 375×812):
+  - Story circles render in horizontal scroll, no overflow (scrollWidth ≤ clientWidth).
+  - "Stories" button in mobile bottom nav (first item, gradient icon).
+  - Viewer opens full-screen (375×812, no rounded corners on mobile).
+  - No horizontal overflow anywhere on the page.
+- Verified viewed-state persistence:
+  - After tapping through stories, localStorage key `fanpulse:story-viewed` contains `{"2026-07-30": [8 story IDs]}`.
+  - On reload, all 8 circles show gray borders (viewed state). JSON.stringify check: ["gray","gray",...×8].
+  - After clearing localStorage + reload, all 8 circles show gradient borders (unviewed). JSON.stringify check: ["gradient","gradient",...×8].
+  - 7-day prune prevents unbounded localStorage growth.
+- VLM verified desktop Home: "TODAY'S PULSE STORIES header with 8 circular story thumbnails with gradient borders (purple to orange), emojis inside (👑🏆⚡📦😊⚽), short labels below. Hero Banner below, FAN MOOD below that, Match Sentiments below." ✅
+- VLM verified story viewer (transfer-buzz story): "Full-screen story overlay centered on dark blurred background. Vibrant orange-to-yellow gradient. Segmented progress bars at top. Source label pill. Tier 1 source label, journalist name Marco Conterio, handle @marcoconterio · Tuttomercatoweb. Rumor headline card. See saga → CTA + share button. Footer metadata." ✅
+- Screenshots saved: story-mode-home-circles.png, story-mode-home-circles-final.png, story-mode-viewer-open.png, story-mode-viewer-golden-boot.png, story-mode-mobile-home.png, story-mode-mobile-viewer.png, story-mode-mobile-circles-unviewed.png, story-mode-desktop-home-full.png.
+
+Stage Summary:
+- 3 files modified: Navigation.tsx (Stories button desktop + mobile), page.tsx (Home component story state + HomeTab props + StoryCircle + StoryViewer overlay).
+- 1 file fixed: use-stories.ts (rewrote useStories from TanStack Query → direct fetch, since app has no QueryClientProvider).
+- 1 file fixed: StoryViewer.tsx (auto-advance timing bug — combined adjust-state-during-render + effect ref reset).
+- Story circles render at TOP of Home tab (above hero, above Match Sentiments) per spec.
+- Nav "Stories" icon (desktop sidebar + mobile bottom nav) opens viewer from any tab.
+- Viewed state persists in localStorage (gray borders on reload, day-keyed, 7-day prune).
+- Daily refresh: 10-min client refetch + 1h server cache + day-keyed cache invalidation at midnight UTC.
+- Share: Web Share API (mobile) + clipboard.copy fallback (desktop) with "Link copied" toast.
+- Mobile (375px): full-screen viewer, no overflow, tap zones work.
+- No regressions: Sentiments, World Cup, Transfers tabs all render correctly.
+- Lint: 0 errors, 0 warnings. Dev server: HTTP 200, all APIs 200, no browser errors.
+
+**Story Mode complete. 3 phases delivered. All content sourced from verified data (Ballon d'Or, Team of Tournament, Match Events, Tier 1 journalists). Zero invented data. Existing tabs unaffected.**

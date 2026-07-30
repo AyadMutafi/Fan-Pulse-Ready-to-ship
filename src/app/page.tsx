@@ -17,6 +17,10 @@ import { Progress } from '@/components/ui/progress'
 import TopHeader from '@/components/TopHeader'
 import Navigation, { type TabId } from '@/components/Navigation'
 import TransfersTab from '@/components/tabs/TransfersTab'
+import StoryCircle from '@/components/Stories/StoryCircle'
+import StoryViewer from '@/components/Stories/StoryViewer'
+import { useStories, useViewedStories } from '@/hooks/queries/use-stories'
+import { type PulseStory } from '@/lib/story-generator'
 import { useLanguage } from '@/context/LanguageContext'
 import { findNationalTeam, NATIONAL_TEAMS } from '@/lib/national-teams'
 import { useFlagMode } from '@/lib/flag-mode'
@@ -297,7 +301,11 @@ interface TransferSagaSummary {
   }[]
 }
 
-function HomeTab() {
+function HomeTab({ stories, viewedIds, onOpenStories }: {
+  stories: PulseStory[]
+  viewedIds: Set<string>
+  onOpenStories: (startIndex: number) => void
+}) {
   const { t } = useLanguage()
   const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('WC')
   const [apiMatches, setApiMatches] = useState<Array<{
@@ -660,6 +668,21 @@ function HomeTab() {
 
   return (
     <div className="space-y-8">
+      {/* ════════════════════════════════════════════════════════════════════
+          POSITION 0 — PULSE STORIES (Story Mode)
+          Horizontal row of circular story thumbnails. Tap to open the
+          full-screen vertical story viewer (Instagram/Snapchat-style).
+          This is the retention feature — the first thing Gen Z users see.
+          Positioned ABOVE the hero narrative and Match Sentiments.
+          ════════════════════════════════════════════════════════════════════ */}
+      {stories.length > 0 && (
+        <StoryCircle
+          stories={stories}
+          viewedIds={viewedIds}
+          onOpen={onOpenStories}
+        />
+      )}
+
       {/* ════════════════════════════════════════════════════════════════════
           POSITION 1 — HERO NARRATIVE BANNER
           Full-width compact banner surfacing the single most significant data
@@ -2882,6 +2905,23 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabId>('home')
   const [stages, setStages] = useState<WCStage[]>([])
 
+  // ── Story Mode state ───────────────────────────────────────────────────────
+  // storiesOpen controls the full-screen StoryViewer overlay; storyStartIndex
+  // is the index the viewer should start at (set when a user taps a specific
+  // story circle). Stories are fetched via direct fetch + 10-min refetch so
+  // a new UTC day's stories appear without a manual reload.
+  const [storiesOpen, setStoriesOpen] = useState(false)
+  const [storyStartIndex, setStoryStartIndex] = useState(0)
+  const { data: stories = [], dayKey } = useStories()
+  const { viewedIds, markViewed } = useViewedStories(dayKey)
+
+  const openStories = useCallback((startIndex: number = 0) => {
+    setStoryStartIndex(startIndex)
+    setStoriesOpen(true)
+  }, [])
+
+  const closeStories = useCallback(() => setStoriesOpen(false), [])
+
   useEffect(() => {
     let cancelled = false
     async function loadStages() {
@@ -2907,7 +2947,11 @@ export default function Home() {
     <div className="min-h-screen glass-bg-gradient">
       <div className="flex">
         {/* Sidebar */}
-        <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
+        <Navigation
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onOpenStories={() => openStories(0)}
+        />
 
         {/* Main content area */}
         <div className="flex-1 md:ml-60 min-w-0 min-h-screen flex flex-col">
@@ -2928,7 +2972,13 @@ export default function Home() {
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
               >
-                {activeTab === 'home' && <HomeTab />}
+                {activeTab === 'home' && (
+                  <HomeTab
+                    stories={stories}
+                    viewedIds={viewedIds}
+                    onOpenStories={openStories}
+                  />
+                )}
                 {activeTab === 'sentiments' && <SentimentsTab />}
                 {activeTab === 'rate' && <PausedTabOverlay tabName="Rate" />}
                 {activeTab === 'goals' && <PausedTabOverlay tabName="Goals" />}
@@ -2969,6 +3019,17 @@ export default function Home() {
           </footer>
         </div>
       </div>
+
+      {/* ── Story Mode full-screen overlay ─────────────────────────────────── */}
+      {storiesOpen && stories.length > 0 && (
+        <StoryViewer
+          stories={stories}
+          startIndex={storyStartIndex}
+          onClose={closeStories}
+          onViewed={markViewed}
+          onNavigate={(tabId) => setActiveTab(tabId as TabId)}
+        />
+      )}
     </div>
   )
 }
