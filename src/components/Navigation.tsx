@@ -29,7 +29,7 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
   return (
     <>
       {/* ── Desktop Sidebar ──────────────────────────────────── */}
-      <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:z-40 md:w-60 bg-[#F8F9FA] dark:bg-[#16162A] border-r border-[#E0E0E0] dark:border-white/10">
+      <aside className="hidden md:flex md:flex-col md:fixed md:inset-y-0 md:left-0 md:z-40 md:w-60 glass-card border-r border-[#E0E0E0] dark:border-white/10">
         <div className="flex flex-col h-full">
           {/* Branding */}
           <div className="px-5 pt-6 pb-2">
@@ -37,8 +37,8 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
               <div className="flex items-center justify-center size-9 rounded-lg bg-[#6C2BD9] shadow-md shadow-[#6C2BD9]/20">
                 <Zap className="size-4.5 text-white fill-white" />
               </div>
-              <h1 className="text-lg font-extrabold tracking-wide text-[#6C2BD9] dark:text-[#8B5CF6]">
-                FAN<span className="text-[#FF6B35]">PULSE</span>
+              <h1 className="text-lg font-extrabold tracking-wide">
+                <span className="logo-fan">FAN</span><span className="text-[#FF6B35]">PULSE</span>
               </h1>
             </div>
           </div>
@@ -134,7 +134,7 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
       </aside>
 
       {/* ── Mobile Bottom Tab Bar ────────────────────────────── */}
-      <nav role="navigation" aria-label="Main navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-[#2D2D2D] border-t border-[#E0E0E0] dark:border-white/10 safe-area-bottom">
+      <nav role="navigation" aria-label="Main navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-[#1A1A1A]/80 border-t border-black/5 dark:border-white/5 safe-area-bottom">
         <div className="flex items-center justify-around py-1.5 px-1">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id

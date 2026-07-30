@@ -585,3 +585,149 @@
    focus class still get the outline above. For wrappers that are focusable
    via [tabindex] / role=button, the outline applies too. No override needed
    for shadcn components — their ring is additive. */
+
+/* ════════════════════════════════════════════════════════════════════════════
+   GLASSMORPHISM + BRUTALIST TYPOGRAPHY UPGRADE
+   Premium "sentiment terminal" aesthetic — frosted glass cards floating over
+   a layered gradient background, with heavy condensed monospace numbers for
+   Pulse Scores / sentiment percentages / vote counts (Bloomberg-meets-Apple).
+   These utilities are ADDITIVE — they do NOT replace any existing styles.
+   Apply via the `glass-card`, `glass-hover`, `glass-glow-*`, `glass-rank-1`,
+   `glass-bg-gradient`, `brutalist-number`, `brutalist-number-lg`, and
+   `logo-fan` classes alongside existing Tailwind classes.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Glassmorphism Foundation ──────────────────────────────────── */
+
+/* Dark mode glass surfaces — deep, layered, terminal feel */
+.dark .glass-card {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Light mode glass surfaces — soft white, clean depth */
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* Premium glow for high-impact data (purple) */
+.glass-glow-purple {
+  box-shadow: 0 0 30px rgba(108, 43, 217, 0.15), 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* Premium glow for positive sentiment (green) */
+.glass-glow-green {
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.12), 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* Premium glow for crisis/negative (red) */
+.glass-glow-red {
+  box-shadow: 0 0 30px rgba(239, 68, 68, 0.12), 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* Rank-1 highlight (Ballon d'Or #1, Elite XI top scorer) */
+.dark .glass-rank-1 {
+  background: rgba(108, 43, 217, 0.1);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(108, 43, 217, 0.25);
+  box-shadow: 0 0 40px rgba(108, 43, 217, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.glass-rank-1 {
+  background: rgba(108, 43, 217, 0.06);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(108, 43, 217, 0.15);
+  box-shadow: 0 0 24px rgba(108, 43, 217, 0.1);
+}
+
+/* Dark mode background gradient (premium terminal feel) */
+.dark .glass-bg-gradient {
+  background: radial-gradient(ellipse at top, #13131a 0%, #0a0a0f 50%, #08080c 100%);
+}
+
+/* Light mode background gradient */
+.glass-bg-gradient {
+  background: radial-gradient(ellipse at top, #ffffff 0%, #fafafa 50%, #f4f4f8 100%);
+}
+
+/* Hover lift for glass cards */
+.glass-hover {
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.glass-hover:hover {
+  transform: translateY(-2px);
+  border-color: rgba(108, 43, 217, 0.2);
+}
+
+/* All glass cards: subtle hover lift + active press feedback (Phase 4 micro-interactions) */
+.glass-card {
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.glass-card:hover {
+  transform: translateY(-2px);
+}
+.dark .glass-card:hover {
+  border-color: rgba(108, 43, 217, 0.2);
+}
+.glass-card:active,
+.glass-hover:active {
+  transform: translateY(0) scale(0.99);
+}
+
+/* ── Brutalist Number Typography ───────────────────────────────── */
+
+/* Hero numbers: Pulse Scores, sentiment %, vote counts */
+.brutalist-number {
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/* Large display numbers (Ballon d'Or score, Pulse Score hero) */
+.brutalist-number-lg {
+  font-family: 'Geist Mono', 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 900;
+  font-size: clamp(1.5rem, 5vw, 2.5rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+}
+
+/* ── FANPULSE logo gradient ────────────────────────────────────── */
+.logo-fan {
+  background: linear-gradient(135deg, #6C2BD9 0%, #8B5CF6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+/* PULSE stays orange (#FF6B35) — solid, no gradient */
+
+/* ── Performance: disable backdrop-blur on mobile when below the fold ────
+   backdrop-filter: blur() is GPU-expensive. On small screens with many cards
+   this can drop frames during scroll. We keep the blur on desktop (≥768px)
+   and use a more opaque flat background on mobile so glass cards still look
+   premium but don't cost frames. The .glass-card-mobile-flat class opts a
+   specific card into this behavior; applied to below-the-fold lists. */
+@media (max-width: 767px) {
+  .glass-card-mobile-flat {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .dark .glass-card-mobile-flat {
+    background: rgba(30, 30, 38, 0.92);
+  }
+  .glass-card-mobile-flat {
+    background: rgba(255, 255, 255, 0.92);
+  }
+}

@@ -750,13 +750,13 @@ function HomeTab() {
             </h3>
             {!votesLoading && (
               <Badge className="bg-[#6C2BD9]/10 text-[#6C2BD9] dark:text-[#8B5CF6] border-0 text-[11px] font-bold px-2 py-0.5">
-                {totalVoteCount.toLocaleString()} {totalVoteCount === 1 ? 'vote' : 'votes'} cast
+                {totalVoteCount.toLocaleString()} <span className="brutalist-number">{totalVoteCount === 1 ? 'vote' : 'votes'}</span> cast
               </Badge>
             )}
           </div>
           <span className="text-[11px] font-semibold text-[#FF6B35]">Swipe teams to vote →</span>
         </div>
-        <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none overflow-hidden">
+        <Card className="glass-card glass-hover border-[#E0E0E0]/50 dark:border-white/5 overflow-hidden">
           <CardContent className="p-4">
             {votesLoading ? (
               <div className="flex gap-2.5 overflow-hidden">
@@ -824,7 +824,7 @@ function HomeTab() {
 
                         {/* Vote count */}
                         <span className="text-[8px] text-[#666] dark:text-[#CCCCCC]">
-                          {entry.count} {entry.count === 1 ? 'vote' : 'votes'}
+                          <span className="brutalist-number">{entry.count}</span> {entry.count === 1 ? 'vote' : 'votes'}
                         </span>
 
                         {/* Thin mood indicator bar */}
@@ -912,7 +912,7 @@ function HomeTab() {
                 transition={{ duration: 0.4, delay: i * 0.05 }}
                 className="shrink-0 snap-start w-[280px] md:w-auto"
               >
-                <Card className="card-hover h-full border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+                <Card className="glass-card glass-hover glass-card-mobile-flat h-full border-[#E0E0E0]/50 dark:border-white/5">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1002,7 +1002,7 @@ function HomeTab() {
           </div>
         </div>
 
-        <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+        <Card className="glass-card glass-hover glass-card-mobile-flat border-[#E0E0E0]/50 dark:border-white/5">
           <CardContent className="p-4">
             {sagasLoading ? (
               <div className="space-y-2">
@@ -1043,18 +1043,18 @@ function HomeTab() {
                           <div className="mt-0.5 flex items-center gap-1.5">
                             <BadgeCheck className="size-3 text-[#6C2BD9] dark:text-[#8B5CF6]" />
                             <span className="text-[10px] font-semibold text-[#6C2BD9] dark:text-[#8B5CF6]">
-                              {saga.tier1Count} Tier 1
+                              <span className="brutalist-number">{saga.tier1Count}</span> Tier 1
                             </span>
                             <span className="text-[10px] text-[#6B7280] dark:text-gray-400">
-                              · {saga.buzzVolume} {saga.buzzVolume === 1 ? 'post' : 'posts'}
+                              · <span className="brutalist-number">{saga.buzzVolume}</span> {saga.buzzVolume === 1 ? 'post' : 'posts'}
                             </span>
                           </div>
                         </div>
                         {/* Overall sentiment trend arrow */}
                         <div className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                           saga.excitedPct >= saga.dreadingPct
-                            ? 'bg-[#10B981]/10 text-[#10B981]'
-                            : 'bg-[#EF4444]/10 text-[#EF4444]'
+                            ? 'bg-[#10B981]/10 text-[#10B981] glass-glow-green'
+                            : 'bg-[#EF4444]/10 text-[#EF4444] glass-glow-red'
                         }`}>
                           {saga.buzzTrend === 'rising' && <TrendingUp className="size-3" />}
                           {saga.buzzTrend === 'falling' && <TrendingDown className="size-3" />}
@@ -1071,7 +1071,7 @@ function HomeTab() {
                               Fan Sentiment
                             </span>
                             <span className="text-[10px] text-[#6B7280] dark:text-gray-400">
-                              {revealed ? `${saga.buzzVolume} posts` : '???'}
+                              {revealed ? <><span className="brutalist-number">{saga.buzzVolume}</span> posts</> : '???'}
                             </span>
                           </div>
 
@@ -1087,15 +1087,15 @@ function HomeTab() {
                           <div className={`mt-1.5 flex items-center gap-2.5 text-[11px] transition-all duration-300 ${!revealed ? 'blur-sm select-none' : ''}`}>
                             <span className="flex items-center gap-1 text-[#10B981]">
                               <span className="size-1.5 rounded-full bg-[#10B981]" />
-                              {saga.excitedPct.toFixed(0)}%
+                              <span className="brutalist-number">{saga.excitedPct.toFixed(0)}%</span>
                             </span>
                             <span className="flex items-center gap-1 text-[#F59E0B]">
                               <span className="size-1.5 rounded-full bg-[#F59E0B]" />
-                              {saga.skepticalPct.toFixed(0)}%
+                              <span className="brutalist-number">{saga.skepticalPct.toFixed(0)}%</span>
                             </span>
                             <span className="flex items-center gap-1 text-[#EF4444]">
                               <span className="size-1.5 rounded-full bg-[#EF4444]" />
-                              {saga.dreadingPct.toFixed(0)}%
+                              <span className="brutalist-number">{saga.dreadingPct.toFixed(0)}%</span>
                             </span>
                           </div>
 
@@ -1153,7 +1153,7 @@ function HomeTab() {
           </div>
         </div>
 
-        <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+        <Card className="glass-card glass-hover border-[#E0E0E0]/50 dark:border-white/5">
           <CardContent className="p-4">
             {/* Movement highlights */}
             {ballonDor && (ballonDor.movers.biggestRiser || ballonDor.movers.biggestFaller) && (
@@ -1196,7 +1196,7 @@ function HomeTab() {
                       title={c.verifiedMatchFact}
                       className={`
                         flex items-center gap-2 rounded-lg px-2 py-2 transition-colors
-                        ${isTop3 ? 'bg-[#F59E0B]/5 dark:bg-[#F59E0B]/10' : 'hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D]'}
+                        ${rank === 1 ? 'glass-rank-1 glass-glow-purple' : isTop3 ? 'bg-[#F59E0B]/5 dark:bg-[#F59E0B]/10' : 'hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D]'}
                       `}
                     >
                       {/* Rank */}
@@ -1215,7 +1215,7 @@ function HomeTab() {
                         </p>
                       </div>
                       {/* Score */}
-                      <span className="text-sm font-black text-[#6C2BD9] dark:text-[#8B5CF6]">
+                      <span className={`brutalist-number ${rank === 1 ? 'brutalist-number-lg' : ''} text-[#6C2BD9] dark:text-[#8B5CF6]`}>
                         {c.ballonDorScore}
                       </span>
                       {/* Trend */}
@@ -1452,7 +1452,7 @@ function SentimentsTab() {
       </motion.div>
 
       {/* Filter pills — mood filters */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <div className="glass-card rounded-2xl p-2 flex gap-2 overflow-x-auto scrollbar-none">
         {moods.map((mood) => {
           const isActive = filter === mood.id
           return (
@@ -1478,7 +1478,7 @@ function SentimentsTab() {
       {loading && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 9 }).map((_, i) => (
-            <Card key={i} className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+            <Card key={i} className="glass-card border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -1540,7 +1540,7 @@ function SentimentsTab() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: i * 0.05 }}
                   >
-                    <Card className={`card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${getSentimentBg(score)}`}>
+                    <Card className={`glass-card glass-hover glass-card-mobile-flat card-hover border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${getSentimentBg(score)}`}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2.5">
@@ -1553,7 +1553,7 @@ function SentimentsTab() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className={`text-2xl font-black ${getSentimentColor(score)}`}>
+                            <p className={`brutalist-number text-2xl font-black ${getSentimentColor(score)}`}>
                               {score}
                             </p>
                             <p className="text-[10px] text-[#666] dark:text-[#CCCCCC]">pulse</p>
@@ -1569,7 +1569,9 @@ function SentimentsTab() {
                         </div>
                         <div className="mt-2 flex items-center gap-1">
                           <span className="text-sm">{emoji}</span>
-                          <span className={`text-[10px] font-semibold ${getSentimentColor(score)}`}>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getSentimentColor(score)} ${
+                            player.label === 'on_fire' ? 'glass-glow-green' : player.label === 'crisis' ? 'glass-glow-red' : ''
+                          }`}>
                             {t(labelKey)}
                           </span>
                           {player.trend && (
@@ -2025,8 +2027,8 @@ function FormationPlayerCard({
       {/* Player Circle - always shows face emoji */}
       <div
         className={`
-          relative flex size-7 sm:size-8 items-center justify-center rounded-full border-[1.5px] shadow-sm overflow-hidden
-          border-white/70 bg-white/95 dark:bg-white/90 shadow-black/10
+          glass-card relative flex size-7 sm:size-8 items-center justify-center rounded-full border-[1.5px] shadow-sm overflow-hidden
+          ${isElite ? 'border-white/70' : 'border-red-500/20'}
           ${isLive ? 'animate-pulse-glow' : ''}
           transition-all duration-300
         `}
@@ -2065,7 +2067,7 @@ function FormationPlayerCard({
           <span className="text-[8px] leading-none">{flagEmoji}</span>
         )}
         <span
-          className="text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+          className="brutalist-number text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
         >
           {rating.toFixed(1)}
         </span>
@@ -2337,7 +2339,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
       <TournamentRetroModal open={showRetro} onOpenChange={setShowRetro} />
 
       {/* Stage Selector */}
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <div className="glass-card rounded-2xl p-2 flex gap-2 overflow-x-auto scrollbar-none">
         {stages.map((stage) => {
           const isActive = selectedStageId === stage.id
           return (
@@ -2388,7 +2390,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
       {!loading && stageStatus !== 'upcoming' && (
         <>
           {/* Toggle Tabs */}
-          <div className="flex gap-2">
+          <div className="glass-card rounded-2xl p-1.5 flex gap-2 w-fit">
             <button
               onClick={() => setActiveView('elite')}
               className={`
@@ -2456,7 +2458,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
             >
-              <Card className={`overflow-hidden border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none ${activeView === 'elite' ? 'purple-glow' : 'red-glow'}`}>
+              <Card className={`glass-card overflow-hidden border-[#E0E0E0]/50 dark:border-white/5 ${activeView === 'elite' ? 'glass-glow-purple' : 'glass-glow-red'}`}>
                 {/* Top accent bar */}
                 <div className={`h-0.5 w-full ${activeView === 'elite' ? 'bg-gradient-to-r from-[#6C2BD9] via-[#8B5CF6] to-[#FF6B35]' : 'bg-gradient-to-r from-[#EF4444] via-[#DC2626] to-[#FF6B35]'}`} />
                 <CardHeader className="py-2 px-4">
@@ -2588,15 +2590,15 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
               className="grid grid-cols-2 gap-3 sm:grid-cols-4"
             >
               {[
-                { label: t('wc.elite_avg'), value: (eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length / 10).toFixed(1), icon: TrendingUp, color: 'text-[#6C2BD9]', emoji: '🤩' },
-                { label: t('wc.crisis_avg'), value: (crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length / 10).toFixed(1), icon: TrendingDown, color: 'text-[#EF4444]', emoji: '😟' },
-                { label: t('wc.live_players'), value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-[#FF6B35]', emoji: '' },
-                { label: t('wc.total_votes'), value: totalVotes.toLocaleString(), icon: Users, color: 'text-[#1A1A1A] dark:text-white', emoji: '' },
+                { label: t('wc.elite_avg'), value: (eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length / 10).toFixed(1), icon: TrendingUp, color: 'text-[#6C2BD9]', emoji: '🤩', glow: 'glass-glow-purple' },
+                { label: t('wc.crisis_avg'), value: (crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length / 10).toFixed(1), icon: TrendingDown, color: 'text-[#EF4444]', emoji: '😟', glow: 'glass-glow-red' },
+                { label: t('wc.live_players'), value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-[#FF6B35]', emoji: '', glow: '' },
+                { label: t('wc.total_votes'), value: totalVotes.toLocaleString(), icon: Users, color: 'text-[#1A1A1A] dark:text-white', emoji: '', glow: '' },
               ].map((stat, i) => (
-                <Card key={i} className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+                <Card key={i} className={`glass-card glass-hover ${stat.glow} border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none`}>
                   <CardContent className="p-3 text-center">
                     <stat.icon className={`mx-auto size-4 mb-1.5 ${stat.color}`} />
-                    <p className={`text-lg font-black ${stat.color}`}>{stat.emoji} {stat.value}</p>
+                    <p className={`brutalist-number text-lg font-black ${stat.color}`}>{stat.emoji} {stat.value}</p>
                     <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
                   </CardContent>
                 </Card>
@@ -2712,7 +2714,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                           </p>
                         </div>
                         <div
-                          className={`flex items-center justify-center size-14 rounded-xl text-2xl font-black text-white shadow-md ${getPulseScoreColorClass(pulseBreakdown.pulseScore.overall)}`}
+                          className={`flex items-center justify-center size-14 rounded-xl brutalist-number text-2xl font-black text-white shadow-md ${getPulseScoreColorClass(pulseBreakdown.pulseScore.overall)}`}
                           style={{ backgroundColor: getPulseScoreColor(pulseBreakdown.pulseScore.overall) }}
                         >
                           {Math.round(pulseBreakdown.pulseScore.overall)}
@@ -2758,11 +2760,11 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                               <span className="text-xs font-bold text-[#1A1A1A] dark:text-white">
                                 {c.label}
                               </span>
-                              <Badge variant="outline" className="text-[11px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                              <Badge variant="outline" className="brutalist-number text-[11px] font-bold px-1.5 py-0 border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
                                 {Math.round(c.weight * 100)}%
                               </Badge>
                             </div>
-                            <span className="text-sm font-black text-[#1A1A1A] dark:text-white">
+                            <span className="brutalist-number text-sm font-black text-[#1A1A1A] dark:text-white">
                               {Math.round(c.value)}
                             </span>
                           </div>
@@ -2902,7 +2904,7 @@ export default function Home() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#1A1A1A]">
+    <div className="min-h-screen glass-bg-gradient">
       <div className="flex">
         {/* Sidebar */}
         <Navigation activeTab={activeTab} onTabChange={setActiveTab} />

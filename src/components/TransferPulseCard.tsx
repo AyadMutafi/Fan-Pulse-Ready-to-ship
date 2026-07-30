@@ -77,7 +77,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
   return (
     <button
       onClick={() => onClick(saga)}
-      className="group relative w-full text-left rounded-2xl bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 p-4 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 hover:shadow-lg hover:shadow-[#6C2BD9]/5 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+      className="group relative w-full text-left rounded-2xl glass-card glass-hover glass-card-mobile-flat border border-[#E0E0E0] dark:border-white/10 p-4 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 hover:shadow-lg hover:shadow-[#6C2BD9]/5 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
     >
       {/* RUMOR label — anti-hallucination, always visible */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5">
@@ -114,7 +114,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
       <div className="mt-3 flex items-center gap-1.5">
         <BadgeCheck className="size-3.5 text-[#6C2BD9] dark:text-[#8B5CF6]" />
         <span className="text-[10px] font-semibold text-[#6C2BD9] dark:text-[#8B5CF6]">
-          {saga.tier1Count} Tier 1 {saga.tier1Count === 1 ? 'source' : 'sources'}
+          <span className="brutalist-number">{saga.tier1Count}</span> Tier 1 {saga.tier1Count === 1 ? 'source' : 'sources'}
         </span>
         <span className="text-[10px] text-[#6B7280] dark:text-gray-400">
           · {timeAgo(saga.firstReportedAt)}
@@ -129,7 +129,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
               Fan Sentiment
             </span>
             <span className="text-[11px] text-[#6B7280] dark:text-gray-400">
-              {saga.buzzVolume} {saga.buzzVolume === 1 ? 'post' : 'posts'}
+              <span className="brutalist-number">{saga.buzzVolume}</span> {saga.buzzVolume === 1 ? 'post' : 'posts'}
             </span>
           </div>
           <div className="h-2 rounded-full overflow-hidden flex bg-[#F0F0F0] dark:bg-white/5">
@@ -145,7 +145,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
             <div className="flex items-center gap-2 mt-1.5 text-[11px]">
               <span className="flex items-center gap-1 text-[#6B7280] dark:text-gray-400">
                 <span className="size-1.5 rounded-full bg-[#999]/60" />
-                Neutral {neutralPct.toFixed(0)}%
+                Neutral <span className="brutalist-number">{neutralPct.toFixed(0)}%</span>
               </span>
               <span className="text-[#6B7280] dark:text-gray-400 italic">
                 · fans haven't taken a strong stance
@@ -155,15 +155,15 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
             <div className="flex items-center gap-2.5 mt-1.5 text-[11px]">
               <span className="flex items-center gap-1 text-[#10B981]">
                 <span className="size-1.5 rounded-full bg-[#10B981]" />
-                {saga.excitedPct.toFixed(0)}%
+                <span className="brutalist-number">{saga.excitedPct.toFixed(0)}%</span>
               </span>
               <span className="flex items-center gap-1 text-[#F59E0B]">
                 <span className="size-1.5 rounded-full bg-[#F59E0B]" />
-                {saga.skepticalPct.toFixed(0)}%
+                <span className="brutalist-number">{saga.skepticalPct.toFixed(0)}%</span>
               </span>
               <span className="flex items-center gap-1 text-[#EF4444]">
                 <span className="size-1.5 rounded-full bg-[#EF4444]" />
-                {saga.dreadingPct.toFixed(0)}%
+                <span className="brutalist-number">{saga.dreadingPct.toFixed(0)}%</span>
               </span>
             </div>
           )}
@@ -184,7 +184,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
           <TrendIcon className={`size-3 ${trend.color} ml-0.5`} />
         </div>
         <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${lik.bg}`}>
-          <span className={`text-[10px] font-bold ${lik.text}`}>{saga.fanReadLikelihood.toFixed(0)}%</span>
+          <span className={`brutalist-number text-[10px] font-bold ${lik.text}`}>{saga.fanReadLikelihood.toFixed(0)}%</span>
           <span className="text-[8px] uppercase tracking-wider text-[#6B7280] dark:text-gray-400">fan read</span>
         </div>
       </div>

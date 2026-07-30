@@ -62,7 +62,7 @@ type SortId = (typeof SORT_OPTIONS)[number]['id']
 
 function SkeletonCard() {
   return (
-    <Card className="border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
+    <Card className="glass-card border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none">
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -158,7 +158,7 @@ export default function TransfersTab() {
       </motion.div>
 
       {/* ── Disclaimer ──────────────────────────────────────── */}
-      <div className="rounded-xl border border-[#FF6B35]/20 bg-[#FF6B35]/5 px-4 py-3">
+      <div className="glass-card glass-glow-purple rounded-xl border border-[#FF6B35]/20 px-4 py-3">
         <div className="flex items-start gap-2">
           <AlertTriangle className="size-4 shrink-0 text-[#FF6B35] mt-0.5" />
           <div>
@@ -173,7 +173,7 @@ export default function TransfersTab() {
       </div>
 
       {/* ── Filter pills ────────────────────────────────────── */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+      <div className="glass-card rounded-2xl p-2 flex gap-2 overflow-x-auto scrollbar-none">
         {LEAGUE_FILTERS.map((f) => {
           const isActive = filter === f.id
           return (

@@ -230,7 +230,7 @@ function TournamentFactsBanner({ facts }: { facts: TournamentFacts }) {
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="rounded-2xl overflow-hidden border-2 border-[#F59E0B]/40 shadow-sm"
+      className="rounded-2xl overflow-hidden glass-card glass-glow-purple border-2 border-[#F59E0B]/40"
     >
       <div
         className="h-1 w-full"
@@ -264,7 +264,7 @@ function FactPill({ icon, label, value }: { icon: React.ReactNode; label: string
         {icon}
         <span className="text-[8px] font-bold uppercase tracking-wide">{label}</span>
       </div>
-      <p className="mt-0.5 text-[11px] sm:text-[11px] font-bold text-[#1A1A1A] dark:text-white leading-tight">
+      <p className="brutalist-number mt-0.5 text-[11px] sm:text-[11px] font-bold text-[#1A1A1A] dark:text-white leading-tight">
         {value}
       </p>
     </div>
@@ -346,7 +346,7 @@ function RetroFormationCard({
         </div>
         <div className="text-right">
           <p className="text-[11px] font-bold text-[#666] dark:text-[#CCCCCC]">AVG</p>
-          <p className="text-sm font-black" style={{ color: accent }}>{(avgScore / 10).toFixed(1)}</p>
+          <p className="brutalist-number text-sm font-black" style={{ color: accent }}>{(avgScore / 10).toFixed(1)}</p>
         </div>
       </div>
 
@@ -480,7 +480,7 @@ function RetroPlayerChip({
       {/* Match Rating — clearly labelled, separated from position */}
       <div className="mt-0.5 flex items-center gap-0.5 px-1 py-px rounded bg-black/40 backdrop-blur-sm">
         {flagMode === 'emoji' && !isNA && <span className="text-[8px] leading-none">{flagEmoji}</span>}
-        <span className="text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+        <span className="brutalist-number text-[7px] sm:text-[8px] font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
           {ratingValue}
         </span>
         <span className="text-[5px] sm:text-[6px] font-semibold text-white/70 uppercase tracking-wide">rtg</span>
