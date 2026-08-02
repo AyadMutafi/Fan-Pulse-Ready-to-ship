@@ -114,6 +114,32 @@ model Match {
   @@index([league, status, matchDate])
 }
 
+// ── League Models (EPL + future leagues) ─────────────────────────────────────
+// Pre-seeded league + team directory. Powers match-level voting (FanVote.matchId)
+// and the future EPL matchday surface. Teams carry a stable `code` (e.g. "ARS")
+// that joins onto Match.homeTeamCode / awayTeamCode when `league = 'EPL'`.
+
+model League {
+  id        String   @id @default(cuid())
+  name      String   // "Premier League"
+  slug      String   @unique // "epl"
+  country   String   // "England"
+  createdAt DateTime @default(now())
+  teams     LeagueTeam[]
+}
+
+model LeagueTeam {
+  id        String   @id @default(cuid())
+  name      String   // "Arsenal"
+  code      String   @unique // "ARS" — joins onto Match.homeTeamCode/awayTeamCode
+  crestUrl  String?
+  leagueId  String
+  league    League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([leagueId])
+}
+
 // ── Pulse Score Engine Models ────────────────────────────────────────────────
 
 /// Per-player breakdown of the 4 weighted Pulse Score components.
@@ -178,21 +204,43 @@ model SentimentSummary {
 // ── Fan Voting Models ────────────────────────────────────────────────────────
 
 /// A fan's vote on a team's mood (0-100). One vote per session per team.
+/// Extended for EPL match-level voting: `matchId` links a vote to a specific
+/// Match (when `league = 'EPL'`), `intensity` captures how strongly the fan
+/// feels (1-10), and `context` tags the in-match moment (GOAL, VAR, RED_CARD).
+/// The original team-level voting path (teamCode + score, no matchId) is
+/// untouched — `matchId` is optional and defaults to NULL.
 model FanVote {
   id        String   @id @default(cuid())
   teamCode  String
   score     Int      // 0-100
   sessionId String
+  /// Optional link to a Match for match-level voting (EPL matchday). NULL for
+  /// the original team-level votes. NOT a foreign key — Match rows may be
+  /// pruned over time, and we want votes to survive as a historical record.
+  matchId   String?
+  /// Optional 1-10 scale for how strongly the user feels. NULL = unspecified.
+  intensity Int?
+  /// Optional event context tag. Defaults to "GENERAL" so untagged votes still
+  /// carry a human-readable label in aggregations.
+  context   String   @default("GENERAL") // "GENERAL" | "GOAL" | "VAR" | "RED_CARD"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([teamCode, sessionId])
+  // One vote per session per match (when matchId is set). SQLite treats NULL
+  // matchId values as distinct, so team-level votes (matchId = NULL) are NOT
+  // affected by this constraint — they remain bounded only by @@unique above.
+  @@unique([matchId, sessionId])
   // Hot path: /api/fan-vote GET aggregates all votes per team, and the admin
   // dashboard filters by recency. This compound index supports both the
   // `WHERE teamCode = ? ORDER BY createdAt` and the team-scoped COUNT/SUM
   // aggregations without a full table scan — important when 7 concurrent EPL
   // matches generate 70+ votes/min.
   @@index([teamCode, createdAt])
+  // Hot path: match-level aggregation queries votes for a single match ordered
+  // by recency (`WHERE matchId = ? ORDER BY createdAt`). Separate from the
+  // teamCode index because matchId and teamCode are independent filter paths.
+  @@index([matchId, createdAt])
 }
 
 /// Aggregated fan ratings per player (1-10 scale). For the Rate tab.

@@ -5033,3 +5033,45 @@ Stage Summary:
 - All Pulse Scores match real verified data. Emoji is the HERO element.
 
 **Emoji Player Cards complete. 3 phases delivered. All content sourced from verified data (Ballon d'Or, Team of Tournament, Sentiments, Transfer Pulse). Zero invented data. Existing tabs unaffected. Emoji is the hero, not the background color.**
+
+---
+Task ID: epl-schema-extension
+Agent: Main Agent
+Task: Add League + LeagueTeam models to prisma/schema.prisma and extend FanVote with match-level voting fields (matchId, intensity, context). Do NOT touch any other models or change the datasource provider.
+
+Work Log:
+- Read /home/z/my-project/worklog.md (anti-hallucination rule #1) and the full current prisma/schema.prisma (415 lines, 14 existing models).
+- Confirmed scope: add League + LeagueTeam, extend FanVote only. No WriteQueue, no PulseVote, no LeagueMatch model (FanVote.matchId is a plain String?, not a FK), no datasource change.
+- Added `League` model (id, name, slug @unique, country, createdAt, teams LeagueTeam[]) — placed in a new "// ── League Models (EPL + future leagues) ──" section between Match and PulseBreakdown so team-directory models sit next to the Match model they join onto via homeTeamCode/awayTeamCode.
+- Added `LeagueTeam` model (id, name, code @unique, crestUrl?, leagueId, league relation with onDelete: Cascade, createdAt, @@index([leagueId])).
+- Extended `FanVote` model IN PLACE — preserved existing `score Int // 0-100`, `teamCode`, `sessionId`, `@@unique([teamCode, sessionId])`, and `@@index([teamCode, createdAt])`. Added:
+    * `matchId String?` — optional link to a Match for EPL match-level voting (plain String, NOT a foreign key, so votes survive even if Match rows are pruned).
+    * `intensity Int?` — optional 1-10 strength-of-feeling scale.
+    * `context String @default("GENERAL")` — optional event tag (GOAL, VAR, RED_CARD); defaults to GENERAL so untagged votes carry a label in aggregations.
+    * `@@unique([matchId, sessionId])` — one vote per session per match. SQLite treats NULL matchId as distinct, so existing team-level votes (matchId=NULL) are unaffected.
+    * `@@index([matchId, createdAt])` — serves `WHERE matchId = ? ORDER BY createdAt` for match-level aggregation (independent filter path from teamCode).
+- Did NOT touch Match, WCStage, WCSelection, WCSelectionPlayer, NationalTeam, FeedMonitor, FeedPost, PulseBreakdown, SentimentSummary, PlayerSentiment, FanRating, UserRating, TransferSaga, TransferSource, TransferPost, or SentimentTimeline. Confirmed by re-reading the full file post-edit.
+- Ran `bun run db:push` — succeeded in 17ms, Prisma Client regenerated (v6.19.2) in 228ms. No data loss.
+- Verified the migration via a one-off Prisma script:
+    * `db.league.count()` → 0 (new empty table, expected — task only asked to add models, not seed).
+    * `db.leagueTeam.count()` → 0 (new empty table, expected).
+    * `db.fanVote.count()` → 20 (all 20 existing votes preserved).
+    * Sample FanVote row: `{"teamCode":"BRA","matchId":null,"intensity":null,"context":"GENERAL"}` — new fields correctly nullable / defaulted on existing rows.
+- Verified all 4 critical surfaces still load (curl + dev.log):
+    * Home `/` → HTTP 200
+    * `/api/world-cup/stages` → 200, returns Mbappé/Rodri/etc. Team of Tournament data intact
+    * `/api/transfers?limit=30&status=active` → 200, returns sagas (Saka, etc.)
+    * `/api/ballon-dor` → 200, returns Mbappé Golden Boot contender
+    * `/api/fan-vote` → 200, existing team-level aggregation still works (20 votes returned per team)
+- Ran `bun run lint` → 0 errors.
+
+Stage Summary:
+- Schema change is purely ADDITIVE — no breaking changes, no data loss, no code changes required.
+- New `League` / `LeagueTeam` models are ready to be seeded (seeding is a separate future task — not in scope here).
+- FanVote now supports TWO independent voting paths:
+    1. Team-level (original): `teamCode + score + sessionId`, bounded by `@@unique([teamCode, sessionId])`.
+    2. Match-level (new, EPL): `teamCode + score + sessionId + matchId + intensity + context`, bounded by `@@unique([matchId, sessionId])`.
+  Both paths coexist on the same table — existing /api/fan-vote endpoints are untouched and continue to work because the new fields are nullable/defaulted.
+- No WriteQueue or PulseVote model added (per explicit instruction — in-memory queue, extend existing FanVote).
+- Datasource provider remains `sqlite`.
+- Ready for the next task (EPL seeding / match-level voting UI to follow in a separate task).
