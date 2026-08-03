@@ -175,7 +175,15 @@ export default function CurateAdminPage() {
             placeholder="Enter admin password"
             className="w-full bg-[#0A0A0A] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-[#6C2BD9] focus:ring-2 focus:ring-[#6C2BD9]/30 transition-all"
             autoFocus
+            autoComplete="new-password"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-form-type="other"
           />
+          <p className="mt-2 text-xs text-white/40">
+            Password changed? Clear your browser&rsquo;s saved password for this
+            site and re-type it manually.
+          </p>
           {authError && (
             <p className="mt-2 text-xs text-[#EF4444] flex items-center gap-1.5">
               <AlertCircle className="size-3.5" /> {authError}

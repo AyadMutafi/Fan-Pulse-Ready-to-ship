@@ -216,8 +216,16 @@ function LoginGate({ onAuthed }: { onAuthed: () => void }) {
                 placeholder="••••••••••••"
                 autoFocus
                 disabled={loading}
+                autoComplete="new-password"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
                 className="border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600"
               />
+              <p className="text-xs text-zinc-500">
+                Password changed? Clear your browser&rsquo;s saved password for
+                this site and re-type it manually.
+              </p>
             </div>
             {error && (
               <Alert variant="destructive">
