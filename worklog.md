@@ -5161,3 +5161,33 @@ Stage Summary:
 - End-to-end verified: paste 3 URLs → 3 CuratedLink rows with real content + scores → Fan Talk shows curated tweets as primary source (SDK skipped).
 - Lint: 0 errors. All existing surfaces (Home, World Cup, Transfers, Ballon d'Or, Fan Talk) still HTTP 200.
 - USER ACTION NEEDED: Change ADMIN_PASSWORD from "fp-curate-test-2026" to a secure password before launch.
+
+---
+Task ID: admin-env-hot-reload-fix
+Agent: Main Agent
+Task: Fix admin login rejecting valid password after .env change
+
+Work Log:
+- User changed ADMIN_PASSWORD in .env from "fp-curate-test-2026" to "123456789"
+- User reported admin login page (/admin/curate) showing "Invalid password" with new password
+- Read /home/z/my-project/worklog.md (anti-hallucination rule #1)
+- Analyzed screenshot via VLM: confirmed Fan Pulse admin login page rejecting password
+- Checked dev.log: saw "Reload env: .env" — Next.js DID reload env vars
+- Read src/lib/admin-auth.ts: found root cause at line 18 — `const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD` was a MODULE-LEVEL constant
+  - Module-level constants are evaluated ONCE when the module is first imported
+  - Next.js reloads process.env on .env change, but does NOT invalidate already-cached modules
+  - So the cached ADMIN_PASSWORD constant retained the OLD value (fp-curate-test-2026) even after .env was updated
+- Fix: replaced module-level const with a `getAdminPassword()` helper function that reads `process.env.ADMIN_PASSWORD` at CALL TIME
+- Updated all 3 consumers (isAdminAuthorized, verifyAdminPassword, createAdminToken) to call getAdminPassword() dynamically
+- Ran `bun run lint`: clean, no errors
+- Verified via curl:
+  - POST /api/admin/login with OLD password "fp-curate-test-2026" → HTTP 401 "Invalid password" ✓ (correctly rejected)
+  - POST /api/admin/login with NEW password "123456789" → HTTP 200 {"success":true}, cookie set ✓ (correctly accepted)
+
+Stage Summary:
+- Root cause: module-level constant caching of process.env.ADMIN_PASSWORD prevented .env hot-reload from taking effect
+- Fix: dynamic read via getAdminPassword() helper inside each function — standard Node/Next.js pattern for env-var auth
+- Files modified: src/lib/admin-auth.ts (single file, ~10 line change, no behavior change for already-correct env)
+- Security model unchanged: still fail-closed if env var unset, still timing-safe comparison, still HttpOnly+SameSite=Strict cookie
+- User can now log in to /admin/curate (and /admin/feed-monitor) with password "123456789"
+- NOTE: this fix also benefits production — if ADMIN_PASSWORD is rotated via fly secrets, the new value takes effect on next request without requiring module re-evaluation (though fly secrets typically restart the app anyway)

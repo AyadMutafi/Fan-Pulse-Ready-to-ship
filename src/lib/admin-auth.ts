@@ -14,8 +14,17 @@ import { timingSafeEqual } from 'node:crypto'
  *
  * Password comparison uses crypto.timingSafeEqual to prevent timing attacks.
  * Never log the password or any derived value.
+ *
+ * NOTE: `process.env.ADMIN_PASSWORD` is read DYNAMICALLY inside each function
+ * (not cached as a module-level constant). This is critical for the dev server:
+ * when `.env` is edited, Next.js reloads `process.env` but does NOT invalidate
+ * already-imported modules. A module-level `const ADMIN_PASSWORD = ...` would
+ * keep the OLD value until a full server restart. Reading it at call time
+ * ensures password changes take effect immediately after `.env` reload.
  */
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
+function getAdminPassword(): string | undefined {
+  return process.env.ADMIN_PASSWORD
+}
 
 /**
  * Timing-safe string comparison. Returns true iff a === b.
@@ -38,6 +47,10 @@ function timingSafeEqualStr(a: string, b: string): boolean {
 }
 
 export function isAdminAuthorized(request: NextRequest | Request): boolean {
+  // Read the password DYNAMICALLY (see module note above) so that `.env`
+  // edits take effect immediately without a full dev server restart.
+  const ADMIN_PASSWORD = getAdminPassword()
+
   // Fail-closed: if the env var is not set, deny everything.
   if (!ADMIN_PASSWORD) {
     console.error(
@@ -121,6 +134,7 @@ export const ADMIN_ID = 'admin'
  * Fail-closed: returns false if the env var is not set.
  */
 export function verifyAdminPassword(password: string): boolean {
+  const ADMIN_PASSWORD = getAdminPassword()
   if (!ADMIN_PASSWORD || !password) return false
   return timingSafeEqualStr(password, ADMIN_PASSWORD)
 }
@@ -134,7 +148,7 @@ export function verifyAdminPassword(password: string): boolean {
  * string when ADMIN_PASSWORD is unset so the cookie is effectively invalid.
  */
 export function createAdminToken(_adminId: string): string {
-  return ADMIN_PASSWORD ?? ''
+  return getAdminPassword() ?? ''
 }
 
 /** Standard cookie attributes for the admin session cookie (24h lifetime). */
