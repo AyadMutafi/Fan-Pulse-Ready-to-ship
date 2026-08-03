@@ -96,8 +96,15 @@ export async function readPage(url: string): Promise<PageReadResult> {
     }
   }
 
-  const html = String(raw?.html || raw?.content || raw?.text || '')
-  const title = String(raw?.title || '')
+  // The z-ai SDK returns the page content nested under `raw.data` with keys
+  // { html, content, title, publishedTime, ... }. Older call paths in
+  // live-fan-talk.ts already knew this (they access `pageData?.data?.html`).
+  // The facade previously only checked the top level, which returned empty
+  // for every URL — making readPage unusable. Fix: check both `.data.*`
+  // (current SDK shape) and top-level (defensive fallback).
+  const data = raw?.data ?? raw
+  const html = String(data?.html || data?.content || raw?.html || raw?.content || raw?.text || '')
+  const title = String(data?.title || raw?.title || '')
   const text = stripHtml(html)
 
   if (!text) {

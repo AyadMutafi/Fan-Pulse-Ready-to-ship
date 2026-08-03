@@ -140,6 +140,69 @@ model LeagueTeam {
   @@index([leagueId])
 }
 
+// ── Founder-Curated Link Pipeline (70% manual curation) ──────────────────────
+// The founder manually pastes tweet/post URLs for a specific match. The AI
+// then reads + scores ONLY those specific URLs (never invents content).
+//
+// ANTI-HALLUCINATION CONTRACT (enforced in src/app/api/curate/route.ts):
+//   - Every CuratedLink.url MUST start with https:// and be from an allowed
+//     domain (x.com, twitter.com, reddit.com, instagram.com, facebook.com,
+//     tiktok.com, or a real news hostname). URLs failing this check are
+//     rejected before any AI call.
+//   - content is extracted by page_reader (src/lib/ai). If page_reader fails
+//     or returns a block message, the URL is SKIPPED — never fabricated.
+//   - postedAt is parsed from the page content; if unparseable, defaults to
+//     now. Links older than 7 days are rejected (freshness guarantee for
+//     live-match curation).
+//   - sentimentScore (0-100) is LLM-scored from the REAL extracted content.
+//   - Author is extracted from the URL (handle) or hostname — never invented.
+//
+// FAN TALK INTEGRATION (src/lib/live-fan-talk.ts):
+//   When Fan Talk is requested for a match, CuratedLink rows for that match
+//   are checked FIRST. If > 3 curated links exist, they are the primary
+//   source (web_search is skipped — the "70% manual" path). If < 3, the
+//   existing web_search pipeline runs ("30% AI backup") and curated links
+//   are merged in. This is the 70/30 curation pattern.
+
+/// A founder-curated social/news link for a specific match. One per URL.
+model CuratedLink {
+  id              String   @id @default(cuid())
+  /// Optional link to a Match. NULL for "add new match" (manual entry) where
+  /// the founder typed a matchLabel but no matchId exists yet. NOT a foreign
+  /// key — Match rows may be pruned, curated links must survive as audit trail.
+  matchId         String?
+  /// Human label: "Arsenal vs Chelsea — Friendly Jul 28". Required so the
+  /// link is always displayable even if the Match row is gone.
+  matchLabel      String
+  /// The real tweet/post URL. @unique → natural dedupe on re-curation.
+  url             String   @unique
+  /// "twitter" | "reddit" | "instagram" | "facebook" | "tiktok" | "web"
+  platform        String
+  /// @handle (twitter) or hostname (web) or r/subreddit (reddit). Extracted
+  /// from the URL structure; never invented.
+  author          String
+  /// Extracted text from page_reader. May be truncated. NEVER fabricated.
+  content         String
+  /// 0-100, LLM-scored from the real content. 50 = neutral default.
+  sentimentScore  Float    @default(50)
+  /// "excited" | "skeptical" | "dreading" | "neutral". Derived from score.
+  sentimentLabel  String   @default("neutral")
+  /// JSON array of hashtags, e.g. ["#Arsenal","#COYG"]. From founder input.
+  hashtags        String   @default("[]")
+  /// When the original post was made. Parsed from page content or URL.
+  /// If unparseable, defaults to the curation time (now).
+  postedAt        DateTime
+  /// When the founder added this link. Audit trail.
+  curatedAt       DateTime @default(now())
+  /// Who curated it. Defaults to "founder". Audit trail.
+  curatedBy       String   @default("founder")
+  /// Soft-delete / suppress flag. false = hidden from Fan Talk.
+  isActive        Boolean  @default(true)
+
+  @@index([matchId, postedAt])
+  @@index([platform, postedAt])
+}
+
 // ── Pulse Score Engine Models ────────────────────────────────────────────────
 
 /// Per-player breakdown of the 4 weighted Pulse Score components.

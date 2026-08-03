@@ -222,6 +222,102 @@ export async function fetchLiveFanTalk(
     console.log(`[live-fan-talk] Created monitor ${monitor.id} for ${matchLabel} (matchId=${matchId ?? 'none'})`)
   }
 
+  // ── 1b. Check CuratedLink table (70% manual curation path) ─────────────
+  // The founder may have curated real social/news links for this match via
+  // /admin/curate. These take PRIORITY over the SDK web_search pipeline:
+  //   - If > 3 curated links exist → sync them to FeedPost + short-circuit
+  //     (skip SDK entirely — the "70% manual" path).
+  //   - If 1-3 curated links exist → sync them, then fall through to the
+  //     SDK flow (the "30% AI backup") so Fan Talk has enough posts.
+  //   - If 0 curated links → proceed with the existing SDK-only flow.
+  //
+  // Sync is an upsert by URL (FeedPost.url @unique), so it's idempotent —
+  // re-running it on every call within the 5-min refresh window is just a
+  // few cheap DB writes. The curated content/score is always preserved.
+  const curatedLinks = matchId
+    ? await database.curatedLink.findMany({
+        where: { matchId, isActive: true },
+        orderBy: { postedAt: 'desc' },
+        take: 12,
+      })
+    : // No matchId — fall back to matching by team code in matchLabel.
+      // This is the legacy path for calls that don't pass a matchId.
+      await database.curatedLink.findMany({
+        where: {
+          isActive: true,
+          OR: codes.map((c) => ({
+            matchLabel: { contains: c, mode: 'insensitive' as const },
+          })),
+        },
+        orderBy: { postedAt: 'desc' },
+        take: 12,
+      })
+
+  if (curatedLinks.length > 0) {
+    let syncedCount = 0
+    for (const cl of curatedLinks) {
+      try {
+        await database.feedPost.upsert({
+          where: { url: cl.url },
+          update: {
+            monitorId: monitor.id,
+            platform: cl.platform,
+            author: cl.author,
+            content: cl.content,
+            language: 'en',
+            sentimentScore: cl.sentimentScore,
+            positiveRatio: 0.5,
+            mentionedPlayers: JSON.stringify([]),
+            topQuote: null,
+            postedAt: cl.postedAt,
+            analyzedAt: new Date(),
+          },
+          create: {
+            monitorId: monitor.id,
+            platform: cl.platform,
+            url: cl.url,
+            author: cl.author,
+            content: cl.content,
+            language: 'en',
+            sentimentScore: cl.sentimentScore,
+            positiveRatio: 0.5,
+            mentionedPlayers: JSON.stringify([]),
+            topQuote: null,
+            postedAt: cl.postedAt,
+            analyzedAt: new Date(),
+          },
+        })
+        syncedCount++
+      } catch (dbErr) {
+        console.warn(
+          `[live-fan-talk] curated sync failed for ${cl.url}: ${String(dbErr).slice(0, 120)}`,
+        )
+      }
+    }
+    console.log(
+      `[live-fan-talk] Synced ${syncedCount}/${curatedLinks.length} curated links → FeedPost (monitor ${monitor.id})`,
+    )
+
+    // ── 70% path: enough curated links → short-circuit, skip SDK ────────
+    if (curatedLinks.length > 3) {
+      await database.feedMonitor.update({
+        where: { id: monitor.id },
+        data: { lastRefreshedAt: new Date() },
+      })
+      return {
+        monitorId: monitor.id,
+        newPosts: syncedCount,
+        skippedDuplicates: 0,
+        rejected: 0,
+        durationMs: Date.now() - startedAt,
+      }
+    }
+    // ── 30% path: 1-3 curated links → fall through to SDK for supplement ─
+    // The synced curated URLs are now in FeedPost. The existing dedup logic
+    // (step 5) will exclude them from the SDK's new-posts list, so we won't
+    // double-insert. The SDK adds scraped posts alongside the curated ones.
+  }
+
   // ── 2. Short-circuit if refreshed too recently ─────────────────────────
   if (monitor.lastRefreshedAt) {
     const ageMs = Date.now() - monitor.lastRefreshedAt.getTime()
