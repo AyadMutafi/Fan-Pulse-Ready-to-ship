@@ -5272,3 +5272,38 @@ Stage Summary:
 - Screenshots saved at: /home/z/my-project/admin-before-login.png, /home/z/my-project/admin-after-login.png, /home/z/my-project/curate-before-login.png, /home/z/my-project/curate-after-login.png
 - Dev server note: was not running on arrival; started with `setsid bash -c 'exec bun run dev ...' &` to survive across bash sessions. Still running at end of task.
 - Remaining user-facing caveat (unchanged from prior worklog): if the user STILL sees "Invalid password" in their personal browser, they must (a) hard-reload (Cmd/Ctrl+Shift+R) to bust cached client JS, AND (b) clear the outdated saved password entry for localhost:3000 in their browser's password manager (chrome://password-manager, 1Password, etc.). The muted hint text on both pages directs them to do this. The typed-manually login path is verified working.
+
+---
+Task ID: sentiment-emojis-appwide
+Agent: Main Agent
+Task: Make all fan sentiments display as emojis across the whole app (user reported sentiments shown as text/numbers, e.g. numeric +28/-12 badges in the Pulse Elite formation screenshot).
+
+Work Log:
+- Analyzed uploaded screenshot (Pulse Elite formation) with VLM — identified numeric scoreDelta badges (+28/-12) and lucide trend icons as non-emoji sentiment displays
+- Audited the entire app for sentiment shown as TEXT WORDS or bare NUMBERS without an accompanying emoji
+- Fixed RateTab.tsx: removed text rating label ("World Class"/"Solid"/etc.) — emoji (🤩😊😐😟😵) is now the sole sentiment indicator next to the numeric rating
+- Fixed SentimentsTab.tsx: replaced text "On Fire"/"Under Pressure"/"Crisis" with emoji (🔥😤😰) using the existing-but-unused getSentimentEmoji helper
+- Fixed page.tsx SentimentsTab: replaced text label with emoji (🔥😤😰)
+- Fixed FanPulseTab.tsx: added getSentimentFaceEmoji helper; replaced text "Positive"/"Neutral"/"Negative" post labels with emoji (😊😐😡); replaced "Pos"/"Neu"/"Neg" split labels with emojis; added face emoji to team sentiment numbers + Global Pulse CircularGauge center
+- Fixed page.tsx FormationPlayerCard: converted scoreDelta badges from ↑28/↓12 to 📈28/📉12 (emoji-led); converted getTrendIcon lucide icons to emojis (📈📉➡️); converted R32 ticker arrows to emojis
+- Fixed page.tsx hero narrative: converted TrendingUp/Down lucide icons to 📈/📉 emojis
+- Fixed page.tsx transfer saga pill: converted lucide trend icons + "Bullish"/"Bearish" text to emojis (📈📉➡️ + 🤩😰)
+- Fixed page.tsx transfer breakdown dots: replaced colored dots with sentiment emojis (🤩🤔😰)
+- Fixed page.tsx stats bar: replaced icon:TrendingUp/Down with emoji-based render (🤩/😟); fixed runtime crash from removed imports
+- Fixed TransferSagaDetail.tsx: added SENTIMENT_EMOJI map; replaced "Excited · 75" text labels with emoji (🤩 75); converted TrendIcon lucide to emojis; added emojis to timeline legend
+- Fixed TransferPulseCard.tsx: converted TREND_ICON lucide map to TREND_EMOJI; replaced sentiment breakdown colored dots with emojis (🤩🤔😰😐); removed Zap/TrendingUp/Down/Minus imports
+- Fixed shared common/TrendIcon.tsx: converted lucide icons to emojis (📈📉➡️)
+- Fixed PlayerCard.tsx TrendArrow: converted lucide to emojis
+- Fixed pulse/MatchMomentumModal.tsx TrendArrow: converted lucide to emojis
+- Fixed tabs/TransfersTab.tsx: converted TrendingUp "Trending up" stat icon to 📈 emoji
+- Fixed TournamentRetroTab.tsx: converted TrendArrow lucide assignment to emoji (📈📉)
+- Removed now-unused lucide imports (TrendingUp/TrendingDown/Minus/Zap) across all edited files
+- Ran `bun run lint` — clean (no errors)
+- Verified with Agent Browser + DOM inspection: World Cup formation DOM shows 😊/😐 face emojis in circles + 📈 trend emojis + "📈73" scoreDelta badges (emoji-led, VLM misread 📈 as ↑ but DOM confirms emoji); Sentiments tab shows 🔥😤😰 with 0 text labels; Transfers tab shows 🤩😰🤔 + 📈 with 0 "Bullish"/"Bearish"/"Excited"/"Dreading" text words; Home page has 0 bare-text sentiment labels (0 "On Fire"/"World Class"/"Solid"/"Bullish"/etc.)
+- No runtime/console errors; dev.log shows all 200 responses
+
+Stage Summary:
+- Sentiment emoji scale standardized app-wide: face moods 🤩😊😐😟😡😵 (pulse/rating levels), category emojis 🔥😤😰 (sentiment labels), trend emojis 📈📉➡️ (momentum direction), transfer fan emojis 🤩🤔😰😐 (excited/skeptical/dreading/neutral)
+- Every sentiment indicator across Home, Sentiments, World Cup, and Transfers tabs now renders as an emoji — no bare text words ("On Fire"/"Bullish"/"World Class") and no bare numeric sentiment badges without an emoji
+- Numeric rating VALUES (e.g. 8.6/10, 73/100) and percentages are intentionally retained as supplementary info alongside the emoji, since these are rating values, not sentiments
+- Files modified: RateTab.tsx, SentimentsTab.tsx, FanPulseTab.tsx, page.tsx, TransferSagaDetail.tsx, TransferPulseCard.tsx, common/TrendIcon.tsx, PlayerCard.tsx, pulse/MatchMomentumModal.tsx, tabs/TransfersTab.tsx, TournamentRetroTab.tsx

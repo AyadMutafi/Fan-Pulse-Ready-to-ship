@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, ArrowRight, BadgeCheck, ExternalLink, CheckCircle2, XCircle,
-  TrendingUp, TrendingDown, Minus, MessageCircle,
+  MessageCircle,
 } from 'lucide-react'
 import type { TransferSagaSummary } from '@/components/TransferPulseCard'
 
@@ -54,6 +54,14 @@ const SENTIMENT_COLOR: Record<string, string> = {
   skeptical: 'text-[#F59E0B] bg-[#F59E0B]/10',
   dreading: 'text-[#EF4444] bg-[#EF4444]/10',
   neutral: 'text-[#6B7280] dark:text-gray-400 bg-[#999]/10',
+}
+
+// Sentiments are ALWAYS presented as emojis across the whole app.
+const SENTIMENT_EMOJI: Record<string, string> = {
+  excited: '🤩',
+  skeptical: '🤔',
+  dreading: '😰',
+  neutral: '😐',
 }
 
 export default function TransferSagaDetail({ saga, onClose }: TransferSagaDetailProps) {
@@ -371,8 +379,9 @@ function TransferSagaDetailContent({
                             className={`shrink-0 px-1.5 py-0.5 rounded text-[11px] font-bold capitalize ${
                               SENTIMENT_COLOR[p.sentimentLabel] ?? SENTIMENT_COLOR.neutral
                             }`}
+                            title={`${p.sentimentLabel} · ${p.sentimentScore.toFixed(0)}`}
                           >
-                            {p.sentimentLabel} · {p.sentimentScore.toFixed(0)}
+                            {SENTIMENT_EMOJI[p.sentimentLabel] ?? '😐'} {p.sentimentScore.toFixed(0)}
                           </span>
                         </div>
                         <p className="text-[11px] text-[#666] dark:text-gray-300 line-clamp-3">
@@ -427,9 +436,9 @@ function Stat({
 }
 
 function TrendIcon({ trend }: { trend: string }) {
-  if (trend === 'rising') return <TrendingUp className="size-3.5 text-[#10B981]" />
-  if (trend === 'falling') return <TrendingDown className="size-3.5 text-[#EF4444]" />
-  return <Minus className="size-3.5 text-[#6B7280] dark:text-gray-400" />
+  if (trend === 'rising') return <span className="text-sm leading-none" title="Rising">📈</span>
+  if (trend === 'falling') return <span className="text-sm leading-none" title="Falling">📉</span>
+  return <span className="text-sm leading-none" title="Stable">➡️</span>
 }
 
 function TimelineChart({
@@ -464,9 +473,9 @@ function TimelineChart({
         })}
       </div>
       <div className="flex items-center gap-3 mt-2 text-[11px]">
-        <span className="flex items-center gap-1 text-[#10B981]"><span className="size-1.5 rounded-full bg-[#10B981]" />Excited</span>
-        <span className="flex items-center gap-1 text-[#F59E0B]"><span className="size-1.5 rounded-full bg-[#F59E0B]" />Skeptical</span>
-        <span className="flex items-center gap-1 text-[#EF4444]"><span className="size-1.5 rounded-full bg-[#EF4444]" />Dreading</span>
+        <span className="flex items-center gap-1 text-[#10B981]"><span className="size-1.5 rounded-full bg-[#10B981]" />🤩 Excited</span>
+        <span className="flex items-center gap-1 text-[#F59E0B]"><span className="size-1.5 rounded-full bg-[#F59E0B]" />🤔 Skeptical</span>
+        <span className="flex items-center gap-1 text-[#EF4444]"><span className="size-1.5 rounded-full bg-[#EF4444]" />😰 Dreading</span>
       </div>
     </div>
   )

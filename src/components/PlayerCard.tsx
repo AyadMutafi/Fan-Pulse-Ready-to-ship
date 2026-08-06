@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { TrendingUp, TrendingDown, Minus, Share2, RotateCcw, BadgeCheck } from 'lucide-react'
+import { Share2, RotateCcw, BadgeCheck } from 'lucide-react'
 import { CARD_TIERS } from '@/lib/player-card-tiers'
 import { PULSE_FORMULA, type PlayerCardData } from '@/lib/player-card-data'
 import { findNationalTeam } from '@/lib/national-teams'
@@ -286,10 +286,11 @@ export default function PlayerCard({ data, size = 'full', onView, onShare, class
 }
 
 function TrendArrow({ trend, size }: { trend: string; size: PlayerCardSize }) {
-  const s = size === 'full' ? 'size-4' : 'size-3'
-  if (trend === 'rising') return <TrendingUp className={`${s} text-[#10B981]`} />
-  if (trend === 'falling') return <TrendingDown className={`${s} text-[#EF4444]`} />
-  return <Minus className={`${s} text-[#FF6B35]`} />
+  // Sentiment trend is always conveyed with an emoji.
+  const s = size === 'full' ? 'text-base' : 'text-sm'
+  if (trend === 'rising') return <span className={`${s} leading-none`} title="Rising">📈</span>
+  if (trend === 'falling') return <span className={`${s} leading-none`} title="Falling">📉</span>
+  return <span className={`${s} leading-none`} title="Stable">➡️</span>
 }
 
 /**

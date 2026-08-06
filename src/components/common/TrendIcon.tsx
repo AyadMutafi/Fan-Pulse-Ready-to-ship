@@ -1,10 +1,10 @@
 'use client'
 
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import type { Trend } from '@/types'
 
+// Sentiment trend is ALWAYS conveyed with an emoji (no bare icon/number).
 export function TrendIcon({ trend }: { trend: Trend }) {
-  if (trend === 'rising') return <TrendingUp className="size-3 text-[#10B981]" />
-  if (trend === 'falling') return <TrendingDown className="size-3 text-[#EF4444]" />
-  return <Minus className="size-3 text-[#FF6B35]" />
+  if (trend === 'rising') return <span className="text-sm leading-none" title="Rising">📈</span>
+  if (trend === 'falling') return <span className="text-sm leading-none" title="Falling">📉</span>
+  return <span className="text-sm leading-none" title="Stable">➡️</span>
 }

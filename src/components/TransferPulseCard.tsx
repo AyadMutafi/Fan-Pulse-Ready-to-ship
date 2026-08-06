@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowRight, TrendingUp, TrendingDown, Minus, BadgeCheck, Zap } from 'lucide-react'
+import { ArrowRight, BadgeCheck } from 'lucide-react'
 
 export interface TransferSagaSummary {
   id: string
@@ -40,10 +40,11 @@ interface TransferPulseCardProps {
   onClick: (saga: TransferSagaSummary) => void
 }
 
-const TREND_ICON: Record<string, { icon: typeof TrendingUp; color: string; label: string }> = {
-  rising: { icon: TrendingUp, color: 'text-[#10B981]', label: 'Rising' },
-  falling: { icon: TrendingDown, color: 'text-[#EF4444]', label: 'Falling' },
-  stable: { icon: Minus, color: 'text-[#6B7280] dark:text-gray-400', label: 'Stable' },
+// Sentiment trend is always conveyed with an emoji (no bare icon/number).
+const TREND_EMOJI: Record<string, { emoji: string; color: string; label: string }> = {
+  rising: { emoji: '📈', color: 'text-[#10B981]', label: 'Rising' },
+  falling: { emoji: '📉', color: 'text-[#EF4444]', label: 'Falling' },
+  stable: { emoji: '➡️', color: 'text-[#6B7280] dark:text-gray-400', label: 'Stable' },
 }
 
 function likelihoodColor(pct: number): { bg: string; text: string } {
@@ -59,8 +60,7 @@ function statusBadge(status: string): { label: string; cls: string } | null {
 }
 
 export default function TransferPulseCard({ saga, onClick }: TransferPulseCardProps) {
-  const trend = TREND_ICON[saga.buzzTrend] ?? TREND_ICON.stable
-  const TrendIcon = trend.icon
+  const trend = TREND_EMOJI[saga.buzzTrend] ?? TREND_EMOJI.stable
   const lik = likelihoodColor(saga.fanReadLikelihood)
   const sBadge = statusBadge(saga.status)
   const topSrc = saga.topSources[0]
@@ -143,8 +143,8 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
               looks like empty data even though there are real posts. */}
           {saga.excitedPct === 0 && saga.skepticalPct === 0 && saga.dreadingPct === 0 ? (
             <div className="flex items-center gap-2 mt-1.5 text-[11px]">
-              <span className="flex items-center gap-1 text-[#6B7280] dark:text-gray-400">
-                <span className="size-1.5 rounded-full bg-[#999]/60" />
+              <span className="flex items-center gap-0.5 text-[#6B7280] dark:text-gray-400">
+                <span className="text-[11px] leading-none">😐</span>
                 Neutral <span className="brutalist-number">{neutralPct.toFixed(0)}%</span>
               </span>
               <span className="text-[#6B7280] dark:text-gray-400 italic">
@@ -153,16 +153,16 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
             </div>
           ) : (
             <div className="flex items-center gap-2.5 mt-1.5 text-[11px]">
-              <span className="flex items-center gap-1 text-[#10B981]">
-                <span className="size-1.5 rounded-full bg-[#10B981]" />
+              <span className="flex items-center gap-0.5 text-[#10B981]">
+                <span className="text-[11px] leading-none">🤩</span>
                 <span className="brutalist-number">{saga.excitedPct.toFixed(0)}%</span>
               </span>
-              <span className="flex items-center gap-1 text-[#F59E0B]">
-                <span className="size-1.5 rounded-full bg-[#F59E0B]" />
+              <span className="flex items-center gap-0.5 text-[#F59E0B]">
+                <span className="text-[11px] leading-none">🤔</span>
                 <span className="brutalist-number">{saga.skepticalPct.toFixed(0)}%</span>
               </span>
-              <span className="flex items-center gap-1 text-[#EF4444]">
-                <span className="size-1.5 rounded-full bg-[#EF4444]" />
+              <span className="flex items-center gap-0.5 text-[#EF4444]">
+                <span className="text-[11px] leading-none">😰</span>
                 <span className="brutalist-number">{saga.dreadingPct.toFixed(0)}%</span>
               </span>
             </div>
@@ -179,9 +179,8 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
       {/* Footer: buzz trend + fan-read likelihood */}
       <div className="mt-3 pt-3 border-t border-[#E0E0E0]/60 dark:border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-1">
-          <Zap className={`size-3.5 ${trend.color}`} />
+          <span className="text-sm leading-none">{trend.emoji}</span>
           <span className={`text-[10px] font-semibold ${trend.color}`}>{trend.label}</span>
-          <TrendIcon className={`size-3 ${trend.color} ml-0.5`} />
         </div>
         <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${lik.bg}`}>
           <span className={`brutalist-number text-[10px] font-bold ${lik.text}`}>{saga.fanReadLikelihood.toFixed(0)}%</span>

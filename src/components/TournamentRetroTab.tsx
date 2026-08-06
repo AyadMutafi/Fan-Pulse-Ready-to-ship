@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Trophy, X, Share2, Check, Lock, TrendingUp, TrendingDown, Award, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react'
+import { Trophy, X, Share2, Check, Lock, Award, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -462,9 +462,9 @@ function RetroPlayerChip({
   const isNA = player.name === 'N/A'
   const faceEmoji = isNA ? '❓' : getPulseFaceEmoji(player.tournamentScore)
   const ratingValue = isNA ? '—' : (player.tournamentScore / 10).toFixed(1)
-  // Trend shown as a colored arrow on the avatar's top-right corner — kept
+  // Trend shown as an emoji on the avatar's top-right corner — kept
   // visually distinct from the position badge and rating pill below.
-  const TrendArrow = player.trend === 'rising' ? TrendingUp : player.trend === 'falling' ? TrendingDown : null
+  const trendEmoji = player.trend === 'rising' ? '📈' : player.trend === 'falling' ? '📉' : null
 
   return (
     <motion.div
@@ -485,11 +485,13 @@ function RetroPlayerChip({
         ) : (
           <span className="text-xs sm:text-sm leading-none select-none">{faceEmoji}</span>
         )}
-        {TrendArrow && (
-          <TrendArrow
-            className="absolute -right-0.5 -top-0.5 size-2.5"
-            style={{ color: accent }}
-          />
+        {trendEmoji && (
+          <span
+            className="absolute -right-1 -top-1 text-[10px] leading-none"
+            title={player.trend === 'rising' ? 'Rising' : 'Falling'}
+          >
+            {trendEmoji}
+          </span>
         )}
         {/* Award winner crown badge */}
         {player.isAwardWinner && !isNA && (

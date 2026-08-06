@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useLanguage } from '@/context/LanguageContext'
 import { findNationalTeam } from '@/lib/national-teams'
 import { useFanRatings, useSubmitRating } from '@/hooks/queries/use-ratings'
-import { getRatingEmoji, getRatingColor, getRatingLabel } from '@/types'
+import { getRatingEmoji, getRatingColor } from '@/types'
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -191,7 +191,6 @@ export default function RateTab() {
             const avgRating = player.avgRating
             const emoji = getRatingEmoji(avgRating)
             const color = getRatingColor(avgRating)
-            const label = getRatingLabel(avgRating)
 
             return (
               <motion.div
@@ -216,9 +215,9 @@ export default function RateTab() {
                         </div>
                       </div>
 
-                      {/* Avg rating display with emoji */}
+                      {/* Avg rating display — sentiment shown as emoji (no text label) */}
                       <div className="flex items-center gap-2">
-                        <span className="text-2xl">{emoji}</span>
+                        <span className="text-3xl" title={`Avg ${avgRating.toFixed(1)}/10`}>{emoji}</span>
                         <div className="flex flex-col items-end">
                           <div className="flex items-baseline gap-1">
                             <span className="text-lg font-black" style={{ color }}>
@@ -226,9 +225,6 @@ export default function RateTab() {
                             </span>
                             <span className="text-[10px] text-[#6B7280] dark:text-gray-400">/10</span>
                           </div>
-                          <span className="text-[11px] font-semibold" style={{ color }}>
-                            {label}
-                          </span>
                         </div>
                       </div>
                     </div>

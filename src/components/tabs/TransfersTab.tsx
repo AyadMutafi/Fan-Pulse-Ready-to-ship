@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeftRight, RefreshCw, ShieldCheck, Zap, TrendingUp } from 'lucide-react'
+import { ArrowLeftRight, RefreshCw, ShieldCheck, Zap } from 'lucide-react'
 import TransferPulseCard, { type TransferSagaSummary } from '@/components/TransferPulseCard'
 import TransferSagaDetail from '@/components/TransferSagaDetail'
 import PlayerCard from '@/components/PlayerCard'
@@ -117,7 +117,7 @@ export default function TransfersTab() {
         <div className="grid grid-cols-3 gap-2">
           <MiniStat icon={<ArrowLeftRight className="size-3.5 text-[#6C2BD9] dark:text-[#8B5CF6]" />} label="Rumors" value={String(sagas.length)} />
           <MiniStat icon={<Zap className="size-3.5 text-[#FF6B35]" />} label="Fan posts" value={String(totalBuzz)} />
-          <MiniStat icon={<TrendingUp className="size-3.5 text-[#10B981]" />} label="Trending up" value={String(hotCount)} />
+          <MiniStat icon={<span className="text-sm leading-none">📈</span>} label="Trending up" value={String(hotCount)} />
         </div>
       )}
 

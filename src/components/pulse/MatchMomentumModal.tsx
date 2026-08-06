@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Zap, Info, X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Zap, Info, X } from 'lucide-react'
 import {
   Dialog, DialogContent, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog'
@@ -103,9 +103,10 @@ const TYPE_ICON: Record<string, string> = {
 }
 
 function TrendArrow({ trend, className = '' }: { trend: 'up' | 'down' | 'flat'; className?: string }) {
-  if (trend === 'up') return <TrendingUp className={`size-3 ${className}`} />
-  if (trend === 'down') return <TrendingDown className={`size-3 ${className}`} />
-  return <Minus className={`size-3 ${className}`} />
+  // Sentiment trend is always conveyed with an emoji.
+  if (trend === 'up') return <span className={`text-sm leading-none ${className}`} title="Rising">📈</span>
+  if (trend === 'down') return <span className={`text-sm leading-none ${className}`} title="Falling">📉</span>
+  return <span className={`text-sm leading-none ${className}`} title="Stable">➡️</span>
 }
 
 export function MatchMomentumModal({ match, isOpen, onClose }: Props) {
