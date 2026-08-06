@@ -5576,3 +5576,60 @@ Stage Summary:
 - Existing functionality preserved: Stories, Recent Match Sentiments (with WC/All filter), Latest Transfer Tweets, Ballon d'Or Race, Wikipedia photo integration (Phases 1-4), footer attribution.
 - Tier emojis (🔥⚡💀🏆🚀) on PlayerCard components across all tabs untouched.
 - Mobile responsive (375px) — no horizontal overflow, carousel scrolls horizontally, compact fixture rows fit.
+
+---
+Task ID: restore-league-and-fpl-tabs
+Agent: Main Agent
+Task: User asked to "restore" LEAGUE and FPL tabs (and their backend APIs) that were allegedly "accidentally removed" in a recent change. The user specified worklog Task IDs `totw-phase-1` through `totw-phase-4` (LEAGUE/EPL build) and `fpl-phase-1` through `fpl-phase-5` (FPL integration) as the source of truth, and asked to restore from git history if possible. Anti-hallucination rule #3: "Do NOT invent code — restore the actual code that was there before."
+
+Work Log (investigation, no code changes):
+- Followed anti-hallucination rule #1: Read /home/z/my-project/worklog.md FIRST. Searched for the Task IDs the user cited:
+  * `grep -n "Task ID:" worklog.md` returned 100+ Task IDs. NONE of them match `totw-phase-1`, `totw-phase-2`, `totw-phase-3`, `totw-phase-4`, `fpl-phase-1`, `fpl-phase-2`, `fpl-phase-3`, `fpl-phase-4`, or `fpl-phase-5`. The closest match is `tot-fix-phase-1` (line 3116), but that task was about World Cup Team of the TOURNAMENT (replacing a broken computed lineup with a manually-verified XI of Mbappé/Messi/Haaland/Rodri/etc.), NOT an EPL Team of the Week feature.
+  * Searched worklog body for keywords: `team of the week`, `TOTW`, `FPL`, `fantasy premier`, `LeaguePlayer`, `LeagueMatch`, `FPLPlayer`, `captain pulse`, `differential`. The only TOTW hits refer to (a) the World Cup TOTWTab component (Team of the Tournament) and (b) a PausedTabOverlay placeholder. No FPL/captain-pulse/differential-finder implementation has ever been logged.
+- Followed anti-hallucination rule #2: Searched git history.
+  * `git log --oneline -30` shows the repo has only ONE commit on main: `05a3850` (Aug 6). There is no prior commit where LEAGUE or FPL tabs could have existed.
+  * `git log --oneline -20 --all -- src/components/TeamOfTheWeekTab.tsx src/components/FPLTab.tsx src/app/api/fpl/ src/app/api/epl/` returns only the single `05a3850` commit (which is the current HEAD — it doesn't restore anything).
+  * `git status` shows working tree clean (only `db/custom.db-shm` modified, which is a SQLite WAL file, not source code). Nothing has been "removed" — there is no diff to revert.
+- Verified the current state of the source:
+  * `src/components/Navigation.tsx` line 7: `export type TabId = 'home' | 'sentiments' | 'rate' | 'goals' | 'totw' | 'worldcup' | 'transfers'`. There is NO `'league'` or `'fpl'` ID in the union. The visible tabs array (line 31-36) only registers 4 tabs: home, sentiments, worldcup, transfers. The 'rate', 'goals', 'totw' IDs are leftover dormant types — line 3281 of page.tsx renders `<PausedTabOverlay tabName="Team of the Week" />` for `activeTab === 'totw'` (a "coming soon" lock screen), not a real LEAGUE feature.
+  * `src/app/page.tsx` (3353 lines) — grepped for `activeTab === 'league'`, `activeTab === 'fpl'`, `TeamOfTheWeek`, `FPLTab`. ZERO matches. The only `activeTab === 'totw'` is the PausedTabOverlay at line 3281.
+  * `src/app/api/` directory listing: there is NO `fpl/` folder. The `epl/` folder exists but only contains `fan-mood/` and `upcoming/` subdirectories (both created by the `home-restructure-epl` task on Aug 6). There are NO `epl/matches/`, `epl/totw/`, `epl/totw/publish/`, or `epl/compute-pulse/` routes.
+  * `src/lib/` directory listing: there are NO `fpl-api.ts`, `fpl-matcher.ts`, `captain-pulse.ts`, `differential-finder.ts`, `epl-teams.ts`, `league-pulse-engine.ts`, or `totw-generator.ts` files. The EPL-related files that DO exist are: `epl-clubs.ts` (static 12-club dictionary), `epl-fixtures.ts` (FPL API fetcher — read-only, used by /api/epl/upcoming for the Home tab), `epl-club-mood.ts` (FanVote aggregator — used by /api/epl/fan-mood for the Home tab). None of these implement a LEAGUE tab or FPL tab.
+- Verified the Prisma schema (`prisma/schema.prisma`):
+  * `League` model EXISTS (id, name, slug, country, teams) — pre-seeded directory.
+  * `LeagueTeam` model EXISTS (id, name, code, crestUrl, leagueId) — pre-seeded directory.
+  * `LeagueMatch` model DOES NOT EXIST. Per the `sqlite-optimization-for-epl` worklog entry (line 3713) and the schema comment at lines 113-117: "there is no separate LeagueMatch model; EPL matches live here [in Match] with `league = 'EPL'`." EPL matches are stored in the generic `Match` model with `league = 'EPL'`.
+  * `LeaguePlayer` model DOES NOT EXIST. Per the `player-photos-phase-1` worklog entry (line 5341): "Discovered `LeaguePlayer` and `TOTWPlayer` Prisma models DO NOT EXIST in this project. Only `WCSelectionPlayer` (real DB model) and `TransferSaga` (real DB model) hold player data. TOTW / Ballon d'Or use STATIC verified arrays."
+  * `TOTWPlayer` model DOES NOT EXIST (see above).
+  * `TeamOfTheWeek` model DOES NOT EXIST.
+  * `FPLPlayer` model DOES NOT EXIST.
+  * `FPLFixture` model DOES NOT EXIST.
+  * `FPLGameweek` model DOES NOT EXIST.
+- Cross-referenced with prior worklog entry `restore-and-minimal-emoji` (line 5311-5333), which ALREADY investigated this exact same claim in a prior session:
+  > "Investigated 'League and FPL tabs' claim: searched git history of Navigation.tsx with `git log -p --all -S 'League'/'FPL'` — NO history of these tabs ever existing. Navigation.tsx was NOT modified in my previous commit (d35c01c). The tabs have always been Home/Sentiments/World Cup/Transfers. Nothing was removed."
+  > "League/FPL tabs: confirmed they never existed in committed code — not removed by anyone"
+  The user has now made this same false claim a second time. The prior investigation's conclusion still holds: the tabs were never built, so there is nothing to "restore".
+- Did NOT run `bun run lint` or `bun run db:push` because NO code changes were made. There is nothing to lint or push.
+- Did NOT deploy, per the user's instruction "DO NOT DEPLOY until all 6 tabs are verified working." Since 0 of the 6 tabs were modified (and 2 of the 6 don't exist), there is nothing to deploy.
+
+Stage Summary:
+- INVESTIGATION RESULT: The LEAGUE and FPL tabs NEVER EXISTED in this codebase. There is nothing to "restore". The user's premise — "a recent change accidentally removed the LEAGUE and FUL tabs from the navigation and deleted their API routes" — is false. The prior worklog entry `restore-and-minimal-emoji` already established this fact in a previous session when the user made the same claim.
+- Evidence (4 independent sources all agree):
+  1. Worklog: The cited Task IDs `totw-phase-1`..`totw-phase-4` and `fpl-phase-1`..`fpl-phase-5` DO NOT EXIST in worklog.md. The worklog explicitly states (line 5317, 5330): "NO history of these tabs ever existing" and "confirmed they never existed in committed code — not removed by anyone".
+  2. Git history: The repo has only ONE commit (`05a3850`). There is no prior commit where LEAGUE/FPL tabs could have existed. `git status` shows the working tree is clean — nothing has been "removed".
+  3. Prisma schema: The models `LeagueMatch`, `LeaguePlayer`, `TOTWPlayer`, `TeamOfTheWeek`, `FPLPlayer`, `FPLFixture`, `FPLGameweek` DO NOT EXIST. Only `League` and `LeagueTeam` exist (pre-seeded directory tables, used for fan-vote teamCode joins).
+  4. Source code: `TabId` union has no `'league'` or `'fpl'` member. No `/api/fpl/` folder exists. No `TeamOfTheWeekTab.tsx` or `FPLTab.tsx` files exist. No `fpl-api.ts`/`captain-pulse.ts`/`differential-finder.ts`/`totw-generator.ts` library files exist. The only EPL code that exists was built by the `home-restructure-epl` task: it added an "Upcoming EPL Games" section + "EPL Fan Mood" carousel to the HOME tab (not a separate LEAGUE tab).
+- Anti-hallucination rule #3 ("Do NOT invent code — restore the actual code that was there before") was UPHELD. Since no prior code existed, no code was fabricated. The user's fallback instruction ("If git history doesn't have the files: Rebuild them from the worklog specs") could not be executed because the cited worklog specs (`totw-phase-1..4`, `fpl-phase-1..5`) do not exist.
+- WHAT ACTUALLY EXISTS for the EPL pivot (built by `home-restructure-epl` on Aug 6):
+  * Home tab has an "Upcoming EPL Games" section (FotMob-style: featured match hero card + compact fixture rows). Fixtures come from the real FPL API (https://fantasy.premierleague.com/api/fixtures/) with a 30-min cache.
+  * Home tab has an "EPL Fan Mood" carousel (12 EPL clubs: ARS, CHE, LIV, MCI, MUN, TOT, NEW, AVL, BHA, WHU, EVE, FUL). Fan votes aggregate via the existing FanVote model (teamCode accepts any 3-letter code).
+  * `/api/epl/upcoming` and `/api/epl/fan-mood` endpoints exist and are working.
+- WHAT DOES NOT EXIST (would need to be BUILT AS NEW FEATURES, not "restored"):
+  * A separate LEAGUE tab with Team of the Week / Flops of the Week UI
+  * An FPL tab with Captain Pulse + Differentials + Your FPL Team sections
+  * `/api/fpl/players`, `/api/fpl/captain-pulse`, `/api/fpl/differentials`, `/api/fpl/sync` endpoints
+  * `/api/epl/matches`, `/api/epl/totw`, `/api/epl/totw/publish`, `/api/epl/compute-pulse` endpoints
+  * `fpl-api.ts`, `fpl-matcher.ts`, `captain-pulse.ts`, `differential-finder.ts`, `epl-teams.ts`, `league-pulse-engine.ts`, `totw-generator.ts` library files
+  * `LeagueMatch`, `LeaguePlayer`, `TOTWPlayer`, `TeamOfTheWeek`, `FPLPlayer`, `FPLFixture`, `FPLGameweek` Prisma models
+- RECOMMENDATION TO USER: If you want a LEAGUE tab (Team of the Week) and an FPL tab (Captain Pulse + Differentials) for the EPL launch on August 21, these need to be BUILT AS NEW FEATURES — they cannot be "restored" because they were never built. Please confirm and I will plan + implement them as fresh work (new Prisma models, new lib files, new API routes, new tab components, Navigation update). Building them properly will require: schema migration (`bun run db:push`), real FPL bootstrap-static + fixtures API integration, a TOTW generation algorithm tied to real EPL match data, and ~6-8 new files. This is a multi-step feature build, not a restore operation.
+- NO CHANGES WERE MADE TO THE CODEBASE. The app remains in its current state: 4 visible tabs (HOME, SENTIMENTS, WORLD CUP, TRANSFERS) with the EPL pivot already implemented on the HOME tab.
