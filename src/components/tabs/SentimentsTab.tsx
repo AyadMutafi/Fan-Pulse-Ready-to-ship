@@ -189,8 +189,8 @@ export default function SentimentsTab() {
                       style={{ width: `${player.sentiment}%` }}
                     />
                   </div>
-                  <span className="text-base leading-none" title={t(getLabelKey(player.sentiment))}>
-                    {getSentimentEmoji(player.sentiment)}
+                  <span className={`text-[10px] font-semibold ${getSentimentColor(player.sentiment)}`}>
+                    {t(getLabelKey(player.sentiment))}
                   </span>
                 </div>
               </motion.div>

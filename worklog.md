@@ -5307,3 +5307,26 @@ Stage Summary:
 - Every sentiment indicator across Home, Sentiments, World Cup, and Transfers tabs now renders as an emoji — no bare text words ("On Fire"/"Bullish"/"World Class") and no bare numeric sentiment badges without an emoji
 - Numeric rating VALUES (e.g. 8.6/10, 73/100) and percentages are intentionally retained as supplementary info alongside the emoji, since these are rating values, not sentiments
 - Files modified: RateTab.tsx, SentimentsTab.tsx, FanPulseTab.tsx, page.tsx, TransferSagaDetail.tsx, TransferPulseCard.tsx, common/TrendIcon.tsx, PlayerCard.tsx, pulse/MatchMomentumModal.tsx, tabs/TransfersTab.tsx, TournamentRetroTab.tsx
+
+---
+Task ID: restore-and-minimal-emoji
+Agent: Main Agent
+Task: User reported that sweeping emoji changes were unwanted — they only wanted emojis BESIDE the player photo. Also asked about "League and FPL tabs" being removed. Restore previous version, then add emojis beside player photo only.
+
+Work Log:
+- Investigated "League and FPL tabs" claim: searched git history of Navigation.tsx with `git log -p --all -S "League"/"FPL"` — NO history of these tabs ever existing. Navigation.tsx was NOT modified in my previous commit (d35c01c). The tabs have always been Home/Sentiments/World Cup/Transfers. Nothing was removed.
+- Restored all 11 source files I had modified back to the previous commit (HEAD~1) via `git checkout HEAD~1 -- <files>`:
+  - src/app/page.tsx, PlayerCard.tsx, TournamentRetroTab.tsx, TransferPulseCard.tsx, TransferSagaDetail.tsx, common/TrendIcon.tsx, pulse/MatchMomentumModal.tsx, tabs/FanPulseTab.tsx, RateTab.tsx, SentimentsTab.tsx, TransfersTab.tsx
+- Confirmed restore: Sentiments tab text labels "On Fire"/"Under Pressure" are back (32/25 occurrences); lint clean; no errors
+- Made the MINIMAL change the user actually asked for: added a fan-sentiment emoji badge BESIDE the player circle in the World Cup FormationPlayerCard ONLY (src/app/page.tsx, one card component)
+  - Used the existing getFanMoodEmoji(player.sentiment) helper (🤩😊😐😟😡 based on the sentiment field)
+  - Positioned as a small absolute badge at bottom-right of the player circle (visually "beside the player photo")
+  - Purely additive — nothing removed or replaced; no other files touched
+- Verified with Agent Browser + DOM inspection: each formation player now shows TWO emojis (face emoji in circle + fan-sentiment emoji badge beside it), e.g. "Raúl Rangel: 😊😊", "Achraf Hakimi: 😐🤩"
+- Lint clean; no runtime/console errors; dev.log all 200
+
+Stage Summary:
+- Previous version fully restored (all 11 files reverted to HEAD~1)
+- League/FPL tabs: confirmed they never existed in committed code — not removed by anyone
+- Minimal additive change: fan-sentiment emoji badge (🤩😊😐😟😡) now appears beside each player circle in the World Cup formation view only
+- No other tabs/components modified; text labels, trend icons, and numeric badges elsewhere remain as they were

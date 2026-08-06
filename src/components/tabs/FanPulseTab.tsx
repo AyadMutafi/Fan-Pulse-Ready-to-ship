@@ -95,13 +95,6 @@ function getSentimentLabel(score: number, isAr: boolean): string {
   return isAr ? 'سلبي' : 'Negative'
 }
 
-// Face emoji for a 0-100 sentiment score — sentiments are ALWAYS shown as emojis.
-function getSentimentFaceEmoji(score: number): string {
-  if (score > 60) return '😊'
-  if (score >= 40) return '😐'
-  return '😡'
-}
-
 function timeAgo(dateStr: string | null, isAr: boolean): string {
   if (!dateStr) return ''
   const now = new Date()
@@ -193,9 +186,8 @@ function CircularGauge({ value, size = 100 }: { value: number; size?: number }) 
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-xl leading-none mb-0.5">{getSentimentFaceEmoji(value)}</span>
         <motion.span
-          className="text-xl font-black leading-none"
+          className="text-2xl font-black"
           style={{ color }}
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -203,7 +195,7 @@ function CircularGauge({ value, size = 100 }: { value: number; size?: number }) 
         >
           {Math.round(value)}
         </motion.span>
-        <span className="text-[10px] font-medium text-[#666] dark:text-[#CCCCCC]">/ 100</span>
+        <span className="text-[11px] font-medium text-[#666] dark:text-[#CCCCCC]">/ 100</span>
       </div>
     </div>
   )
@@ -659,13 +651,13 @@ export default function FanPulseTab() {
                 </div>
                 <div className="flex justify-between text-[11px]">
                   <span className="text-[#10B981] font-semibold">
-                    😊 {sentimentSplit.positive}%
+                    {isAr ? 'إيجابي' : 'Pos'} {sentimentSplit.positive}%
                   </span>
                   <span className="text-[#F59E0B] font-semibold">
-                    😐 {sentimentSplit.neutral}%
+                    {isAr ? 'محايد' : 'Neu'} {sentimentSplit.neutral}%
                   </span>
                   <span className="text-[#EF4444] font-semibold">
-                    😡 {sentimentSplit.negative}%
+                    {isAr ? 'سلبي' : 'Neg'} {sentimentSplit.negative}%
                   </span>
                 </div>
               </div>
@@ -724,8 +716,7 @@ export default function FanPulseTab() {
                             )
                           })}
                         </div>
-                        <span className={`flex items-center gap-0.5 text-xs font-bold min-w-[44px] justify-end ${getSentimentTextClass(team.overallSentiment)}`}>
-                          <span className="text-sm leading-none">{getSentimentFaceEmoji(team.overallSentiment)}</span>
+                        <span className={`text-xs font-bold min-w-[28px] text-right ${getSentimentTextClass(team.overallSentiment)}`}>
                           {Math.round(team.overallSentiment)}
                         </span>
                         {isExpanded
@@ -760,8 +751,7 @@ export default function FanPulseTab() {
                                       transition={{ duration: 0.5 }}
                                     />
                                   </div>
-                                  <span className={`flex items-center gap-0.5 font-bold ${getSentimentTextClass(data.avg)}`}>
-                                    <span className="text-xs leading-none">{getSentimentFaceEmoji(data.avg)}</span>
+                                  <span className={`font-bold ${getSentimentTextClass(data.avg)}`}>
                                     {Math.round(data.avg)}
                                   </span>
                                 </div>
@@ -940,8 +930,8 @@ export default function FanPulseTab() {
                               <Share2 className="size-3" />
                               {formatNumber(post.shares)}
                             </span>
-                            <span className={`ml-auto text-[11px] font-semibold ${getSentimentTextClass(post.sentiment)}`} title={getSentimentLabel(post.sentiment, isAr)}>
-                              {getSentimentFaceEmoji(post.sentiment)}
+                            <span className={`ml-auto text-[11px] font-semibold ${getSentimentTextClass(post.sentiment)}`}>
+                              {getSentimentLabel(post.sentiment, isAr)}
                             </span>
                           </div>
                         </CardContent>

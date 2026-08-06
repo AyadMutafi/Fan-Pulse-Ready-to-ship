@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Activity, Play, Star, AlertTriangle,
+  Activity, TrendingUp, TrendingDown, Minus, Play, Star, AlertTriangle,
   Lock, Clock, Zap, Shield, ShieldCheck, CircleDot,
   Sparkles, BarChart3, Users, Timer, Share2, Eye, Flame, Trophy, X, ChevronRight, Check, ArrowLeft,
   MessageCircle, ExternalLink, BadgeCheck
@@ -139,10 +139,9 @@ function getFlag(nationCode: string): string {
 }
 
 function getTrendIcon(trend: string) {
-  // Sentiment trend is always conveyed with an emoji (no bare icon/number).
-  if (trend === 'rising') return <span className="text-[10px] leading-none" title="Rising">📈</span>
-  if (trend === 'falling') return <span className="text-[10px] leading-none" title="Falling">📉</span>
-  return <span className="text-[10px] leading-none" title="Stable">➡️</span>
+  if (trend === 'rising') return <TrendingUp className="size-3 text-[#10B981]" />
+  if (trend === 'falling') return <TrendingDown className="size-3 text-[#EF4444]" />
+  return <Minus className="size-3 text-[#FF6B35]" />
 }
 
 function getSentimentColor(score: number) {
@@ -771,7 +770,9 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                 ? 'bg-[#10B981]/15 text-[#10B981]'
                 : 'bg-[#EF4444]/15 text-[#EF4444]'
             }`}>
-              <span className="text-2xl leading-none">{heroNarrative.isPositive ? '📈' : '📉'}</span>
+              {heroNarrative.isPositive
+                ? <TrendingUp className="size-6" />
+                : <TrendingDown className="size-6" />}
             </div>
 
             {/* Headline + subtext */}
@@ -801,9 +802,15 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                 : 'bg-[#EF4444]/10 text-[#EF4444]'
             }`}>
               {heroNarrative.isPositive ? (
-                <span className="text-sm leading-none">📈</span>
+                <>
+                  <TrendingUp className="size-3.5" />
+                  Rising
+                </>
               ) : (
-                <span className="text-sm leading-none">📉</span>
+                <>
+                  <TrendingDown className="size-3.5" />
+                  Falling
+                </>
               )}
             </div>
           </div>
@@ -1139,12 +1146,10 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                             ? 'bg-[#10B981]/10 text-[#10B981] glass-glow-green'
                             : 'bg-[#EF4444]/10 text-[#EF4444] glass-glow-red'
                         }`}>
-                          <span className="text-[11px] leading-none">
-                            {saga.buzzTrend === 'rising' ? '📈' : saga.buzzTrend === 'falling' ? '📉' : '➡️'}
-                          </span>
-                          <span className="text-[11px] leading-none ml-0.5">
-                            {saga.excitedPct >= saga.dreadingPct ? '🤩' : '😰'}
-                          </span>
+                          {saga.buzzTrend === 'rising' && <TrendingUp className="size-3" />}
+                          {saga.buzzTrend === 'falling' && <TrendingDown className="size-3" />}
+                          {saga.buzzTrend === 'stable' && <Minus className="size-3" />}
+                          {saga.excitedPct >= saga.dreadingPct ? 'Bullish' : 'Bearish'}
                         </div>
                       </div>
 
@@ -1168,18 +1173,18 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                             <div className="bg-[#999]/40" style={{ width: `${neutralPct}%` }} title={`Neutral ${neutralPct.toFixed(0)}%`} />
                           </div>
 
-                          {/* Percentage labels — blurred/hidden until revealed. Sentiment shown as emoji. */}
+                          {/* Percentage labels — blurred/hidden until revealed */}
                           <div className={`mt-1.5 flex items-center gap-2.5 text-[11px] transition-all duration-300 ${!revealed ? 'blur-sm select-none' : ''}`}>
-                            <span className="flex items-center gap-0.5 text-[#10B981]">
-                              <span className="text-[11px] leading-none">🤩</span>
+                            <span className="flex items-center gap-1 text-[#10B981]">
+                              <span className="size-1.5 rounded-full bg-[#10B981]" />
                               <span className="brutalist-number">{saga.excitedPct.toFixed(0)}%</span>
                             </span>
-                            <span className="flex items-center gap-0.5 text-[#F59E0B]">
-                              <span className="text-[11px] leading-none">🤔</span>
+                            <span className="flex items-center gap-1 text-[#F59E0B]">
+                              <span className="size-1.5 rounded-full bg-[#F59E0B]" />
                               <span className="brutalist-number">{saga.skepticalPct.toFixed(0)}%</span>
                             </span>
-                            <span className="flex items-center gap-0.5 text-[#EF4444]">
-                              <span className="text-[11px] leading-none">😰</span>
+                            <span className="flex items-center gap-1 text-[#EF4444]">
+                              <span className="size-1.5 rounded-full bg-[#EF4444]" />
                               <span className="brutalist-number">{saga.dreadingPct.toFixed(0)}%</span>
                             </span>
                           </div>
@@ -1616,16 +1621,11 @@ function SentimentsTab() {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 place-items-center">
               {filtered.map((player, i) => {
                 const cardData = fromSentimentPlayer(player)
-                const moodEmoji = player.label === 'on_fire'
-                  ? '🔥'
+                const labelKey = player.label === 'on_fire'
+                  ? 'sentiments.on_fire'
                   : player.label === 'under_pressure'
-                    ? '😤'
-                    : '😰'
-                const moodTitle = player.label === 'on_fire'
-                  ? t('sentiments.on_fire')
-                  : player.label === 'under_pressure'
-                    ? t('sentiments.under_pressure')
-                    : t('sentiments.crisis')
+                    ? 'sentiments.under_pressure'
+                    : 'sentiments.crisis'
                 return (
                   <motion.div
                     key={player.id}
@@ -1642,8 +1642,8 @@ function SentimentsTab() {
                           style={{ width: `${player.sentiment}%` }}
                         />
                       </div>
-                      <span className="text-base leading-none" title={moodTitle}>
-                        {moodEmoji}
+                      <span className={`text-[10px] font-semibold ${getSentimentColor(player.pulseScore)}`}>
+                        {t(labelKey)}
                       </span>
                     </div>
                   </motion.div>
@@ -2088,22 +2088,31 @@ function FormationPlayerCard({
       className={`flex flex-col items-center ${clickable ? 'cursor-pointer hover:scale-[1.08] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6C2BD9]/60 rounded-md' : ''} transition-transform duration-200`}
       title={clickable ? `View ${player.name} pulse breakdown` : undefined}
     >
-      {/* Player Circle - always shows face emoji */}
-      <div
-        className={`
-          glass-card relative flex size-7 sm:size-8 items-center justify-center rounded-full border-[1.5px] shadow-sm overflow-hidden
-          ${isElite ? 'border-white/70' : 'border-red-500/20'}
-          ${isLive ? 'animate-pulse-glow' : ''}
-          transition-all duration-300
-        `}
-      >
-        <span className="text-xs sm:text-sm leading-none select-none">{faceEmoji}</span>
-        {isLive && (
-          <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-[#EF4444] shadow-sm shadow-[#EF4444]/50 animate-live-pulse" />
-        )}
-        {isCompleted && (
-          <Lock className="absolute -right-0.5 -top-0.5 size-2 text-[#666] dark:text-[#CCCCCC]" />
-        )}
+      {/* Player Circle - always shows face emoji, with a fan-sentiment emoji badge beside it */}
+      <div className="relative">
+        <div
+          className={`
+            glass-card relative flex size-7 sm:size-8 items-center justify-center rounded-full border-[1.5px] shadow-sm overflow-hidden
+            ${isElite ? 'border-white/70' : 'border-red-500/20'}
+            ${isLive ? 'animate-pulse-glow' : ''}
+            transition-all duration-300
+          `}
+        >
+          <span className="text-xs sm:text-sm leading-none select-none">{faceEmoji}</span>
+          {isLive && (
+            <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-[#EF4444] shadow-sm shadow-[#EF4444]/50 animate-live-pulse" />
+          )}
+          {isCompleted && (
+            <Lock className="absolute -right-0.5 -top-0.5 size-2 text-[#666] dark:text-[#CCCCCC]" />
+          )}
+        </div>
+        {/* Fan-sentiment emoji badge — sits beside the player circle (bottom-right) */}
+        <span
+          className="absolute -bottom-1 -right-1 text-[10px] sm:text-xs leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+          title={`Fan sentiment ${Math.round(player.sentiment)}/100`}
+        >
+          {getFanMoodEmoji(player.sentiment)}
+        </span>
       </div>
       {/* Player Name — full name (no truncation); word-break keeps long names visible on the pitch */}
       <p
@@ -2141,21 +2150,19 @@ function FormationPlayerCard({
       {getTrendIcon(player.trend) && (
         <div className="mt-0.5">{getTrendIcon(player.trend)}</div>
       )}
-      {/* R32 movement chip — sentiment trend shown as emoji (stock-ticker feel). Only for live R32 stage. */}
+      {/* R32 movement chip — stock-ticker feel. Only for live R32 stage. */}
       {typeof player.scoreDelta === 'number' && Math.abs(player.scoreDelta) > 1 && (
         <motion.span
           layoutId={`delta-${player.id}`}
           initial={{ opacity: 0, scale: 0.6 }}
           animate={{ opacity: 1, scale: 1 }}
-          className={`flex items-center gap-px text-[7px] sm:text-[8px] font-black px-1 py-px rounded-full leading-tight ${
+          className={`text-[6px] sm:text-[7px] font-black px-1 py-px rounded-full leading-tight ${
             player.scoreDelta > 0
               ? 'bg-[#10B981] text-white'
               : 'bg-[#EF4444] text-white'
           }`}
-          title={player.scoreDelta > 0 ? `Surging +${Math.abs(player.scoreDelta).toFixed(0)}` : `Dropping -${Math.abs(player.scoreDelta).toFixed(0)}`}
         >
-          <span className="leading-none">{player.scoreDelta > 0 ? '📈' : '📉'}</span>
-          {Math.abs(player.scoreDelta).toFixed(0)}
+          {player.scoreDelta > 0 ? '↑' : '↓'}{Math.abs(player.scoreDelta).toFixed(0)}
         </motion.span>
       )}
     </motion.div>
@@ -2604,7 +2611,7 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
                         .slice(0, 5)
                       if (movers.length === 0) return null
                       const items = movers.map((p) =>
-                        `${p.name} ${p.scoreDelta! > 0 ? '📈' : '📉'}${Math.abs(p.scoreDelta!).toFixed(0)}`
+                        `${p.name} ${p.scoreDelta! > 0 ? '↑' : '↓'}${Math.abs(p.scoreDelta!).toFixed(0)}`
                       ).join(' · ')
                       return (
                         <div
@@ -2655,20 +2662,16 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
               transition={{ delay: 0.4 }}
               className="grid grid-cols-2 gap-3 sm:grid-cols-4"
             >
-              {([
-                { label: t('wc.elite_avg'), value: (eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length / 10).toFixed(1), icon: null, color: 'text-[#6C2BD9]', emoji: '🤩', glow: 'glass-glow-purple' },
-                { label: t('wc.crisis_avg'), value: (crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length / 10).toFixed(1), icon: null, color: 'text-[#EF4444]', emoji: '😟', glow: 'glass-glow-red' },
+              {[
+                { label: t('wc.elite_avg'), value: (eliteData.players.reduce((a, p) => a + p.pulseScore, 0) / eliteData.players.length / 10).toFixed(1), icon: TrendingUp, color: 'text-[#6C2BD9]', emoji: '🤩', glow: 'glass-glow-purple' },
+                { label: t('wc.crisis_avg'), value: (crisisData.players.reduce((a, p) => a + p.pulseScore, 0) / crisisData.players.length / 10).toFixed(1), icon: TrendingDown, color: 'text-[#EF4444]', emoji: '😟', glow: 'glass-glow-red' },
                 { label: t('wc.live_players'), value: [...eliteData.players, ...crisisData.players].filter(p => p.isLive).length, icon: Activity, color: 'text-[#FF6B35]', emoji: '', glow: '' },
                 { label: t('wc.total_votes'), value: totalVotes.toLocaleString(), icon: Users, color: 'text-[#1A1A1A] dark:text-white', emoji: '', glow: '' },
-              ] as Array<{ label: string; value: string | number; icon: typeof Activity | null; color: string; emoji: string; glow: string }>).map((stat, i) => (
+              ].map((stat, i) => (
                 <Card key={i} className={`glass-card glass-hover ${stat.glow} border-[#E0E0E0]/50 dark:border-white/5 shadow-[0_2px_4px_rgba(0,0,0,0.05)] dark:shadow-none`}>
                   <CardContent className="p-3 text-center">
-                    {stat.emoji ? (
-                      <span className="mx-auto mb-1.5 text-lg leading-none">{stat.emoji}</span>
-                    ) : stat.icon ? (
-                      <stat.icon className={`mx-auto size-4 mb-1.5 ${stat.color}`} />
-                    ) : null}
-                    <p className={`brutalist-number text-lg font-black ${stat.color}`}>{stat.value}</p>
+                    <stat.icon className={`mx-auto size-4 mb-1.5 ${stat.color}`} />
+                    <p className={`brutalist-number text-lg font-black ${stat.color}`}>{stat.emoji} {stat.value}</p>
                     <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">{stat.label}</p>
                   </CardContent>
                 </Card>
