@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useEffect } from 'react'
+import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { TrendingUp, TrendingDown, Minus, Share2, RotateCcw, BadgeCheck } from 'lucide-react'
 import { CARD_TIERS } from '@/lib/player-card-tiers'
 import { PULSE_FORMULA, type PlayerCardData } from '@/lib/player-card-data'
 import { findNationalTeam } from '@/lib/national-teams'
+import { usePlayerPhoto, usePlayerPhotoLoading } from '@/hooks/usePlayerPhoto'
 import FlagImage from '@/components/common/FlagImage'
 import { toast } from 'sonner'
 
@@ -29,17 +31,44 @@ const SIZE_DIMS: Record<PlayerCardSize, { w: number; h: number }> = {
 
 export default function PlayerCard({ data, size = 'full', onView, onShare, className }: PlayerCardProps) {
   const [flipped, setFlipped] = useState(false)
+  const [photoLoaded, setPhotoLoaded] = useState(false)
   const tier = CARD_TIERS[data.tier]
   const team = findNationalTeam(data.nationCode)
   const flagEmoji = team?.flag ?? '🏳️'
   const dims = SIZE_DIMS[size]
 
-  // Emoji + label sizes scale with card size
-  const emojiSize = size === 'full' ? 48 : 32
+  // ── On-demand Wikipedia photo fetching ─────────────────────────────────
+  // When data.photoUrl is set (from the DB via the API), the hook's fast
+  // path activates and returns it immediately — no network call.
+  // When data.photoUrl is null/undefined (static-data players like Ballon
+  // d'Or / Tournament Retro), the hook fetches from /api/player-photo on
+  // first render and caches in localStorage so subsequent renders are instant.
+  const onDemandPhotoUrl = usePlayerPhoto(data.name, data.photoUrl)
+  const onDemandLoading = usePlayerPhotoLoading(data.name, data.photoUrl)
+
+  // When the on-demand fetch resolves a NEW photo URL, we need to reset
+  // photoLoaded so the skeleton shows again until the new image's onLoad
+  // fires (otherwise the old fallback stays visible during the swap).
+  useEffect(() => {
+    if (!onDemandLoading) {
+      // The hook resolved. If the resolved URL differs from what the <Image>
+      // currently shows, reset photoLoaded so the shimmer returns briefly.
+      setPhotoLoaded(false)
+    }
+  }, [onDemandLoading, onDemandPhotoUrl])
+
+  // Photo + tier emoji sizes scale with card size.
+  // Photo: 80px circular on full, 48px on compact (per spec).
+  // Tier emoji: 24px on full, 16px on compact (moved to top-right corner).
+  const photoSize = size === 'full' ? 80 : 48
+  const tierEmojiSize = size === 'full' ? 24 : 16
   const scoreSize = size === 'full' ? 48 : 32
   const labelSize = size === 'full' ? 'text-[11px]' : 'text-[8px]'
   const nameSize = size === 'full' ? 'text-[20px]' : 'text-[14px]'
   const clubSize = size === 'full' ? 'text-[11px]' : 'text-[8px]'
+
+  const photoSrc = onDemandPhotoUrl
+  const isWikipediaPhoto = photoSrc.startsWith('https://upload.wikimedia.org/')
 
   const handleFlip = useCallback(() => {
     setFlipped((f) => {
@@ -144,25 +173,82 @@ export default function PlayerCard({ data, size = 'full', onView, onShare, class
             style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 40%, transparent 60%, rgba(0,0,0,0.05) 100%)' }}
           />
 
-          {/* Top: tier emoji (HERO) + label */}
-          <div className="relative flex flex-col items-center pt-3" style={{ paddingTop: size === 'full' ? 14 : 10 }}>
-            <span style={{ fontSize: emojiSize, lineHeight: 1 }} className="drop-shadow-sm select-none">
+          {/* Tier emoji — TOP-RIGHT corner (smaller, overlays photo slightly) */}
+          <div
+            className="absolute z-20 flex items-center justify-center rounded-full bg-black/30 dark:bg-white/20 backdrop-blur-sm"
+            style={{
+              top: size === 'full' ? 8 : 6,
+              right: size === 'full' ? 8 : 6,
+              width: tierEmojiSize + 8,
+              height: tierEmojiSize + 8,
+            }}
+            aria-hidden
+          >
+            <span style={{ fontSize: tierEmojiSize, lineHeight: 1 }} className="select-none drop-shadow-sm">
               {tier.emoji}
             </span>
+          </div>
+
+          {/* Tier label — top-left small (kept for context, doesn't compete with photo) */}
+          <div className="absolute top-2 left-2 z-10">
             <span
-              className={`brutalist-number ${labelSize} font-black tracking-[0.15em] mt-1`}
-              style={{ color: tier.accent }}
+              className={`brutalist-number ${labelSize} font-black tracking-[0.12em]`}
+              style={{ color: tier.accent, textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}
             >
               {tier.label}
             </span>
             {data.isAwardWinner && data.awardName && (
-              <span className={`mt-0.5 ${size === 'full' ? 'text-[9px]' : 'text-[7px]'} font-bold text-[#F59E0B] text-center px-2 leading-tight`}>
+              <span className={`mt-0.5 block ${size === 'full' ? 'text-[8px]' : 'text-[6px]'} font-bold text-[#F59E0B] leading-tight`} style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
                 {data.awardName}
               </span>
             )}
           </div>
 
-          {/* Center: player name */}
+          {/* Center-top: PLAYER PHOTO (circular, replaces the giant emoji) */}
+          <div
+            className="relative flex justify-center"
+            style={{ paddingTop: size === 'full' ? 28 : 20 }}
+          >
+            <div
+              className="relative rounded-full overflow-hidden"
+              style={{
+                width: photoSize,
+                height: photoSize,
+                boxShadow: `0 0 0 3px ${tier.glow}, 0 4px 12px rgba(0,0,0,0.25)`,
+                background: 'linear-gradient(135deg, rgba(108,43,217,0.15), rgba(139,92,246,0.15))',
+              }}
+            >
+              {/* Skeleton shimmer — shows until the photo loads (either from
+                  the on-demand hook OR the <Image> onLoad). Same size as the
+                  photo so there's NO layout shift when it swaps in. */}
+              {(onDemandLoading || !photoLoaded) && (
+                <div
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    background: 'linear-gradient(90deg, rgba(108,43,217,0.12) 0%, rgba(139,92,246,0.25) 50%, rgba(108,43,217,0.12) 100%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.4s ease-in-out infinite',
+                  }}
+                  aria-hidden
+                />
+              )}
+              <Image
+                src={photoSrc}
+                alt={`${data.name} — player photo${isWikipediaPhoto ? '' : ' (initials fallback)'}`}
+                fill
+                unoptimized
+                className="rounded-full object-cover"
+                style={{
+                  opacity: photoLoaded ? 1 : 0,
+                  transition: 'opacity 200ms ease-in-out',
+                }}
+                onLoad={() => setPhotoLoaded(true)}
+                onError={() => setPhotoLoaded(true)}
+              />
+            </div>
+          </div>
+
+          {/* Center: player name + flag + position */}
           <div className="relative flex flex-col items-center px-2 mt-2">
             <p
               className={`font-extrabold text-center leading-tight text-[#1A1A1A] dark:text-white ${nameSize}`}
@@ -230,7 +316,7 @@ export default function PlayerCard({ data, size = 'full', onView, onShare, class
         >
           <div className="absolute inset-0 pointer-events-none" style={{ background: tier.tint }} />
 
-          {/* Back header */}
+          {/* Back header — tier emoji stays visible on the back too */}
           <div className="relative flex items-center justify-between mb-2">
             <span className={`brutalist-number ${size === 'full' ? 'text-[11px]' : 'text-[8px]'} font-black tracking-wider`} style={{ color: tier.accent }}>
               {tier.emoji} {tier.label}
@@ -281,6 +367,15 @@ export default function PlayerCard({ data, size = 'full', onView, onShare, class
           </div>
         </div>
       </motion.div>
+
+      {/* Shimmer keyframes — injected once per card. Cheap because React
+          dedupes the <style> tag by id across renders. */}
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+      `}</style>
     </div>
   )
 }

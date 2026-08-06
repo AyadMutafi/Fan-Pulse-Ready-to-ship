@@ -63,6 +63,11 @@ model WCSelectionPlayer {
   isLive             Boolean  @default(false)
   matchInfo          String?  // e.g. "BRA vs ARG 2-1"
   order              Int      @default(0) // position in formation
+  /// Wikipedia/CC-BY-SA thumbnail URL for the player. NULL when no Wikipedia
+  /// photo exists (the UI renders a graceful initials-on-purple fallback).
+  /// Always starts with https://upload.wikimedia.org/ when set — never a
+  /// Google Image scrape or unlicensed source. See src/lib/wikipedia-photo.ts.
+  photoUrl           String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   pulseBreakdown PulseBreakdown?
@@ -456,6 +461,10 @@ model TransferSaga {
   /// NULL for active sagas. Surfaced in the detail modal so users can click
   /// through to the source that resolved the rumor.
   resolutionUrl       String?
+  /// Wikipedia/CC-BY-SA thumbnail URL for the transfer TARGET player. NULL
+  /// when no Wikipedia photo exists (UI shows initials fallback). Always
+  /// https://upload.wikimedia.org/ when set. See src/lib/wikipedia-photo.ts.
+  playerPhotoUrl      String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

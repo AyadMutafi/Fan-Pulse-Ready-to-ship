@@ -70,6 +70,14 @@ export interface PlayerCardData {
   source: string
   /** Verified fan-sentiment value (0-100) when available — shown on card back. */
   fanSentiment?: number
+  /**
+   * Wikipedia/CC-BY-SA photo URL for the player (always
+   * https://upload.wikimedia.org/... when set). NULL/undefined → the card
+   * renders a graceful initials-on-purple fallback avatar via
+   * getFallbackAvatar(). NEVER a Google Images scrape or unlicensed source.
+   * See src/lib/wikipedia-photo.ts.
+   */
+  photoUrl?: string | null
 }
 
 /** Build a PlayerCardData from a VERIFIED_ELITE_XI / VERIFIED_CRISIS_XI pick. */
@@ -145,6 +153,7 @@ export function fromSentimentPlayer(p: SentimentPlayer): PlayerCardData {
     verifiedNote: `Sentiment label: ${p.label.replace(/_/g, ' ')} · League: ${p.league}`,
     source: 'Match Sentiments',
     fanSentiment: p.sentiment,
+    photoUrl: p.photoUrl ?? null,
   }
 }
 
@@ -180,6 +189,7 @@ export function fromTransferSaga(saga: TransferSagaSummary): PlayerCardData {
     tier: getCardTier(score, trend, false, isYoungBreakout),
     verifiedNote: note,
     source: 'Transfer Pulse',
+    photoUrl: saga.playerPhotoUrl ?? null,
   }
 }
 

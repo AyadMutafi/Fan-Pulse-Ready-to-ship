@@ -51,6 +51,8 @@ export async function GET(request: NextRequest) {
           previousPulseScore: p.previousPulseScore,
           scoreDelta: Math.round((p.pulseScore - p.previousPulseScore) * 10) / 10,
           lastBuzzRefreshAt: p.lastBuzzRefreshAt ? p.lastBuzzRefreshAt.toISOString() : null,
+          // Wikipedia/CC-BY-SA photo URL (NULL → pitch card shows flag/emoji fallback)
+          photoUrl: p.photoUrl,
         })),
       }
     }

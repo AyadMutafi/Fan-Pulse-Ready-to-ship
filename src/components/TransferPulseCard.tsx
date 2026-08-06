@@ -24,6 +24,13 @@ export interface TransferSagaSummary {
   lastUpdatedAt: string
   resolvedAt: string | null
   resolutionUrl: string | null
+  /**
+   * Wikipedia/CC-BY-SA photo URL for the transfer TARGET player
+   * (https://upload.wikimedia.org/...). NULL when no photo exists — the
+   * card renders an initials fallback. Populated by the admin
+   * /api/fetch-player-photos batch endpoint.
+   */
+  playerPhotoUrl?: string | null
   topSources: {
     journalistName: string
     journalistHandle: string

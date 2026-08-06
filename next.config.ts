@@ -31,7 +31,10 @@ const cspHeader = [
   // 'unsafe-eval' kept in dev for Turbopack HMR; removed in prod (no eval usage).
   "script-src 'self' 'unsafe-inline'" + (isProd ? '' : " 'unsafe-eval'") + " https://cloud.umami.is",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' https://flagcdn.com data:",
+  // Wikipedia (upload.wikimedia.org) hosts all player photos under CC-BY-SA.
+  // ui-avatars.com generates the initials-on-purple fallback avatars.
+  // flagcdn.com hosts national flag images. data: for inline unoptimized.
+  "img-src 'self' https://flagcdn.com https://upload.wikimedia.org https://ui-avatars.com data:",
   "font-src 'self' data:",
   "connect-src 'self' https://cloud.umami.is",
   // Production: 'self' only (clickjacking protection).
@@ -117,6 +120,18 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'flagcdn.com',
+      },
+      // Wikipedia / Wikimedia Commons — CC-BY-SA licensed player photos.
+      // All photoUrl values stored in the DB come from this hostname.
+      {
+        protocol: 'https',
+        hostname: 'upload.wikimedia.org',
+      },
+      // UI Avatars — generates the initials-on-purple fallback avatar when
+      // a player has no Wikipedia photo. Free, no API key required.
+      {
+        protocol: 'https',
+        hostname: 'ui-avatars.com',
       },
     ],
   },

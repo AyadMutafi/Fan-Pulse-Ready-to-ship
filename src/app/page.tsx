@@ -360,6 +360,9 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
       tier: getCardTier(score, trend, false, isYoungBreakout),
       verifiedNote: topSrc ? `${topSrc.journalistName} (${topSrc.outlet})` : `Fan-read ${s.fanReadLikelihood}%`,
       source: 'Transfer Pulse',
+      // Wikipedia/CC-BY-SA photo URL for the transfer target player.
+      // NULL when no photo → PlayerCard shows initials-on-purple fallback.
+      photoUrl: s.playerPhotoUrl ?? null,
     }
   }
   const { t } = useLanguage()
@@ -3042,12 +3045,28 @@ export default function Home() {
             </AnimatePresence>
           </main>
 
+          {/* Mobile-only Wikipedia attribution — the desktop footer below
+              has the full attribution, but on mobile the footer is hidden
+              (the fixed bottom nav replaces it). This tiny line sits at the
+              bottom of the scrollable content so the CC-BY-SA legal notice
+              is still visible when a mobile user scrolls to the end. */}
+          <div className="md:hidden px-4 py-2 text-center text-[10px] text-[#999] dark:text-[#777] border-t border-[#E0E0E0] dark:border-white/10" title="Player photos sourced from Wikipedia/Wikimedia Commons under Creative Commons CC-BY-SA license">
+            Player photos: Wikipedia/CC-BY-SA
+          </div>
+
           {/* Desktop footer — sticky to bottom via mt-auto in the flex-col.
               Hidden on mobile where the fixed bottom nav serves as the footer.
               Includes text links for About · Privacy · GitHub (placeholder # for now). */}
           <footer className="hidden md:flex mt-auto border-t border-[#E0E0E0] dark:border-white/10 px-4 py-3 items-center justify-between text-[11px] text-[#666] dark:text-[#999]">
             <span>Fan Pulse © 2026 · World Cup 2026 Real-Time Fan Sentiment Dashboard</span>
             <nav aria-label="Footer" className="flex items-center gap-1">
+              {/* Legal attribution — required for Creative Commons images.
+                  All player photos are from Wikipedia/Wikimedia Commons under
+                  CC-BY-SA. See src/lib/wikipedia-photo.ts for the source contract. */}
+              <span className="px-2 py-0.5 text-[10px] text-[#999] dark:text-[#777]" title="Player photos sourced from Wikipedia/Wikimedia Commons under Creative Commons CC-BY-SA license">
+                Photos: Wikipedia/CC-BY-SA
+              </span>
+              <span aria-hidden="true" className="text-[#E0E0E0] dark:text-white/20">·</span>
               <a
                 href="#"
                 className="px-2 py-0.5 rounded hover:text-[#6C2BD9] dark:hover:text-[#8B5CF6] transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"

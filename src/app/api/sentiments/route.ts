@@ -32,6 +32,10 @@ export async function GET(request: NextRequest) {
         trend: p.trend,
         league: 'WC', // All from World Cup
         label: p.pulseScore >= 80 ? 'on_fire' : p.pulseScore >= 50 ? 'under_pressure' : 'crisis',
+        position: p.position,
+        // Wikipedia/CC-BY-SA photo URL (NULL when no photo → UI shows initials fallback).
+        // Always https://upload.wikimedia.org/ when set. See src/lib/wikipedia-photo.ts.
+        photoUrl: p.photoUrl,
       }))
 
     return NextResponse.json({ players: result })

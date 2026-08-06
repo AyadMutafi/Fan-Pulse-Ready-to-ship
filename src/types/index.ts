@@ -96,6 +96,12 @@ export interface Player {
   previousPulseScore?: number
   scoreDelta?: number
   lastBuzzRefreshAt?: string | null
+  /**
+   * Wikipedia/CC-BY-SA photo URL (https://upload.wikimedia.org/...). NULL
+   * when no photo exists — the pitch card renders a flag/face-emoji fallback.
+   * See src/lib/wikipedia-photo.ts.
+   */
+  photoUrl?: string | null
 }
 
 // ── Elite/Crisis Selection ────────────────────────────────
@@ -161,6 +167,15 @@ export interface SentimentPlayer {
   trend: Trend
   league: string
   label: SentimentLabel
+  /** Position code (e.g. "LW") when known; the card shows '—' otherwise. */
+  position?: string
+  /**
+   * Wikipedia/CC-BY-SA photo URL (https://upload.wikimedia.org/...). NULL
+   * when no photo exists — the card renders an initials fallback. The
+   * on-demand usePlayerPhoto hook fetches it lazily for players whose DB
+   * row doesn't have one yet.
+   */
+  photoUrl?: string | null
 }
 
 // ── Fan Rating ────────────────────────────────────────────

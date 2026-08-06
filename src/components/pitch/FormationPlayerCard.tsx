@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +11,7 @@ import FlagImage from '@/components/common/FlagImage'
 import { TrendIcon } from '@/components/common/TrendIcon'
 import type { Player, SelectionType, StageStatus, Position } from '@/types'
 import { getPulseFaceEmoji, getRatingColor } from '@/types'
+import { getFallbackAvatar } from '@/lib/wikipedia-photo'
 
 interface FormationPlayerCardProps {
   player: Player
@@ -26,6 +29,21 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
   const isLive = player.isLive && stageStatus === 'live'
   const isCompleted = stageStatus === 'completed'
 
+  // Photo resolution: prefer the player's Wikipedia photo (CC-BY-SA) when
+  // available. Fall back to the initials-on-purple avatar ONLY when the
+  // player has no Wikipedia photo AND the flag-mode is not 'flag' (so the
+  // pitch still shows national flags when the user prefers flags).
+  //
+  // When the user has flag-mode ON, we show the flag in the circle (the
+  // original behavior) and DON'T override it with a photo — flags are the
+  // user's explicit preference. Photos show in flag-mode 'face' or 'auto'.
+  const hasWikiPhoto = !!player.photoUrl && player.photoUrl.startsWith('https://upload.wikimedia.org/')
+  const showPhoto = hasWikiPhoto && flagMode !== 'flag'
+  const photoSrc = showPhoto
+    ? (player.photoUrl as string)
+    : getFallbackAvatar(player.name)
+  const [photoLoaded, setPhotoLoaded] = useState(false)
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.85 }}
@@ -42,7 +60,36 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
           transition-all duration-300 hover:scale-110
         `}
       >
-        {flagMode === 'flag' ? (
+        {showPhoto ? (
+          <>
+            {/* Skeleton shimmer while the photo loads — same size as the
+                circle so there's NO layout shift when it fades in. */}
+            {!photoLoaded && (
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: 'linear-gradient(90deg, rgba(108,43,217,0.12) 0%, rgba(139,92,246,0.25) 50%, rgba(108,43,217,0.12) 100%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.4s ease-in-out infinite',
+                }}
+                aria-hidden
+              />
+            )}
+            <Image
+              src={photoSrc}
+              alt={`${player.name} — player photo`}
+              fill
+              unoptimized
+              className="object-cover rounded-full"
+              style={{
+                opacity: photoLoaded ? 1 : 0,
+                transition: 'opacity 200ms ease-in-out',
+              }}
+              onLoad={() => setPhotoLoaded(true)}
+              onError={() => setPhotoLoaded(true)}
+            />
+          </>
+        ) : flagMode === 'flag' ? (
           <FlagImage nationCode={player.nationCode} size={36} fallbackEmoji={flagEmoji} />
         ) : (
           <span className="text-lg sm:text-xl leading-none">{faceEmoji}</span>
@@ -86,6 +133,12 @@ export default function FormationPlayerCard({ player, type, stageStatus }: Forma
           {player.matchInfo}
         </p>
       )}
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+      `}</style>
     </motion.div>
   )
 }

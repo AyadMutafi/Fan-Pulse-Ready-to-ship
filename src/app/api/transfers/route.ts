@@ -115,6 +115,10 @@ export async function GET(request: NextRequest) {
           resolvedAt: s.resolvedAt,
           // Anti-hallucination: null-out resolutionUrl if fabricated
           resolutionUrl: sanitizeXPostUrl(s.resolutionUrl),
+          // Wikipedia/CC-BY-SA photo URL for the transfer TARGET player.
+          // NULL when no photo → UI shows initials fallback.
+          // Always https://upload.wikimedia.org/ when set.
+          playerPhotoUrl: s.playerPhotoUrl,
           topSources: s.sources.map((src, i) => ({
             journalistName: src.journalistName,
             journalistHandle: src.journalistHandle,
