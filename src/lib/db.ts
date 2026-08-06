@@ -82,7 +82,7 @@ async function applySqliteConcurrencyPragmas(client: PrismaClient): Promise<void
  * creates a fresh client on demand.
  */
 export function getDb(): PrismaClient {
-  if (typeof (db as unknown as { socialPost?: unknown }).socialPost !== 'undefined') {
+  if (typeof (db as unknown as { fPLPlayer?: unknown }).fPLPlayer !== 'undefined') {
     return db
   }
   console.log('[db] cached PrismaClient missing models — creating fresh client')

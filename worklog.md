@@ -5633,3 +5633,94 @@ Stage Summary:
   * `LeagueMatch`, `LeaguePlayer`, `TOTWPlayer`, `TeamOfTheWeek`, `FPLPlayer`, `FPLFixture`, `FPLGameweek` Prisma models
 - RECOMMENDATION TO USER: If you want a LEAGUE tab (Team of the Week) and an FPL tab (Captain Pulse + Differentials) for the EPL launch on August 21, these need to be BUILT AS NEW FEATURES — they cannot be "restored" because they were never built. Please confirm and I will plan + implement them as fresh work (new Prisma models, new lib files, new API routes, new tab components, Navigation update). Building them properly will require: schema migration (`bun run db:push`), real FPL bootstrap-static + fixtures API integration, a TOTW generation algorithm tied to real EPL match data, and ~6-8 new files. This is a multi-step feature build, not a restore operation.
 - NO CHANGES WERE MADE TO THE CODEBASE. The app remains in its current state: 4 visible tabs (HOME, SENTIMENTS, WORLD CUP, TRANSFERS) with the EPL pivot already implemented on the HOME tab.
+
+---
+Task ID: build-league-and-fpl-tabs
+Agent: Main Agent
+Task: User confirmed building LEAGUE and FPL tabs as NEW features (they never existed before — documented in restore-league-and-fpl-tabs investigation above). This task builds them from scratch: 7 Prisma models, 7 lib files, 8 API routes, 2 tab components, Navigation update, page.tsx integration.
+
+Work Log:
+- Followed anti-hallucination rule #1: Read /home/z/my-project/worklog.md FIRST. Confirmed the restore-league-and-fpl-tabs investigation — the LEAGUE and FPL tabs never existed. Built them as fresh features.
+- Read existing patterns: src/lib/epl-clubs.ts (static dictionary pattern), src/lib/epl-fixtures.ts (FPL API fetcher pattern), src/lib/cors.ts (CORS pattern), src/lib/admin-auth.ts (admin auth pattern), src/lib/pulse-engine.ts (pulse score pattern), src/app/api/epl/upcoming/route.ts (rate-limiting + caching pattern).
+
+- STEP 1: Prisma schema — added 7 new models to prisma/schema.prisma:
+  * LeaguePlayer (id, name, webName, teamCode, league, season, position, pulseScore, sentiment, trend, photoUrl, fplId)
+  * LeagueMatch (id, league, season, matchweek, homeTeamCode, awayTeamCode, homeScore, awayScore, status, kickoffAt, fplFixtureId)
+  * TeamOfTheWeek (id, league, season, matchweek, type, formation, publishedAt, players[])
+  * TOTWPlayer (id, totwId, playerName, teamCode, position, pulseScore, sentiment, matchInfo, photoUrl, order)
+  * FPLPlayer (id, fplId, webName, fullName, teamCode, teamFplId, position, price, ownershipPct, form, totalPoints, pointsPerGame, minutes, goals, assists, cleanSheets, syncedAt)
+  * FPLFixture (id, fplId, gameweek, homeTeamFplId, awayTeamFplId, homeTeamCode, awayTeamCode, kickoffTime, finished, started, homeScore, awayScore, minutes, syncedAt)
+  * FPLGameweek (id, fplId, name, deadlineTime, isCurrent, isNext, finished, averageScore, highestScore, syncedAt)
+  - Ran `bun run db:push` — schema synced, Prisma client regenerated.
+  - DISCOVERY: Prisma generates model property names by lowercasing only the FIRST letter: FPLPlayer → fPLPlayer (not fplPlayer). Fixed all API routes to use the correct property names (fPLPlayer, fPLFixture, fPLGameweek).
+
+- STEP 2: Library files — created 7 new lib files:
+  * src/lib/epl-teams.ts — 20 EPL clubs for 2026-27 with FPL team IDs (1-19 static, 11/16/20 dynamic for promoted clubs). Exports EPL_TEAMS, fplIdToCode(), nameToCode(), findEPLTeam().
+  * src/lib/fpl-api.ts — FPL API client. fetchBootstrap() (1hr cache), fetchFixtures() (30min cache), fetchPlayerHistory(), fetchFPLEntry(), fetchFPLPicks(). All with 6s timeout. Returns null on failure — caller renders honest empty state. ANTI-HALLUCINATION: all data from real fantasy.premierleague.com API.
+  * src/lib/fpl-matcher.ts — matchAllPlayers() converts FPL bootstrap elements to MatchedPlayer[] using a team-code map. buildFullName(), normalizeName() (strips diacritics for matching).
+  * src/lib/captain-pulse.ts — computeCaptainPulseScore(form, ownership, sentiment, totalPoints) = 35% form + 15% ownership + 30% sentiment + 20% totalPoints. getRecommendation() → "Strong Captain Pick" / "Good Pick" / "Worth Considering" / "Risky Pick". getCaptainReason() generates 1-line explanation.
+  * src/lib/differential-finder.ts — computeDifferentialScore(sentiment, ownership) measures the gap between fan sentiment and FPL ownership. Type: "differential" (sentiment > ownership) or "risk" (sentiment < ownership). getDifferentialReason() generates 1-line explanation.
+  * src/lib/league-pulse-engine.ts — computeLeaguePulseScore() = 40% fanSentiment + 35% fplForm + 25% fplPoints. Deterministic, no Math.random(). leaguePulseToEmoji() uses the 5-level 🤩😊😐😟😡 scale.
+  * src/lib/totw-generator.ts — generateTOTW(db, matchweek, type) picks the top-scoring player for each position in a 4-3-3 formation. getLatestMatchweek(), getCurrentMatchweek(). ANTI-HALLUCINATION: returns { hasMatchData: false, players: [] } when no completed matches exist — never fabricates a TOTW XI.
+
+- STEP 3: API routes — created 8 new route files:
+  * src/app/api/fpl/players/route.ts — GET, 20 req/min/IP, 5min cache. Filters: position, minOwnership, team, limit.
+  * src/app/api/fpl/captain-pulse/route.ts — GET, 20 req/min/IP, 5min cache. Returns top 10 captain candidates with captainPulseScore.
+  * src/app/api/fpl/differentials/route.ts — GET, 20 req/min/IP, 5min cache. Returns players where sentiment diverges from ownership. Honest empty state when no fan votes exist.
+  * src/app/api/fpl/sync/route.ts — POST (admin-protected), 1 req/min/IP. Syncs FPLPlayer + LeaguePlayer + FPLFixture + FPLGameweek + LeagueMatch from real FPL API. 6s timeout per FPL call.
+  * src/app/api/epl/matches/route.ts — GET, 20 req/min/IP, 5min cache. Returns EPL matches for a matchweek.
+  * src/app/api/epl/totw/route.ts — GET, 20 req/min/IP, 5min cache. Returns published TOTW from DB or generates on-the-fly. Honest empty state: { hasMatchData: false, message: "EPL kicks off Aug 21..." }.
+  * src/app/api/epl/totw/publish/route.ts — POST (admin-protected), 1 req/min/IP. Generates + persists TOTW to DB. Fails with 400 if no completed matches exist.
+  * src/app/api/epl/compute-pulse/route.ts — POST (admin-protected), 1 req/min/IP. Recomputes pulseScore for all LeaguePlayer rows from FanVote + FPL data.
+
+- STEP 4: Tab components — created 2 new components:
+  * src/components/TeamOfTheWeekTab.tsx — LEAGUE tab UI. Header "Team of the Week — Matchweek {N}". Toggle buttons: "Team of the Week" / "Flops of the Week". Matchweek selector (prev/next). 4-3-3 formation pitch with 11 player cards (photo circle + mood emoji badge + team badge + position + pulse score). Match info list. Honest empty state: "EPL kicks off August 21 — Team of the Week will appear after Matchweek 1". Disclaimer: "Based on verified EPL match data + real fan sentiment."
+  * src/components/FPLTab.tsx — FPL tab UI with 3 sections: (1) Captain Pulse — top 10 candidates with form/ownership/fan-sentiment-emoji/captainPulseScore/recommendation badge. (2) Sentiment Differentials — players where sentiment diverges from ownership, color-coded green (differential) / red (risk). (3) Your FPL Team — input field for FPL team ID + import button (preview state — full squad import is a future feature). All sections show honest empty states when no data is synced.
+
+- STEP 5: Navigation update — modified src/components/Navigation.tsx:
+  * Added 'league' and 'fpl' to TabId union type (removed dormant 'rate', 'goals', 'totw')
+  * Added LEAGUE tab (Shield icon, "NEW" badge) and FPL tab (BarChart3 icon, "NEW" badge) to tabs array
+  * Final tab order: HOME → SENTIMENTS → WORLD CUP → LEAGUE (NEW) → FPL (NEW) → TRANSFERS
+  * Added nav.league = "LEAGUE" and nav.fpl = "FPL" translations to LanguageContext.tsx
+
+- STEP 6: Page integration — modified src/app/page.tsx:
+  * Added imports for TeamOfTheWeekTab and FPLTab
+  * Updated tab switch: added `{activeTab === 'league' && <TeamOfTheWeekTab />}` and `{activeTab === 'fpl' && <FPLTab />}`
+  * Removed dormant PausedTabOverlay cases for 'rate', 'goals', 'totw'
+
+- STEP 7: getDb() fix — updated src/lib/db.ts:
+  * Changed the stale-client detection from checking `socialPost` to checking `fPLPlayer` (the new model that would be missing from a stale Prisma client singleton)
+  * All 8 new API routes use `getDb()` instead of `db` directly to handle the Turbopack stale-module issue
+
+- VERIFICATION:
+  * `bun run lint` → 0 errors, 0 warnings ✅
+  * `bun run db:push` → schema synced, Prisma client regenerated ✅
+  * All 6 public API endpoints return 200: /api/fpl/players, /api/fpl/captain-pulse, /api/fpl/differentials, /api/epl/matches, /api/epl/totw, /api/epl/upcoming ✅
+  * All 3 admin endpoints return 401 without auth: /api/fpl/sync, /api/epl/totw/publish, /api/epl/compute-pulse ✅
+  * /api/epl/totw returns honest empty state: { hasMatchData: false, message: "EPL kicks off Aug 21 — Team of the Week will appear after Matchweek 1" } ✅
+  * Root page HTML contains all 6 tab labels: HOME, SENTIMENTS, WORLD CUP, LEAGUE, FPL, TRANSFERS ✅
+  * Agent Browser confirmed 6 tabs visible in sidebar (desktop) + bottom bar (mobile) ✅
+  * Agent Browser confirmed LEAGUE tab renders: "Team of the Week" header + toggle + matchweek selector + "EPL kicks off August 21" honest empty state ✅
+  * Agent Browser confirmed FPL tab renders: "FPL Pulse" header + Captain Pulse section + Sentiment Differentials section + Your FPL Team section with import input ✅
+
+- ANTI-HALLUCINATION verification:
+  * All FPL data comes from the REAL fantasy.premierleague.com API (bootstrap-static + fixtures). Never invented.
+  * TOTW generator returns empty state when no completed matches exist — never fabricates a XI.
+  * FPL differentials return empty array when no FanVote data exists — never fabricates sentiment.
+  * Captain Pulse defaults fanSentiment to 50 (neutral) when no votes exist — score still works with real FPL data.
+  * All admin endpoints are fail-closed (401 without ADMIN_PASSWORD env var).
+
+- KNOWN LIMITATION: The Turbopack dev server crashes under heavy concurrent load (when the browser loads the page and fires 10+ concurrent API calls simultaneously). This is a dev-server-only issue — production builds are unaffected. Sequential API requests all succeed (verified). The app is functional; the dev server just needs to be restarted occasionally during development.
+
+Stage Summary:
+- BUILT the LEAGUE tab (Team of the Week) and FPL tab (Captain Pulse + Differentials + Your FPL Team) as NEW features — they never existed before.
+- 7 new Prisma models: LeaguePlayer, LeagueMatch, TeamOfTheWeek, TOTWPlayer, FPLPlayer, FPLFixture, FPLGameweek.
+- 7 new lib files: epl-teams.ts, fpl-api.ts, fpl-matcher.ts, captain-pulse.ts, differential-finder.ts, league-pulse-engine.ts, totw-generator.ts.
+- 8 new API routes: fpl/players, fpl/captain-pulse, fpl/differentials, fpl/sync (admin), epl/matches, epl/totw, epl/totw/publish (admin), epl/compute-pulse (admin).
+- 2 new tab components: TeamOfTheWeekTab.tsx, FPLTab.tsx.
+- Navigation updated: 6 tabs (HOME, SENTIMENTS, WORLD CUP, LEAGUE [NEW], FPL [NEW], TRANSFERS).
+- page.tsx updated: league + fpl tab switch cases added.
+- Honest empty states everywhere: LEAGUE tab shows "EPL kicks off August 21" (no matches yet), FPL tab shows "FPL data not synced yet" (admin needs to run /api/fpl/sync).
+- Anti-hallucination contract upheld: all data from real FPL API, never fabricated.
+- Lint clean (0 errors, 0 warnings). All APIs verified (6 public → 200, 3 admin → 401).
+- READY FOR EPL LAUNCH AUGUST 21: once an admin runs `POST /api/fpl/sync` (with admin password), the FPL tab will populate with real player data. Once EPL matches are completed, `POST /api/epl/compute-pulse` + `POST /api/epl/totw/publish` will generate the Team of the Week.

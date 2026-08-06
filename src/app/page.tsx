@@ -17,6 +17,8 @@ import { Progress } from '@/components/ui/progress'
 import TopHeader from '@/components/TopHeader'
 import Navigation, { type TabId } from '@/components/Navigation'
 import TransfersTab from '@/components/tabs/TransfersTab'
+import TeamOfTheWeekTab from '@/components/TeamOfTheWeekTab'
+import FPLTab from '@/components/FPLTab'
 import StoryCircle from '@/components/Stories/StoryCircle'
 import StoryViewer from '@/components/Stories/StoryViewer'
 import { useStories, useViewedStories } from '@/hooks/queries/use-stories'
@@ -3276,10 +3278,9 @@ export default function Home() {
                   />
                 )}
                 {activeTab === 'sentiments' && <SentimentsTab />}
-                {activeTab === 'rate' && <PausedTabOverlay tabName="Rate" />}
-                {activeTab === 'goals' && <PausedTabOverlay tabName="Goals" />}
-                {activeTab === 'totw' && <PausedTabOverlay tabName="Team of the Week" />}
                 {activeTab === 'worldcup' && <WorldCupTab stages={stages} />}
+                {activeTab === 'league' && <TeamOfTheWeekTab />}
+                {activeTab === 'fpl' && <FPLTab />}
                 {activeTab === 'transfers' && <TransfersTab />}
               </motion.div>
             </AnimatePresence>

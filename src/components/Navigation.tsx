@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { useLanguage } from '@/context/LanguageContext'
-import { Home, Activity, Globe, Zap, ArrowLeftRight, Trophy, Clapperboard } from 'lucide-react'
+import { Home, Activity, Globe, Zap, ArrowLeftRight, Trophy, Clapperboard, Shield, BarChart3 } from 'lucide-react'
 
-export type TabId = 'home' | 'sentiments' | 'rate' | 'goals' | 'totw' | 'worldcup' | 'transfers'
+export type TabId = 'home' | 'sentiments' | 'worldcup' | 'league' | 'fpl' | 'transfers'
 
 interface NavigationProps {
   activeTab: TabId
@@ -22,7 +22,9 @@ const tabs: { id: TabId; icon: typeof Home; labelKey: string; href: string; isNe
   { id: 'home', icon: Home, labelKey: 'nav.home', href: '#home' },
   { id: 'sentiments', icon: Activity, labelKey: 'nav.sentiments', href: '#sentiments' },
   { id: 'worldcup', icon: Globe, labelKey: 'nav.worldcup', href: '#world-cup' },
-  { id: 'transfers', icon: ArrowLeftRight, labelKey: 'nav.transfers', href: '#transfers', isNew: true },
+  { id: 'league', icon: Shield, labelKey: 'nav.league', href: '#league', isNew: true },
+  { id: 'fpl', icon: BarChart3, labelKey: 'nav.fpl', href: '#fpl', isNew: true },
+  { id: 'transfers', icon: ArrowLeftRight, labelKey: 'nav.transfers', href: '#transfers' },
 ]
 
 export default function Navigation({ activeTab, onTabChange, onOpenStories }: NavigationProps) {

@@ -1,11 +1,11 @@
 generator client {
-  provider        = "prisma-client-js"
+  provider      = "prisma-client-js"
   // Generate Prisma engines for the local dev host (native) AND the
   // production host (Debian-based Linux with OpenSSL 3.x).
   // The Z.ai platform and Fly.io both use Debian-based images, so we only
   // need the debian engine. The musl engine was removed to reduce the
   // standalone build size by ~17MB.
-  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -24,88 +24,88 @@ model User {
 // ── World Cup Models ──────────────────────────────────────────────────────────
 
 model WCStage {
-  id          String   @id @default(cuid())
-  name        String   // "Group Stage", "Round of 32", "Round of 16", "Quarter Finals", "Semi Finals", "Final"
-  nameAr      String   // Arabic name
-  order       Int      // 1, 2, 3, 4, 5, 6
-  status      String   @default("upcoming") // "upcoming" | "live" | "completed"
+  id          String        @id @default(cuid())
+  name        String // "Group Stage", "Round of 32", "Round of 16", "Quarter Finals", "Semi Finals", "Final"
+  nameAr      String // Arabic name
+  order       Int // 1, 2, 3, 4, 5, 6
+  status      String        @default("upcoming") // "upcoming" | "live" | "completed"
   startedAt   DateTime?
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
   selections  WCSelection[]
 }
 
 model WCSelection {
-  id         String   @id @default(cuid())
-  type       String   // "elite" | "crisis"
-  stageId    String
-  stage      WCStage  @relation(fields: [stageId], references: [id], onDelete: Cascade)
-  formation  String   @default("4-3-3")
-  locked     Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  players    WCSelectionPlayer[]
+  id        String              @id @default(cuid())
+  type      String // "elite" | "crisis"
+  stageId   String
+  stage     WCStage             @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  formation String              @default("4-3-3")
+  locked    Boolean             @default(false)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  players   WCSelectionPlayer[]
 }
 
 model WCSelectionPlayer {
-  id           String   @id @default(cuid())
-  selectionId  String
-  selection    WCSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
-  playerName   String
-  nationCode   String   // ISO country code e.g. "BRA", "KSA"
-  position     String   // GK, CB, LB, RB, CM, CAM, LW, RW, ST
-  pulseScore         Float    @default(0) // 0-100
-  previousPulseScore Float    @default(0) // prior buzz score, for movement arrows
+  id                 String          @id @default(cuid())
+  selectionId        String
+  selection          WCSelection     @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  playerName         String
+  nationCode         String // ISO country code e.g. "BRA", "KSA"
+  position           String // GK, CB, LB, RB, CM, CAM, LW, RW, ST
+  pulseScore         Float           @default(0) // 0-100
+  previousPulseScore Float           @default(0) // prior buzz score, for movement arrows
   lastBuzzRefreshAt  DateTime? // last live web_search refresh (R32 ticker)
-  sentiment          Float    @default(0) // fan sentiment %
-  trend              String   @default("stable") // "rising" | "stable" | "falling"
-  isLive             Boolean  @default(false)
-  matchInfo          String?  // e.g. "BRA vs ARG 2-1"
-  order              Int      @default(0) // position in formation
+  sentiment          Float           @default(0) // fan sentiment %
+  trend              String          @default("stable") // "rising" | "stable" | "falling"
+  isLive             Boolean         @default(false)
+  matchInfo          String? // e.g. "BRA vs ARG 2-1"
+  order              Int             @default(0) // position in formation
   /// Wikipedia/CC-BY-SA thumbnail URL for the player. NULL when no Wikipedia
   /// photo exists (the UI renders a graceful initials-on-purple fallback).
   /// Always starts with https://upload.wikimedia.org/ when set — never a
   /// Google Image scrape or unlicensed source. See src/lib/wikipedia-photo.ts.
   photoUrl           String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  pulseBreakdown PulseBreakdown?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  pulseBreakdown     PulseBreakdown?
 }
 
 model NationalTeam {
-  id            String   @id @default(cuid())
-  name          String   // "Brazil"
-  nameAr        String   // "البرازيل"
-  code          String   @unique // "BRA"
-  flag          String   // emoji flag "🇧🇷"
-  group         String   // "A", "B", etc.
-  fifaRank      Int      @default(0)
-  primaryColor  String   @default("#000000") // hex
-  region        String   @default("") // "South America", "Europe", etc.
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String // "Brazil"
+  nameAr       String // "البرازيل"
+  code         String   @unique // "BRA"
+  flag         String // emoji flag "🇧🇷"
+  group        String // "A", "B", etc.
+  fifaRank     Int      @default(0)
+  primaryColor String   @default("#000000") // hex
+  region       String   @default("") // "South America", "Europe", etc.
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Match {
-  id             String   @id @default(cuid())
-  homeTeamCode   String   // "ARG"
-  homeTeamName   String   // "Argentina"
-  homeTeamFlag   String   // "🇦🇷"
-  awayTeamCode   String   // "FRA"
-  awayTeamName   String   // "France"
-  awayTeamFlag   String   // "🇫🇷"
-  homeScore      Int      @default(0)
-  awayScore      Int      @default(0)
-  status         String   @default("completed") // "upcoming" | "live" | "completed"
-  league         String   @default("WC") // "WC" | "Friendly"
-  group         String   @default("") // "A", "B", etc. or "R16", "QF", "SF", "Final"
-  minute         Int?     // match minute if live
-  matchDate      DateTime?
-  homeSentiment  Float    @default(50) // 0-100
-  awaySentiment  Float    @default(50) // 0-100
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String    @id @default(cuid())
+  homeTeamCode  String // "ARG"
+  homeTeamName  String // "Argentina"
+  homeTeamFlag  String // "🇦🇷"
+  awayTeamCode  String // "FRA"
+  awayTeamName  String // "France"
+  awayTeamFlag  String // "🇫🇷"
+  homeScore     Int       @default(0)
+  awayScore     Int       @default(0)
+  status        String    @default("completed") // "upcoming" | "live" | "completed"
+  league        String    @default("WC") // "WC" | "Friendly"
+  group         String    @default("") // "A", "B", etc. or "R16", "QF", "SF", "Final"
+  minute        Int? // match minute if live
+  matchDate     DateTime?
+  homeSentiment Float     @default(50) // 0-100
+  awaySentiment Float     @default(50) // 0-100
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Hot path: the homepage + World Cup tab constantly query live/upcoming
   // matches ordered by date. `@@index([status, matchDate])` serves the
@@ -125,17 +125,17 @@ model Match {
 // that joins onto Match.homeTeamCode / awayTeamCode when `league = 'EPL'`.
 
 model League {
-  id        String   @id @default(cuid())
-  name      String   // "Premier League"
-  slug      String   @unique // "epl"
-  country   String   // "England"
-  createdAt DateTime @default(now())
+  id        String       @id @default(cuid())
+  name      String // "Premier League"
+  slug      String       @unique // "epl"
+  country   String // "England"
+  createdAt DateTime     @default(now())
   teams     LeagueTeam[]
 }
 
 model LeagueTeam {
   id        String   @id @default(cuid())
-  name      String   // "Arsenal"
+  name      String // "Arsenal"
   code      String   @unique // "ARS" — joins onto Match.homeTeamCode/awayTeamCode
   crestUrl  String?
   leagueId  String
@@ -143,6 +143,185 @@ model LeagueTeam {
   createdAt DateTime @default(now())
 
   @@index([leagueId])
+}
+
+// ── EPL League Player Models ─────────────────────────────────────────────────
+// Powers the LEAGUE tab (Team of the Week) and the FPL tab (Captain Pulse +
+// Differentials). Players are synced from the FPL bootstrap-static API by the
+// /api/fpl/sync admin endpoint. Each LeaguePlayer is matched 1:1 to an FPLPlayer
+// record (by name + team) so we can join FPL ownership/form data with fan
+// sentiment from FanVote rows.
+//
+// ANTI-HALLUCINATION: LeaguePlayer rows are ONLY created by /api/fpl/sync from
+// the REAL FPL API. Never hand-seeded, never invented. The TOTW generator only
+// selects players that have real match performance data (from LeagueMatch rows
+// with status='completed'). If no matches exist yet (pre-season), the TOTW tab
+// shows an honest empty state — never a fabricated XI.
+
+/// A player in the EPL (or future league). One per (name, teamCode, season).
+/// Synced from FPL bootstrap-static by /api/fpl/sync.
+model LeaguePlayer {
+  id                 String   @id @default(cuid())
+  name               String // "Bukayo Saka"
+  webName            String   @default("") // "Saka" — FPL web_name
+  teamCode           String // "ARS" — joins onto LeagueTeam.code + Match.homeTeamCode
+  league             String   @default("EPL") // "EPL" | future leagues
+  season             String   @default("2026-27") // "2026-27"
+  position           String // "GK" | "DEF" | "MID" | "FWD" (FPL element_type)
+  /// Fan Pulse Score (0-100). Computed by /api/epl/compute-pulse. Combines
+  /// match performance + fan sentiment + form. 0 = not yet computed.
+  pulseScore         Float    @default(0)
+  previousPulseScore Float    @default(0)
+  sentiment          Float    @default(50) // 0-100, from FanVote aggregation
+  trend              String   @default("stable") // "rising" | "stable" | "falling"
+  /// Wikipedia/CC-BY-SA thumbnail URL. NULL = initials fallback.
+  photoUrl           String?
+  /// FPL player ID for joining to FPLPlayer. NULL when not matched.
+  fplId              Int?     @unique
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([name, teamCode, season])
+  @@index([league, season])
+  @@index([teamCode])
+  @@index([position])
+}
+
+/// A completed or upcoming EPL match. Populated from FPL fixtures by /api/fpl/sync.
+/// Used by the TOTW generator to compute match performance per player.
+/// NOTE: this is distinct from the generic Match model (which is WC-focused).
+/// LeagueMatch carries EPL-specific fields (matchweek, FPL fixture ID).
+model LeagueMatch {
+  id           String   @id @default(cuid())
+  league       String   @default("EPL")
+  season       String   @default("2026-27")
+  matchweek    Int // 1, 2, 3, ...
+  homeTeamCode String // "ARS"
+  awayTeamCode String // "CHE"
+  homeScore    Int?
+  awayScore    Int?
+  status       String   @default("upcoming") // "upcoming" | "live" | "completed"
+  kickoffAt    DateTime
+  /// FPL fixture ID for joining to FPLFixture. NULL for non-FPL sources.
+  fplFixtureId Int?     @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([league, season, matchweek, homeTeamCode, awayTeamCode])
+  @@index([league, season, matchweek, status])
+  @@index([status, kickoffAt])
+}
+
+/// Team of the Week (or Flops of the Week) for a given matchweek.
+/// One per (league, season, matchweek, type). Published by /api/epl/totw/publish.
+model TeamOfTheWeek {
+  id          String   @id @default(cuid())
+  league      String   @default("EPL")
+  season      String   @default("2026-27")
+  matchweek   Int
+  type        String // "totw" | "flops"
+  formation   String   @default("4-3-3")
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  players TOTWPlayer[]
+
+  @@unique([league, season, matchweek, type])
+  @@index([league, season, matchweek])
+}
+
+/// A player in a Team of the Week XI. 11 rows per TOTW (4-3-3 formation).
+model TOTWPlayer {
+  id         String        @id @default(cuid())
+  totwId     String
+  totw       TeamOfTheWeek @relation(fields: [totwId], references: [id], onDelete: Cascade)
+  playerName String // "Bukayo Saka"
+  teamCode   String // "ARS"
+  position   String // "GK" | "RB" | "CB" | "LB" | "CM" | "CAM" | "RW" | "ST" | "LW"
+  pulseScore Float         @default(0) // 0-100, snapshot at publish time
+  sentiment  Float         @default(50) // 0-100, fan sentiment snapshot
+  /// Why this player was selected — e.g. "2 goals vs CHE", "Clean sheet vs LIV"
+  matchInfo  String        @default("")
+  /// Wikipedia/CC-BY-SA thumbnail URL. NULL = initials fallback.
+  photoUrl   String?
+  order      Int           @default(0) // position in formation
+  createdAt  DateTime      @default(now())
+
+  @@index([totwId])
+}
+
+/// FPL player data synced from fantasy.premierleague.com/api/bootstrap-static/.
+/// One per FPL element. Joined 1:1 to LeaguePlayer via fplId.
+/// Powers the Captain Pulse + Differentials features.
+model FPLPlayer {
+  id            String   @id @default(cuid())
+  fplId         Int      @unique // FPL element ID
+  webName       String   @default("") // "Saka"
+  fullName      String   @default("") // "Bukayo Saka" (first_name + second_name)
+  teamCode      String // "ARS" — resolved from FPL team ID
+  teamFplId     Int // 1-20 (FPL team ID)
+  position      String // "GK" | "DEF" | "MID" | "FWD"
+  price         Float    @default(0) // now_cost / 10 (e.g. 9.0)
+  ownershipPct  Float    @default(0) // selected_by_percent
+  form          Float    @default(0) // 0-10 scale
+  totalPoints   Int      @default(0)
+  pointsPerGame Float    @default(0)
+  minutes       Int      @default(0)
+  goals         Int      @default(0)
+  assists       Int      @default(0)
+  cleanSheets   Int      @default(0)
+  /// Synced from FPL at the same time as the player data.
+  syncedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([teamCode])
+  @@index([position])
+  @@index([ownershipPct])
+}
+
+/// FPL fixture synced from fantasy.premierleague.com/api/fixtures/.
+/// Joined to LeagueMatch via fplFixtureId.
+model FPLFixture {
+  id            String   @id @default(cuid())
+  fplId         Int      @unique // FPL fixture ID
+  gameweek      Int // event number
+  homeTeamFplId Int
+  awayTeamFplId Int
+  homeTeamCode  String // "ARS" — resolved from FPL team ID
+  awayTeamCode  String // "CHE"
+  kickoffTime   DateTime
+  finished      Boolean  @default(false)
+  started       Boolean  @default(false)
+  homeScore     Int?
+  awayScore     Int?
+  minutes       Int      @default(0)
+  syncedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([gameweek, finished])
+  @@index([kickoffTime])
+}
+
+/// FPL gameweek synced from bootstrap-static events array.
+model FPLGameweek {
+  id           String   @id @default(cuid())
+  fplId        Int      @unique // event ID
+  name         String // "Gameweek 1"
+  deadlineTime DateTime
+  isCurrent    Boolean  @default(false)
+  isNext       Boolean  @default(false)
+  finished     Boolean  @default(false)
+  averageScore Int      @default(0)
+  highestScore Int      @default(0)
+  syncedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isCurrent])
+  @@index([isNext])
 }
 
 // ── Founder-Curated Link Pipeline (70% manual curation) ──────────────────────
@@ -171,38 +350,38 @@ model LeagueTeam {
 
 /// A founder-curated social/news link for a specific match. One per URL.
 model CuratedLink {
-  id              String   @id @default(cuid())
+  id             String   @id @default(cuid())
   /// Optional link to a Match. NULL for "add new match" (manual entry) where
   /// the founder typed a matchLabel but no matchId exists yet. NOT a foreign
   /// key — Match rows may be pruned, curated links must survive as audit trail.
-  matchId         String?
+  matchId        String?
   /// Human label: "Arsenal vs Chelsea — Friendly Jul 28". Required so the
   /// link is always displayable even if the Match row is gone.
-  matchLabel      String
+  matchLabel     String
   /// The real tweet/post URL. @unique → natural dedupe on re-curation.
-  url             String   @unique
+  url            String   @unique
   /// "twitter" | "reddit" | "instagram" | "facebook" | "tiktok" | "web"
-  platform        String
+  platform       String
   /// @handle (twitter) or hostname (web) or r/subreddit (reddit). Extracted
   /// from the URL structure; never invented.
-  author          String
+  author         String
   /// Extracted text from page_reader. May be truncated. NEVER fabricated.
-  content         String
+  content        String
   /// 0-100, LLM-scored from the real content. 50 = neutral default.
-  sentimentScore  Float    @default(50)
+  sentimentScore Float    @default(50)
   /// "excited" | "skeptical" | "dreading" | "neutral". Derived from score.
-  sentimentLabel  String   @default("neutral")
+  sentimentLabel String   @default("neutral")
   /// JSON array of hashtags, e.g. ["#Arsenal","#COYG"]. From founder input.
-  hashtags        String   @default("[]")
+  hashtags       String   @default("[]")
   /// When the original post was made. Parsed from page content or URL.
   /// If unparseable, defaults to the curation time (now).
-  postedAt        DateTime
+  postedAt       DateTime
   /// When the founder added this link. Audit trail.
-  curatedAt       DateTime @default(now())
+  curatedAt      DateTime @default(now())
   /// Who curated it. Defaults to "founder". Audit trail.
-  curatedBy       String   @default("founder")
+  curatedBy      String   @default("founder")
   /// Soft-delete / suppress flag. false = hidden from Fan Talk.
-  isActive        Boolean  @default(true)
+  isActive       Boolean  @default(true)
 
   @@index([matchId, postedAt])
   @@index([platform, postedAt])
@@ -213,19 +392,19 @@ model CuratedLink {
 /// Per-player breakdown of the 4 weighted Pulse Score components.
 /// 1:1 with WCSelectionPlayer. Computed by computeAllPulseScores() in pulse-engine.
 model PulseBreakdown {
-  id                   String   @id @default(cuid())
-  playerId             String   @unique
+  id                   String            @id @default(cuid())
+  playerId             String            @unique
   player               WCSelectionPlayer @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  matchPerformance     Float    @default(50) // 0-100, weight 40%
-  fanSentiment         Float    @default(50) // 0-100, weight 25%
-  aiNarrative          Float    @default(50) // 0-100, weight 20%
-  momentumTrend        Float    @default(50) // 0-100, weight 15%
-  matchPerformanceNote String   @default("")
-  fanSentimentNote     String   @default("")
-  aiNarrativeNote      String   @default("")
-  momentumTrendNote    String   @default("")
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  matchPerformance     Float             @default(50) // 0-100, weight 40%
+  fanSentiment         Float             @default(50) // 0-100, weight 25%
+  aiNarrative          Float             @default(50) // 0-100, weight 20%
+  momentumTrend        Float             @default(50) // 0-100, weight 15%
+  matchPerformanceNote String            @default("")
+  fanSentimentNote     String            @default("")
+  aiNarrativeNote      String            @default("")
+  momentumTrendNote    String            @default("")
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 }
 
 // ── Social Sentiment Models (fed by /api/social-sentiment) ───────────────────
@@ -233,7 +412,7 @@ model PulseBreakdown {
 /// A single scraped social post (Reddit/Twitter/web) about a team.
 model SocialPost {
   id          String   @id @default(cuid())
-  platform    String   // "reddit" | "twitter" | "web"
+  platform    String // "reddit" | "twitter" | "web"
   postId      String
   author      String   @default("")
   content     String   @default("")
@@ -280,7 +459,7 @@ model SentimentSummary {
 model FanVote {
   id        String   @id @default(cuid())
   teamCode  String
-  score     Int      // 0-100
+  score     Int // 0-100
   sessionId String
   /// Optional link to a Match for match-level voting (EPL matchday). NULL for
   /// the original team-level votes. NOT a foreign key — Match rows may be
@@ -329,7 +508,7 @@ model UserRating {
   id        String   @id @default(cuid())
   sessionId String
   playerId  String
-  rating    Int      // 1-10
+  rating    Int // 1-10
   comment   String?
   createdAt DateTime @default(now())
 
@@ -355,26 +534,26 @@ model UserRating {
 /// One FeedMonitor per match. Active while the match is being played + a
 /// configurable cooldown window after.
 model FeedMonitor {
-  id              String   @id @default(cuid())
-  matchLabel      String   // human-readable, e.g. "ESP vs KSA — Matchday 2"
-  stageId         String?  // optional link to WCStage (Group Stage, R32, etc.)
+  id              String    @id @default(cuid())
+  matchLabel      String // human-readable, e.g. "ESP vs KSA — Matchday 2"
+  stageId         String? // optional link to WCStage (Group Stage, R32, etc.)
   /// The Match.id this monitor was created for. When set, the fan-talk API
   /// filters monitors by EXACT matchId — not just team-code overlap. This
   /// prevents posts from one match bleeding into another match that shares
   /// a team code (e.g. ESP vs ARG posts showing on the ESP vs FRA card).
-  matchId         String?  // optional link to Match (exact per-match scoping)
-  teamCodes       String   @default("[]") // JSON array of team codes, e.g. ["ESP","KSA"]
-  playerIds       String   @default("[]") // JSON array of WCSelectionPlayer IDs to track
-  hashtags        String   @default("[]") // JSON array of hashtags, e.g. ["#ESP","#LamineYamal"]
-  seedUrls        String   @default("[]") // JSON array of seed tweet/post URLs (anchor context)
-  status          String   @default("active") // "active" | "paused" | "ended"
-  refreshInterval Int      @default(5) // minutes between auto-refreshes
+  matchId         String? // optional link to Match (exact per-match scoping)
+  teamCodes       String    @default("[]") // JSON array of team codes, e.g. ["ESP","KSA"]
+  playerIds       String    @default("[]") // JSON array of WCSelectionPlayer IDs to track
+  hashtags        String    @default("[]") // JSON array of hashtags, e.g. ["#ESP","#LamineYamal"]
+  seedUrls        String    @default("[]") // JSON array of seed tweet/post URLs (anchor context)
+  status          String    @default("active") // "active" | "paused" | "ended"
+  refreshInterval Int       @default(5) // minutes between auto-refreshes
   lastRefreshedAt DateTime?
   endsAt          DateTime // auto-end time (typically kickoff + 6h)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  posts           FeedPost[]
+  posts FeedPost[]
 
   @@index([status, endsAt])
 }
@@ -382,20 +561,20 @@ model FeedMonitor {
 /// A single scraped post analyzed by the sentiment pipeline.
 /// One FeedPost per (monitorId, url) — de-duplicated across refreshes.
 model FeedPost {
-  id                String   @id @default(cuid())
-  monitorId         String
-  monitor           FeedMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
-  platform          String   // "twitter" | "reddit" | "web"
-  url               String   @unique
-  author            String   @default("")
-  content           String   @default("") // extracted text (truncated to ~2000 chars)
-  language          String   @default("en")
-  sentimentScore    Float    @default(50) // 0-100, LLM-scored
-  positiveRatio     Float    @default(0.5) // 0-1
-  mentionedPlayers  String   @default("[]") // JSON array of player IDs found in content
-  topQuote          String?  // notable fan quote extracted by LLM (for UI display)
-  postedAt          DateTime @default(now())
-  analyzedAt        DateTime @default(now())
+  id               String      @id @default(cuid())
+  monitorId        String
+  monitor          FeedMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  platform         String // "twitter" | "reddit" | "web"
+  url              String      @unique
+  author           String      @default("")
+  content          String      @default("") // extracted text (truncated to ~2000 chars)
+  language         String      @default("en")
+  sentimentScore   Float       @default(50) // 0-100, LLM-scored
+  positiveRatio    Float       @default(0.5) // 0-1
+  mentionedPlayers String      @default("[]") // JSON array of player IDs found in content
+  topQuote         String? // notable fan quote extracted by LLM (for UI display)
+  postedAt         DateTime    @default(now())
+  analyzedAt       DateTime    @default(now())
 
   @@index([monitorId, analyzedAt])
   @@index([mentionedPlayers])
@@ -405,16 +584,16 @@ model FeedPost {
 /// One PlayerSentiment per (playerId, monitorId) — the latest monitor wins.
 /// Read by the Pulse Engine to compute the 25% Fan Sentiment component.
 model PlayerSentiment {
-  id              String   @id @default(cuid())
-  playerId        String   @unique // 1:1 with WCSelectionPlayer
-  monitorId       String?  // link to the FeedMonitor that produced this sentiment
-  sentiment       Float    @default(50) // 0-100, weighted avg of FeedPost.sentimentScore
-  postCount       Int      @default(0) // total posts mentioning this player
-  positiveRatio   Float    @default(0.5) // 0-1
-  topQuotes       String   @default("[]") // JSON array of {quote, source} objects
-  avgEngagement   Float    @default(0) // avg likes+replies+shares (best-effort, often 0)
-  analyzedAt      DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  playerId      String   @unique // 1:1 with WCSelectionPlayer
+  monitorId     String? // link to the FeedMonitor that produced this sentiment
+  sentiment     Float    @default(50) // 0-100, weighted avg of FeedPost.sentimentScore
+  postCount     Int      @default(0) // total posts mentioning this player
+  positiveRatio Float    @default(0.5) // 0-1
+  topQuotes     String   @default("[]") // JSON array of {quote, source} objects
+  avgEngagement Float    @default(0) // avg likes+replies+shares (best-effort, often 0)
+  analyzedAt    DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([monitorId])
 }
@@ -436,41 +615,41 @@ model PlayerSentiment {
 
 /// A single transfer rumor (a "saga"). One per (playerName, toClubCode).
 model TransferSaga {
-  id                  String   @id @default(cuid())
-  playerName          String   // e.g. "Mohamed Salah"
-  playerNationCode    String   @default("") // ISO code e.g. "EGY" (display only)
-  fromClubCode        String   @default("") // e.g. "LIV"
-  fromClubName        String   @default("") // e.g. "Liverpool"
-  toClubCode          String   // e.g. "SAU" (Al-Hilal)
-  toClubName          String   // e.g. "Al-Hilal"
-  status              String   @default("active") // "active" | "completed" | "debunked"
-  feeReported         String   @default("") // e.g. "£150m" (display string, may be empty)
-  tier1Count          Int      @default(0) // number of distinct Tier 1 journalists reporting
-  fanReadLikelihood   Float    @default(50) // 0-100, FAN READ not prediction
-  buzzVolume          Int      @default(0) // total fan posts analyzed
-  buzzTrend           String   @default("stable") // "rising" | "stable" | "falling"
-  excitedPct          Float    @default(0) // 0-100
-  skepticalPct        Float    @default(0) // 0-100
-  dreadingPct         Float    @default(0) // 0-100
-  avgSentiment        Float    @default(50) // 0-100
-  firstReportedAt     DateTime @default(now())
-  lastUpdatedAt       DateTime @default(now())
-  resolvedAt          DateTime?
+  id                String    @id @default(cuid())
+  playerName        String // e.g. "Mohamed Salah"
+  playerNationCode  String    @default("") // ISO code e.g. "EGY" (display only)
+  fromClubCode      String    @default("") // e.g. "LIV"
+  fromClubName      String    @default("") // e.g. "Liverpool"
+  toClubCode        String // e.g. "SAU" (Al-Hilal)
+  toClubName        String // e.g. "Al-Hilal"
+  status            String    @default("active") // "active" | "completed" | "debunked"
+  feeReported       String    @default("") // e.g. "£150m" (display string, may be empty)
+  tier1Count        Int       @default(0) // number of distinct Tier 1 journalists reporting
+  fanReadLikelihood Float     @default(50) // 0-100, FAN READ not prediction
+  buzzVolume        Int       @default(0) // total fan posts analyzed
+  buzzTrend         String    @default("stable") // "rising" | "stable" | "falling"
+  excitedPct        Float     @default(0) // 0-100
+  skepticalPct      Float     @default(0) // 0-100
+  dreadingPct       Float     @default(0) // 0-100
+  avgSentiment      Float     @default(50) // 0-100
+  firstReportedAt   DateTime  @default(now())
+  lastUpdatedAt     DateTime  @default(now())
+  resolvedAt        DateTime?
   /// When a saga is resolved (completed/debunked), this is the official
   /// confirmation URL — typically a Tier 1 journalist's "Here We Go" tweet.
   /// NULL for active sagas. Surfaced in the detail modal so users can click
   /// through to the source that resolved the rumor.
-  resolutionUrl       String?
+  resolutionUrl     String?
   /// Wikipedia/CC-BY-SA thumbnail URL for the transfer TARGET player. NULL
   /// when no Wikipedia photo exists (UI shows initials fallback). Always
   /// https://upload.wikimedia.org/ when set. See src/lib/wikipedia-photo.ts.
-  playerPhotoUrl      String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  playerPhotoUrl    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  sources             TransferSource[]
-  posts               TransferPost[]
-  timeline            SentimentTimeline[]
+  sources  TransferSource[]
+  posts    TransferPost[]
+  timeline SentimentTimeline[]
 
   @@unique([playerName, toClubCode])
   @@index([status, buzzVolume])
@@ -481,17 +660,17 @@ model TransferSaga {
 /// at least one of these was verified. URL is unique — same article never
 /// counted twice.
 model TransferSource {
-  id              String   @id @default(cuid())
-  sagaId          String
-  saga            TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
-  journalistName  String   // e.g. "Fabrizio Romano"
-  journalistHandle String  // e.g. "FabrizioRomano" (without @)
-  tier            Int      @default(1) // 1 = Tier 1 (always 1 in v1)
-  url             String   @unique // the real article/post URL
-  headline        String   @default("") // short headline / summary
-  outlet          String   @default("") // e.g. "The Athletic", "Sky Sports"
-  reportedAt      DateTime @default(now())
-  createdAt       DateTime @default(now())
+  id               String       @id @default(cuid())
+  sagaId           String
+  saga             TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
+  journalistName   String // e.g. "Fabrizio Romano"
+  journalistHandle String // e.g. "FabrizioRomano" (without @)
+  tier             Int          @default(1) // 1 = Tier 1 (always 1 in v1)
+  url              String       @unique // the real article/post URL
+  headline         String       @default("") // short headline / summary
+  outlet           String       @default("") // e.g. "The Athletic", "Sky Sports"
+  reportedAt       DateTime     @default(now())
+  createdAt        DateTime     @default(now())
 
   @@index([sagaId])
 }
@@ -499,18 +678,18 @@ model TransferSource {
 /// A single fan post about a saga, scored for sentiment. URL is unique —
 /// same post never ingested twice across refreshes.
 model TransferPost {
-  id              String   @id @default(cuid())
-  sagaId          String
-  saga            TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
-  platform        String   // "twitter" | "reddit" | "web" | "instagram" | "youtube" | "facebook" | "tiktok"
-  author          String   @default("") // handle without @, or username
-  content         String   @default("") // verbatim or near-verbatim text
-  url             String   @unique // real source URL
-  sentimentScore  Float    @default(50) // 0-100
-  sentimentLabel  String   @default("neutral") // "excited" | "skeptical" | "dreading" | "neutral"
-  postedAt        DateTime @default(now())
-  analyzedAt      DateTime @default(now())
-  createdAt       DateTime @default(now())
+  id             String       @id @default(cuid())
+  sagaId         String
+  saga           TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
+  platform       String // "twitter" | "reddit" | "web" | "instagram" | "youtube" | "facebook" | "tiktok"
+  author         String       @default("") // handle without @, or username
+  content        String       @default("") // verbatim or near-verbatim text
+  url            String       @unique // real source URL
+  sentimentScore Float        @default(50) // 0-100
+  sentimentLabel String       @default("neutral") // "excited" | "skeptical" | "dreading" | "neutral"
+  postedAt       DateTime     @default(now())
+  analyzedAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
 
   @@index([sagaId, postedAt])
   @@index([sagaId, sentimentLabel])
@@ -518,17 +697,17 @@ model TransferPost {
 
 /// Daily sentiment snapshot for the 7-day timeline chart. One per (saga, date).
 model SentimentTimeline {
-  id              String   @id @default(cuid())
-  sagaId          String
-  saga            TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
-  date            String   // YYYY-MM-DD (SQLite-friendly; avoids TZ issues)
-  excitedPct      Float    @default(0) // 0-100
-  skepticalPct    Float    @default(0) // 0-100
-  dreadingPct     Float    @default(0) // 0-100
-  avgSentiment    Float    @default(50) // 0-100
-  postCount       Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String       @id @default(cuid())
+  sagaId       String
+  saga         TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
+  date         String // YYYY-MM-DD (SQLite-friendly; avoids TZ issues)
+  excitedPct   Float        @default(0) // 0-100
+  skepticalPct Float        @default(0) // 0-100
+  dreadingPct  Float        @default(0) // 0-100
+  avgSentiment Float        @default(50) // 0-100
+  postCount    Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@unique([sagaId, date])
   @@index([sagaId, date])

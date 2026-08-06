@@ -22,6 +22,8 @@ const translations: Record<string, string> = {
   'nav.goals': 'GOALS',
   'nav.totw': 'TOTW',
   'nav.worldcup': 'WORLD CUP',
+  'nav.league': 'LEAGUE',
+  'nav.fpl': 'FPL',
   'nav.transfers': 'TRANSFERS',
   'home.your_pulse': 'Your Pulse',
   'home.mood_desc': "How your clubs' fans are feeling right now",
