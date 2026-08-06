@@ -23,6 +23,7 @@ import { useStories, useViewedStories } from '@/hooks/queries/use-stories'
 import { type PulseStory } from '@/lib/story-generator'
 import { useLanguage } from '@/context/LanguageContext'
 import { findNationalTeam, NATIONAL_TEAMS } from '@/lib/national-teams'
+import { EPL_CLUBS, findEPLClub } from '@/lib/epl-clubs'
 import { useFlagMode } from '@/lib/flag-mode'
 import FlagImage from '@/components/common/FlagImage'
 import { FanTalkPanel } from '@/components/FanTalkPanel'
@@ -221,9 +222,9 @@ function SharePulseButton({ className = '' }: { className?: string }) {
 
 // ── HOME Tab ─────────────────────────────────────────────────
 
-// Top 12 WC 2026 teams for the Fan Mood voting chips.
-const FAN_MOOD_TEAM_CODES = ['BRA', 'ARG', 'FRA', 'ENG', 'ESP', 'GER', 'MEX', 'USA', 'POR', 'NED', 'JPN', 'MAR']
-
+// Mood emoji options for the vote modal — reused for EPL club voting.
+// (Previously also used by the national-team Fan Mood carousel which has
+// been removed; the World Cup is over and the app has pivoted to EPL.)
 const MOOD_EMOJI_OPTIONS: { emoji: string; score: number; label: string; color: string }[] = [
   { emoji: '🤩', score: 95, label: 'On Fire', color: 'bg-[#10B981]' },
   { emoji: '😊', score: 75, label: 'Happy', color: 'bg-[#8B5CF6]' },
@@ -309,6 +310,40 @@ interface TransferSagaSummary {
   }[]
 }
 
+// ── EPL Fixtures (upcoming EPL games, FotMob-style) ──────────────────────────
+// Fetched from /api/epl/upcoming which proxies the FPL API (real fixtures
+// only — see src/lib/epl-fixtures.ts for the anti-hallucination contract).
+interface EPLFixture {
+  id: string
+  homeTeamCode: string
+  homeTeamName: string
+  homeTeamBadge: string
+  awayTeamCode: string
+  awayTeamName: string
+  awayTeamBadge: string
+  kickoffAt: string // ISO 8601
+  kickoffLabel: string
+  competition: string
+  matchweek: number
+  venue?: string
+  status: 'upcoming' | 'live' | 'completed'
+  homeScore?: number
+  awayScore?: number
+}
+
+// ── EPL Club Mood (replaces the national-team Fan Mood section) ──────────────
+// Aggregated from FanVote rows where teamCode is an EPL club code (ARS, CHE,
+// LIV, etc.). The fan-vote API accepts any 3-letter code, so no API change
+// was needed — we just use EPL codes in the frontend instead of national
+// team codes.
+interface EPLClubMood {
+  teamCode: string
+  teamName: string
+  avgScore: number
+  voteCount: number
+  moodEmoji: string
+}
+
 function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
   stories: PulseStory[]
   viewedIds: Set<string>
@@ -367,7 +402,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
   }
   const { t } = useLanguage()
   const { markSeen: markCardSeen } = useCardCollection()
-  const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('WC')
+  const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('ALL')
   const [apiMatches, setApiMatches] = useState<Array<{
     id: string; home: string; away: string; homeFlag: string; awayFlag: string
     score: string; homeSentiment: number; awaySentiment: number; live: boolean; league: string
@@ -392,7 +427,6 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
   const [sessionId, setSessionId] = useState<string>('')
   const [fanVotes, setFanVotes] = useState<FanVoteAgg[]>([])
   const [myVotes, setMyVotes] = useState<Array<{ teamCode: string; score: number }>>([])
-  const [votesLoading, setVotesLoading] = useState(true)
   const [selectedVoteTeam, setSelectedVoteTeam] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ msg: string; emoji: string } | null>(null)
@@ -453,7 +487,6 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
     if (!sessionId) return
     let cancelled = false
     async function loadVotes() {
-      setVotesLoading(true)
       try {
         const res = await fetch(`/api/fan-vote?session=${encodeURIComponent(sessionId)}`)
         if (!res.ok) return
@@ -463,8 +496,6 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
         setMyVotes(Array.isArray(data.myVotes) ? data.myVotes : [])
       } catch (err) {
         console.error('Failed to fetch fan votes:', err)
-      } finally {
-        if (!cancelled) setVotesLoading(false)
       }
     }
     loadVotes()
@@ -552,6 +583,60 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
     return () => { cancelled = true }
   }, [])
 
+  // ── EPL fixtures (FotMob-style upcoming games, top of Home tab) ──
+  // Real fixtures from FPL API via /api/epl/upcoming. Honest empty state
+  // when no fixtures available (off-season or API down). NEVER fabricated.
+  const [eplFixtures, setEplFixtures] = useState<EPLFixture[]>([])
+  const [eplFixturesLoading, setEplFixturesLoading] = useState(true)
+  const [eplFixturesAvailable, setEplFixturesAvailable] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadEplFixtures() {
+      setEplFixturesLoading(true)
+      try {
+        const res = await fetch('/api/epl/upcoming?limit=8')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        setEplFixtures(Array.isArray(data.fixtures) ? data.fixtures : [])
+        setEplFixturesAvailable(!!data.available)
+      } catch (err) {
+        console.error('Failed to fetch EPL fixtures:', err)
+      } finally {
+        if (!cancelled) setEplFixturesLoading(false)
+      }
+    }
+    loadEplFixtures()
+    return () => { cancelled = true }
+  }, [])
+
+  // ── EPL club mood (replaces national-team Fan Mood carousel) ──
+  // Aggregated FanVote rows for EPL clubs. Honest empty state when no
+  // votes exist yet ("Be the first to vote" CTA).
+  const [eplClubMoods, setEplClubMoods] = useState<EPLClubMood[]>([])
+  const [eplMoodsLoading, setEplMoodsLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadEplMoods() {
+      setEplMoodsLoading(true)
+      try {
+        const res = await fetch('/api/epl/fan-mood')
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+        setEplClubMoods(Array.isArray(data.moods) ? data.moods : [])
+      } catch (err) {
+        console.error('Failed to fetch EPL club mood:', err)
+      } finally {
+        if (!cancelled) setEplMoodsLoading(false)
+      }
+    }
+    loadEplMoods()
+    return () => { cancelled = true }
+  }, [])
+
   const totalVoteCount = fanVotes.reduce((sum, v) => sum + (v.count || 0), 0)
 
   const handleVote = async (teamCode: string, score: number) => {
@@ -624,52 +709,6 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
     ? Math.max(0, ballonDor.contenders.length - 8)
     : 0
 
-  // ── Hero Narrative: the single most significant data point of the day ──
-  // Picks the highest-impact story to surface at the top of the page:
-  //   1. If there's a transfer saga with buzzVolume >= 5, lead with that
-  //      (the hottest transfer rumor driving fan conversation).
-  //   2. Else if a team's fan mood has dropped below 40 (restless fans),
-  //      lead with the sentiment-drop story.
-  //   3. Else if there's any saga at all, lead with the top one.
-  //   4. Else null (banner doesn't render).
-  const heroNarrative = useMemo(() => {
-    const topSaga = transferSagas[0] // already sorted by buzzVolume desc
-    const lowestMood = [...fanVotes].sort((a, b) => a.score - b.score)[0]
-
-    if (topSaga && topSaga.buzzVolume >= 5) {
-      return {
-        type: 'transfer' as const,
-        headline: `${topSaga.playerName} → ${topSaga.toClubName}`,
-        subtext: `${topSaga.buzzVolume} fan posts · ${topSaga.tier1Count} Tier 1 ${topSaga.tier1Count === 1 ? 'source' : 'sources'}`,
-        trend: topSaga.buzzTrend,
-        isPositive: topSaga.excitedPct >= topSaga.dreadingPct,
-        badge: 'HOT TRANSFER',
-      }
-    }
-    if (lowestMood && lowestMood.score < 40 && lowestMood.count > 0) {
-      const team = NATIONAL_TEAMS.find(t => t.code === lowestMood.teamCode)
-      return {
-        type: 'sentiment' as const,
-        headline: `${team?.name ?? lowestMood.teamCode} fans are restless`,
-        subtext: `Fan mood dropped to ${lowestMood.score}/100 · ${lowestMood.count} ${lowestMood.count === 1 ? 'vote' : 'votes'} cast`,
-        trend: 'falling',
-        isPositive: false,
-        badge: 'MOOD ALERT',
-      }
-    }
-    if (topSaga) {
-      return {
-        type: 'transfer' as const,
-        headline: `${topSaga.playerName} → ${topSaga.toClubName}`,
-        subtext: `${topSaga.buzzVolume} fan posts · ${topSaga.tier1Count} Tier 1 ${topSaga.tier1Count === 1 ? 'source' : 'sources'}`,
-        trend: topSaga.buzzTrend,
-        isPositive: topSaga.excitedPct >= topSaga.dreadingPct,
-        badge: 'TRANSFER BUZZ',
-      }
-    }
-    return null
-  }, [transferSagas, fanVotes])
-
   // ── Curiosity gap: toggle fan-breakdown reveal on a saga card ──
   function toggleSagaReveal(sagaId: string) {
     setRevealedSagas(prev => {
@@ -712,19 +751,50 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
     return 'border-l-[#F59E0B]'
   }
 
-  const moodTeamEntries = FAN_MOOD_TEAM_CODES.map(code => {
-    const team = NATIONAL_TEAMS.find(t => t.code === code)
-    const vote = fanVotes.find(v => v.teamCode === code)
-    const myVote = myVotes.find(v => v.teamCode === code)
-    return {
-      code,
-      flag: team?.flag ?? '🏳️',
-      name: team?.name ?? code,
-      score: vote?.score ?? 50,
-      count: vote?.count ?? 0,
-      myVote: myVote?.score ?? null,
+  // ── EPL club mood entries (replaces national-team moodTeamEntries) ──
+  // Combines the server-side aggregated moods (from /api/epl/fan-mood, which
+  // reads real FanVote rows) with the local fanVotes state so the carousel
+  // updates optimistically when the user votes (handleVote updates fanVotes
+  // + myVotes immediately, then POSTs to the API). Falls back to the static
+  // EPL_CLUBS list when no votes exist yet — the UI shows the "Be the first
+  // to vote" empty state in that case.
+  const eplMoodEntries = useMemo(() => {
+    // Merge server-side moods with local optimistic fanVotes. fanVotes wins
+    // for clubs the user just voted on (optimistic update).
+    const mergeFromList = (clubs: { code: string; name: string; badge: string }[]) => {
+      return clubs.map((club) => {
+        const server = eplClubMoods.find((m) => m.teamCode === club.code)
+        const localVote = fanVotes.find((v) => v.teamCode === club.code)
+        const myVote = myVotes.find((v) => v.teamCode === club.code)?.score ?? null
+        const baseScore = server?.avgScore ?? localVote?.score ?? 50
+        const baseCount = server?.voteCount ?? localVote?.count ?? 0
+        const hasVotes = baseCount > 0
+        return {
+          code: club.code,
+          badge: club.badge,
+          name: club.name,
+          score: baseScore,
+          count: baseCount,
+          myVote,
+          moodEmoji: hasVotes
+            ? (server?.moodEmoji ?? getFanMoodEmoji(baseScore))
+            : '😐' as const,
+        }
+      })
     }
-  })
+
+    // If we have server-side moods, use those clubs as the base (preserves the
+    // vote-count sort order). Otherwise fall back to the static EPL_CLUBS list.
+    if (eplClubMoods.length > 0) {
+      const clubsFromServer = eplClubMoods.map((m) => ({
+        code: m.teamCode,
+        name: m.teamName,
+        badge: findEPLClub(m.teamCode)?.badge ?? '⚽',
+      }))
+      return mergeFromList(clubsFromServer)
+    }
+    return mergeFromList(EPL_CLUBS)
+  }, [eplClubMoods, fanVotes, myVotes])
 
   return (
     <div className="space-y-8">
@@ -744,104 +814,269 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
       )}
 
       {/* ════════════════════════════════════════════════════════════════════
-          POSITION 1 — HERO NARRATIVE BANNER
-          Full-width compact banner surfacing the single most significant data
-          point of the day: the hottest transfer saga (by buzzVolume) OR the
-          team with the biggest sentiment drop. Subtle gradient bg + bold
-          headline + red/green trend arrow.
+          POSITION 1 — UPCOMING EPL GAMES (FotMob-style, top of page)
+          Featured match hero card + compact fixture rows. Real fixtures from
+          the FPL API via /api/epl/upcoming. Honest empty state when no
+          fixtures are available (off-season). NEVER fabricated.
           ════════════════════════════════════════════════════════════════════ */}
-      {heroNarrative && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className={`relative overflow-hidden rounded-2xl border p-4 sm:p-5 ${
-            heroNarrative.isPositive
-              ? 'bg-gradient-to-r from-[#10B981]/8 via-white dark:via-[#1A1A1A] to-[#10B981]/5 border-[#10B981]/20 dark:border-[#10B981]/25'
-              : 'bg-gradient-to-r from-[#EF4444]/8 via-white dark:via-[#1A1A1A] to-[#FF6B35]/5 border-[#EF4444]/20 dark:border-[#EF4444]/25'
-          }`}
-        >
-          {/* Decorative glow */}
-          <div className={`absolute -right-6 -top-6 size-24 rounded-full blur-3xl ${
-            heroNarrative.isPositive ? 'bg-[#10B981]/8' : 'bg-[#EF4444]/8'
-          }`} />
-
-          <div className="relative flex items-center gap-3 sm:gap-4">
-            {/* Trend arrow icon */}
-            <div className={`flex size-11 sm:size-12 shrink-0 items-center justify-center rounded-xl ${
-              heroNarrative.isPositive
-                ? 'bg-[#10B981]/15 text-[#10B981]'
-                : 'bg-[#EF4444]/15 text-[#EF4444]'
-            }`}>
-              {heroNarrative.isPositive
-                ? <TrendingUp className="size-6" />
-                : <TrendingDown className="size-6" />}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-[#6C2BD9]/10 dark:bg-[#8B5CF6]/15">
+              <CircleDot className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
             </div>
-
-            {/* Headline + subtext */}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider ${
-                  heroNarrative.isPositive
-                    ? 'bg-[#10B981]/15 text-[#10B981]'
-                    : 'bg-[#EF4444]/15 text-[#EF4444]'
-                }`}>
-                  <Flame className="size-2.5" />
-                  {heroNarrative.badge}
-                </span>
-              </div>
-              <h2 className="text-base sm:text-lg font-black tracking-tight text-[#1A1A1A] dark:text-white leading-tight truncate">
-                {heroNarrative.headline}
+            <div>
+              <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white flex items-center gap-1.5">
+                Premier League
+                {eplFixturesAvailable && eplFixtures[0]?.matchweek ? (
+                  <span className="text-[10px] font-semibold text-[#666] dark:text-[#CCCCCC] ml-1">
+                    · Matchweek {eplFixtures[0].matchweek}
+                  </span>
+                ) : null}
               </h2>
-              <p className="text-[11px] sm:text-xs text-[#666] dark:text-[#CCCCCC] truncate">
-                {heroNarrative.subtext}
+              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+                Upcoming EPL games — fixtures &amp; fan mood
               </p>
             </div>
-
-            {/* Trend label pill (right side) */}
-            <div className={`hidden sm:flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold ${
-              heroNarrative.isPositive
-                ? 'bg-[#10B981]/10 text-[#10B981]'
-                : 'bg-[#EF4444]/10 text-[#EF4444]'
-            }`}>
-              {heroNarrative.isPositive ? (
-                <>
-                  <TrendingUp className="size-3.5" />
-                  Rising
-                </>
-              ) : (
-                <>
-                  <TrendingDown className="size-3.5" />
-                  Falling
-                </>
-              )}
-            </div>
           </div>
-        </motion.div>
-      )}
+          {eplFixtures.length > 0 && (
+            <span className="hidden sm:inline-flex text-[11px] font-semibold text-[#6C2BD9] dark:text-[#8B5CF6] gap-0.5 items-center">
+              View all <ChevronRight className="size-3" />
+            </span>
+          )}
+        </div>
+
+        {eplFixturesLoading ? (
+          <Card className="glass-card border-[#E0E0E0]/50 dark:border-white/5">
+            <CardContent className="p-4 space-y-2">
+              <div className="h-32 rounded-xl bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-12 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
+              ))}
+            </CardContent>
+          </Card>
+        ) : eplFixtures.length === 0 ? (
+          // ── HONEST EMPTY STATE — never fabricate fixtures ──
+          <Card className="glass-card border-[#E0E0E0]/50 dark:border-white/5">
+            <CardContent className="py-10 text-center">
+              <Clock className="mx-auto size-7 text-[#666]/30 dark:text-[#CCCCCC]/30 mb-2" />
+              <p className="text-sm font-semibold text-[#1A1A1A] dark:text-white">
+                EPL fixtures loading
+              </p>
+              <p className="text-[11px] text-[#666] dark:text-[#CCCCCC] mt-1">
+                Season kicks off soon — check back for the fixture list.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* ── FEATURED MATCH — hero glass-card (the next kickoff) ── */}
+            {(() => {
+              const featured = eplFixtures[0]
+              const homeMood = fanVotes.find((v) => v.teamCode === featured.homeTeamCode)
+              const awayMood = fanVotes.find((v) => v.teamCode === featured.awayTeamCode)
+              const homeScore = homeMood?.score ?? 50
+              const awayScore = awayMood?.score ?? 50
+              const isLive = featured.status === 'live'
+              return (
+                <Card className="glass-card glass-hover border-[#6C2BD9]/30 dark:border-[#8B5CF6]/30 overflow-hidden mb-3">
+                  <CardContent className="p-4 sm:p-5">
+                    {/* Top row: competition + matchweek + status */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="text-[9px] font-bold border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                          {featured.competition}
+                        </Badge>
+                        {featured.matchweek > 0 && (
+                          <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                            · GW {featured.matchweek}
+                          </span>
+                        )}
+                      </div>
+                      {isLive ? (
+                        <LiveBadge />
+                      ) : featured.status === 'completed' ? (
+                        <Badge variant="outline" className="text-[9px] font-bold border-[#999]/30 text-[#666] dark:text-[#999]">
+                          FT
+                        </Badge>
+                      ) : (
+                        <span className="text-[10px] font-bold text-[#FF6B35]">{featured.kickoffLabel}</span>
+                      )}
+                    </div>
+
+                    {/* Teams row */}
+                    <div className="grid grid-cols-3 items-center gap-2">
+                      {/* Home team */}
+                      <div className="flex flex-col items-center text-center">
+                        <span className="text-3xl sm:text-4xl mb-1">{featured.homeTeamBadge}</span>
+                        <span className="text-xs sm:text-sm font-black tracking-tight text-[#1A1A1A] dark:text-white truncate w-full">
+                          {featured.homeTeamName}
+                        </span>
+                        <span className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{featured.homeTeamCode}</span>
+                      </div>
+
+                      {/* Score / kickoff center */}
+                      <div className="flex flex-col items-center">
+                        {featured.status === 'completed' || isLive ? (
+                          <span className="text-2xl sm:text-3xl font-black tracking-wider text-[#1A1A1A] dark:text-white">
+                            {featured.homeScore ?? 0} - {featured.awayScore ?? 0}
+                          </span>
+                        ) : (
+                          <span className="text-base sm:text-lg font-black text-[#1A1A1A] dark:text-white">
+                            {featured.kickoffLabel}
+                          </span>
+                        )}
+                        {featured.venue && (
+                          <span className="mt-0.5 text-[9px] text-[#666] dark:text-[#CCCCCC] truncate max-w-[120px]">
+                            {featured.venue}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Away team */}
+                      <div className="flex flex-col items-center text-center">
+                        <span className="text-3xl sm:text-4xl mb-1">{featured.awayTeamBadge}</span>
+                        <span className="text-xs sm:text-sm font-black tracking-tight text-[#1A1A1A] dark:text-white truncate w-full">
+                          {featured.awayTeamName}
+                        </span>
+                        <span className="text-[9px] text-[#666] dark:text-[#CCCCCC]">{featured.awayTeamCode}</span>
+                      </div>
+                    </div>
+
+                    {/* Fan mood emojis row — small, beside team names */}
+                    <div className="mt-3 grid grid-cols-3 items-center gap-2 rounded-lg bg-[#F8F9FA] dark:bg-[#2D2D2D] px-3 py-2">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="text-[9px] font-bold text-[#666] dark:text-[#CCCCCC]">{featured.homeTeamCode}</span>
+                        <span className="text-xl leading-none">{getFanMoodEmoji(homeScore)}</span>
+                      </div>
+                      <span className="text-center text-[9px] font-bold uppercase tracking-widest text-[#6B7280] dark:text-gray-400">
+                        {t('home.fan_mood')}
+                      </span>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="text-xl leading-none">{getFanMoodEmoji(awayScore)}</span>
+                        <span className="text-[9px] font-bold text-[#666] dark:text-[#CCCCCC]">{featured.awayTeamCode}</span>
+                      </div>
+                    </div>
+
+                    {/* CTAs */}
+                    <div className="mt-3 flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 gap-1.5 border-[#6C2BD9]/30 text-[#6C2BD9] dark:text-[#8B5CF6] dark:border-[#8B5CF6]/30 hover:bg-[#6C2BD9]/5 dark:hover:bg-[#8B5CF6]/10 text-[11px] h-8 rounded-lg font-bold"
+                      >
+                        <MessageCircle className="size-3" />
+                        What Fans Are Saying
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 border-[#E0E0E0]/50 dark:border-white/10 text-[#666] dark:text-[#CCCCCC] hover:bg-[#F8F9FA] dark:hover:bg-[#2D2D2D] text-[11px] h-8 rounded-lg font-bold"
+                      >
+                        <Clock className="size-3" />
+                        Set reminder
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })()}
+
+            {/* ── COMPACT FIXTURE ROWS (the rest of the upcoming fixtures) ── */}
+            {eplFixtures.length > 1 && (
+              <Card className="glass-card border-[#E0E0E0]/50 dark:border-white/5 overflow-hidden">
+                <CardContent className="p-2 sm:p-3">
+                  <div className="divide-y divide-[#E0E0E0]/50 dark:divide-white/5">
+                    {eplFixtures.slice(1).map((f, i) => {
+                      const homeMood = fanVotes.find((v) => v.teamCode === f.homeTeamCode)
+                      const awayMood = fanVotes.find((v) => v.teamCode === f.awayTeamCode)
+                      const homeScore = homeMood?.score ?? 50
+                      const awayScore = awayMood?.score ?? 50
+                      const isLive = f.status === 'live'
+                      return (
+                        <motion.div
+                          key={f.id}
+                          initial={{ opacity: 0, x: -6 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.25, delay: i * 0.04 }}
+                          className="flex items-center gap-2 py-2 px-1 sm:px-2 hover:bg-[#F8F9FA] dark:hover:bg-white/[0.03] rounded-md transition-colors cursor-pointer"
+                        >
+                          {/* Kickoff time (left) */}
+                          <div className="shrink-0 w-14 sm:w-16 text-left">
+                            {isLive ? (
+                              <LiveBadge />
+                            ) : (
+                              <span className="text-[10px] sm:text-[11px] font-bold text-[#1A1A1A] dark:text-white">
+                                {f.kickoffLabel}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Home team + emoji */}
+                          <div className="flex-1 min-w-0 flex items-center justify-end gap-1.5">
+                            <span className="text-[11px] sm:text-xs font-bold text-[#1A1A1A] dark:text-white truncate text-right">
+                              {f.homeTeamName}
+                            </span>
+                            <span className="text-base sm:text-lg leading-none shrink-0">{getFanMoodEmoji(homeScore)}</span>
+                            <span className="text-base sm:text-lg shrink-0">{f.homeTeamBadge}</span>
+                          </div>
+
+                          {/* Center: score or "vs" */}
+                          <div className="shrink-0 w-10 text-center">
+                            {f.status === 'completed' || isLive ? (
+                              <span className="text-xs font-black text-[#1A1A1A] dark:text-white">
+                                {f.homeScore ?? 0}-{f.awayScore ?? 0}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-[#999] dark:text-[#777]">vs</span>
+                            )}
+                          </div>
+
+                          {/* Away team + emoji */}
+                          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                            <span className="text-base sm:text-lg shrink-0">{f.awayTeamBadge}</span>
+                            <span className="text-base sm:text-lg leading-none shrink-0">{getFanMoodEmoji(awayScore)}</span>
+                            <span className="text-[11px] sm:text-xs font-bold text-[#1A1A1A] dark:text-white truncate">
+                              {f.awayTeamName}
+                            </span>
+                          </div>
+
+                          {/* Right: chevron */}
+                          <ChevronRight className="size-3 text-[#999] dark:text-[#777] shrink-0" />
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+      </section>
 
       {/* ════════════════════════════════════════════════════════════════════
-          POSITION 2 — FAN MOOD (voting carousel)
-          Moved up so the interactive voting is the first thing users engage
-          with after the hero banner.
+          POSITION 2 — EPL FAN MOOD (replaces national-team Fan Mood)
+          Horizontal carousel of EPL club cards. Tap to vote — reuses the
+          existing Fan Vote API with EPL club codes (ARS, CHE, LIV, etc.).
+          Honest empty state when no EPL votes exist yet.
           ════════════════════════════════════════════════════════════════════ */}
       <section>
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[#666] dark:text-[#CCCCCC]">
-              {t('home.fan_mood')}
+              EPL Fan Mood
             </h3>
-            {!votesLoading && (
+            {!eplMoodsLoading && eplClubMoods.length > 0 && (
               <Badge className="bg-[#6C2BD9]/10 text-[#6C2BD9] dark:text-[#8B5CF6] border-0 text-[11px] font-bold px-2 py-0.5">
                 {totalVoteCount.toLocaleString()} <span className="brutalist-number">{totalVoteCount === 1 ? 'vote' : 'votes'}</span> cast
               </Badge>
             )}
           </div>
-          <span className="text-[11px] font-semibold text-[#FF6B35]">Swipe teams to vote →</span>
+          <span className="text-[11px] font-semibold text-[#FF6B35]">Swipe clubs to vote →</span>
         </div>
         <Card className="glass-card glass-hover border-[#E0E0E0]/50 dark:border-white/5 overflow-hidden">
           <CardContent className="p-4">
-            {votesLoading ? (
+            {eplMoodsLoading ? (
               <div className="flex gap-2.5 overflow-hidden">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="shrink-0 w-28 h-36 rounded-2xl bg-[#F8F9FA] dark:bg-[#2D2D2D] skeleton-shimmer" />
@@ -862,8 +1097,9 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
 
                 {/* Horizontal scroll carousel */}
                 <div className="flex gap-2.5 overflow-x-auto scrollbar-none snap-x snap-mandatory pb-2 -mx-1 px-1">
-                  {moodTeamEntries.map((entry, i) => {
+                  {eplMoodEntries.map((entry, i) => {
                     const hasMyVote = entry.myVote !== null
+                    const hasVotes = entry.count > 0
                     return (
                       <motion.button
                         key={entry.code}
@@ -890,24 +1126,26 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                           </span>
                         )}
 
-                        {/* Big team flag (real PNG image — renders on all platforms) */}
-                        <div className="flex items-center justify-center" style={{ minHeight: 32 }}>
-                          <FlagImage nationCode={entry.code} size={48} fallbackEmoji={entry.flag} className="shadow-sm" />
-                        </div>
+                        {/* Club badge (emoji crest placeholder) */}
+                        <span className="text-3xl leading-none">{entry.badge}</span>
 
-                        {/* Big mood emoji */}
+                        {/* Mood emoji — only meaningful when hasVotes */}
                         <span className="mt-1.5 text-3xl sm:text-4xl leading-none">
-                          {getFanMoodEmoji(entry.score)}
+                          {hasVotes ? entry.moodEmoji : '🗳️'}
                         </span>
 
-                        {/* Team code */}
+                        {/* Club code */}
                         <span className="mt-2 text-[11px] font-black tracking-wider text-[#1A1A1A] dark:text-white">
                           {entry.code}
                         </span>
 
-                        {/* Vote count */}
+                        {/* Vote count (or empty-state CTA) */}
                         <span className="text-[8px] text-[#666] dark:text-[#CCCCCC]">
-                          <span className="brutalist-number">{entry.count}</span> {entry.count === 1 ? 'vote' : 'votes'}
+                          {hasVotes ? (
+                            <><span className="brutalist-number">{entry.count}</span> {entry.count === 1 ? 'vote' : 'votes'}</>
+                          ) : (
+                            <>Tap to vote</>
+                          )}
                         </span>
 
                         {/* Thin mood indicator bar */}
@@ -917,7 +1155,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                         >
                           <div
                             className={`h-full rounded-full ${entry.score >= 80 ? 'sentiment-positive' : entry.score >= 50 ? 'sentiment-neutral' : 'sentiment-negative'}`}
-                            style={{ width: `${entry.score}%`, transition: 'width 0.6s ease' }}
+                            style={{ width: `${hasVotes ? entry.score : 0}%`, transition: 'width 0.6s ease' }}
                           />
                         </div>
                       </motion.button>
@@ -927,16 +1165,20 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
               </div>
             )}
             <p className="mt-3 text-[11px] text-[#6B7280] dark:text-gray-400 text-center">
-              Your vote is anonymous — stored only in your browser session.
+              {eplClubMoods.length === 0 && !eplMoodsLoading
+                ? 'Be the first to vote — tap a club to set the mood.'
+                : 'Your vote is anonymous — stored only in your browser session.'}
             </p>
           </CardContent>
         </Card>
       </section>
 
       {/* ════════════════════════════════════════════════════════════════════
-          POSITION 3 — MATCH SENTIMENTS
+          POSITION 3 — RECENT MATCH SENTIMENTS
           Horizontal scrollable row of match cards (mobile) / grid (desktop).
-          Includes a green pulsing "Live Pulse" dot next to the header.
+          Default filter is now "All" — the World Cup is over and is now an
+          archive filter. Friendly matches still appear here while the EPL
+          season ramps up.
           ════════════════════════════════════════════════════════════════════ */}
       <section>
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -946,7 +1188,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
             </div>
             <div>
               <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white flex items-center gap-1.5">
-                Match Sentiments
+                Recent Match Sentiments
                 {/* Live Pulse indicator — green pulsing dot */}
                 <span
                   aria-label="Live"
@@ -954,7 +1196,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                 />
               </h2>
               <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
-                Fan reactions from recent matches
+                Fan reactions from recent matches · WC now archived
               </p>
             </div>
           </div>
@@ -1375,12 +1617,10 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                 <CardHeader className="pb-2 pt-4 px-4">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-bold text-[#1A1A1A] dark:text-white flex items-center gap-2">
-                      <FlagImage
-                        nationCode={selectedVoteTeam}
-                        size={24}
-                        fallbackEmoji={NATIONAL_TEAMS.find(t => t.code === selectedVoteTeam)?.flag ?? '🏳️'}
-                      />
-                      {selectedVoteTeam} Mood
+                      <span className="text-xl leading-none">
+                        {findEPLClub(selectedVoteTeam)?.badge ?? '⚽'}
+                      </span>
+                      {findEPLClub(selectedVoteTeam)?.name ?? selectedVoteTeam} Mood
                     </CardTitle>
                     <button
                       onClick={() => !submitting && setSelectedVoteTeam(null)}
@@ -1391,7 +1631,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                     </button>
                   </div>
                   <CardDescription className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
-                    How are fans of {NATIONAL_TEAMS.find(t => t.code === selectedVoteTeam)?.name ?? selectedVoteTeam} feeling right now?
+                    How are fans of {findEPLClub(selectedVoteTeam)?.name ?? selectedVoteTeam} feeling right now?
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="px-4 pb-4 pt-1">

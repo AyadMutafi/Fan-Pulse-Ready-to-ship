@@ -5511,3 +5511,68 @@ Phase 3: API integration — 3 routes return photoUrl, FormationPlayerCard enhan
 Phase 4: On-demand fetching — usePlayerPhoto hook + /api/player-photo route, static-data players (Ballon d'Or + Tournament Retro) now get photos via client-side fetch + localStorage cache
 
 TOTAL: ~199 players with Wikipedia photos across the app (183 DB-sourced + ~16 on-demand for Ballon d'Or/Tournament Retro). 18 players use the graceful initials-on-purple fallback. Tier emojis (🔥⚡💀🏆🚀) on every card. Wikipedia/CC-BY-SA attribution in footer. Anti-hallucination contract upheld — all photos from upload.wikimedia.org.
+
+---
+Task ID: home-restructure-epl
+Agent: Main Agent
+Task: Home tab EPL pivot — remove national-team Fan Mood + Hot Transfer banner; add Upcoming EPL Games (FotMob-style) at the top; add EPL Fan Mood carousel (club-level, replacing national teams); relabel "Match Sentiments" → "Recent Match Sentiments" with default "All" filter.
+
+Work Log:
+- Read /home/z/my-project/worklog.md first (anti-hallucination rule). Confirmed Phases 1-4 of Wikipedia Player Photos were complete; built on top of that stable state.
+- Read existing src/app/page.tsx (3113 lines) to identify the national-team Fan Mood section (POSITION 2, lines 823-934) and the heroNarrative banner (POSITION 1, lines 746-821) — the latter was the "Hot Transfer" Saka → Bayern style banner the user wanted removed.
+- Read prisma/schema.prisma to confirm FanVote model accepts any 3-letter teamCode (no foreign key constraint) — so EPL club codes (ARS, CHE, LIV, etc.) work without API changes.
+- Read src/app/api/fan-vote/route.ts to confirm teamCode validation is `^[A-Za-z]{3}$` — exactly matches EPL club code shape. No API change needed.
+- Read src/lib/transfer-pulse/clubs.ts to confirm the existing EPL club dictionary (ARS, CHE, LIV, MCI, MUN, NEW, TOT, AVL, BHA, WHU, EVE, FUL, WOL, CRY, BOU, BRE, NFO, LEI, SOU, IPS) — reused a 3-letter-code subset for the new EPL Fan Mood carousel.
+
+Created new files:
+- src/lib/epl-clubs.ts — pure static dictionary (no DB imports) so client + server can both import. Exports EPL_CLUBS (12 clubs, 3-letter codes only) + findEPLClub(code). Each club has a code, name, and emoji badge placeholder. Sorted by typical fan-engagement size (top 6 first).
+- src/lib/epl-fixtures.ts — fetchUpcomingEPLFixtures(limit=8). Primary source: FPL API (https://fantasy.premierleague.com/api/fixtures/ + /bootstrap-static/ for team ID→code mapping). 6s timeout per call. 30-minute in-process cache. Fallback: Wikipedia via webSearch (best-effort, returns empty array on parse failure — never fabricates). Returns EPLFixture[] with id, homeTeamCode/Name/Badge, awayTeamCode/Name/Badge, kickoffAt, kickoffLabel ("Today 20:00" / "Sat 15:00" / "Aug 15, 20:00"), competition, matchweek, venue, status (upcoming/live/completed), homeScore/awayScore. Includes a static FPL_ID_TO_CODE map (1=ARS, 2=AVL, ... 19=WOL) for fallback when bootstrap-static is unreachable. ANTI-HALLUCINATION CONTRACT documented at the top: "Only return real fixtures. Never invent kickoff times."
+- src/lib/epl-club-mood.ts — fetchEPLClubMood(). Aggregates FanVote rows where teamCode ∈ EPL_CLUBS codes. Returns top 12 clubs sorted by voteCount desc with avgScore + moodEmoji (🤩😊😐😟😡 5-level scale, same as the rest of the app). 5-minute in-process cache. Honest empty state (returns []) when no EPL votes exist yet.
+- src/app/api/epl/upcoming/route.ts — GET /api/epl/upcoming?limit=8 (max 12). 20 req/min/IP rate limit. 30-min Next.js ISR cache + 5-min CDN cache. Returns {fixtures, available, count, cached}. Returns 200 with empty array on error (so UI shows honest empty state, not an error).
+- src/app/api/epl/fan-mood/route.ts — GET /api/epl/fan-mood. 20 req/min/IP rate limit. 5-min Next.js ISR cache + 60s CDN cache. Returns {moods, available, count}.
+
+Modified src/app/page.tsx:
+- Added import for EPL_CLUBS + findEPLClub from '@/lib/epl-clubs'.
+- Added EPLFixture + EPLClubMood types (client-side shapes matching the API responses).
+- Added 4 new state hooks: eplFixtures, eplFixturesLoading, eplFixturesAvailable, eplClubMoods, eplMoodsLoading.
+- Added 2 new useEffects: loadEplFixtures() calls /api/epl/upcoming?limit=8; loadEplMoods() calls /api/epl/fan-mood.
+- REMOVED the heroNarrative useMemo block entirely (was the "Hot Transfer" / "Mood Alert" banner — POSITION 1).
+- REMOVED the FAN_MOOD_TEAM_CODES constant (was the national-team list ['BRA','ARG','FRA','ENG',...]).
+- REMOVED the votesLoading state (no longer used after the Fan Mood carousel was replaced).
+- REMOVED the moodTeamEntries useMemo (was mapping national-team codes to flags + votes).
+- ADDED eplMoodEntries useMemo — merges server-side eplClubMoods with local optimistic fanVotes + myVotes so the carousel updates immediately when the user votes. Falls back to static EPL_CLUBS list (with voteCount: 0) when no votes exist yet — UI shows the "Be the first to vote" CTA in that case.
+- ADDED new POSITION 1: "Premier League · Matchweek 1" section — FotMob-style featured match hero glass-card (the next kickoff) + compact fixture rows (the rest). Featured card shows: competition badge, matchweek, kickoffLabel/FT/LiveBadge, both teams (badge + name + code), fan mood emojis (small, beside team codes), "What Fans Are Saying" + "Set reminder" CTAs. Compact rows show: kickoffLabel (left), home team + emoji, score/"vs" (center), away team + emoji, chevron (right). Loading skeleton + honest empty state ("EPL fixtures loading — Season kicks off soon").
+- ADDED new POSITION 2: "EPL FAN MOOD" carousel — 12 EPL club cards (ARS, CHE, LIV, MCI, MUN, TOT, NEW, AVL, BHA, WHU, EVE, FUL). Each card shows: club badge emoji, mood emoji (🤩😊😐😟😡 or 🗳️ when no votes), club code, vote count or "Tap to vote" CTA, thin mood indicator bar. Voted check badge (green ✓) appears on clubs the user has voted on. Honest empty state: "Be the first to vote — tap a club to set the mood."
+- UPDATED vote modal to use findEPLClub() instead of NATIONAL_TEAMS.find() — shows the club badge emoji + club name in the modal title.
+- CHANGED matchFilter default from 'WC' to 'ALL' (WC is now archived; the World Cup is over).
+- RELABELED "Match Sentiments" → "Recent Match Sentiments" (POSITION 3). Updated subtitle to "Fan reactions from recent matches · WC now archived". Updated comment block to explain the pivot.
+- KEPT POSITION 0 (Stories), POSITION 4 (Latest Transfer Tweets), POSITION 5 (Ballon d'Or Race) — unchanged.
+- KEPT Wikipedia/CC-BY-SA attribution in the footer (both desktop + mobile) — Phase 3 work preserved.
+
+Verification (Agent Browser, desktop + mobile 375px):
+- Home tab headings (in order): Today's Pulse Stories → Premier League · Matchweek 1 → EPL FAN MOOD → Recent Match Sentiments → Latest Transfer Tweets → Ballon d'Or Race. ✅ Correct order per spec.
+- National-team Fan Mood section GONE — DOM text search finds ZERO occurrences of BRA/ARG/FRA/ENG/ESP/GER/MEX/USA/POR/NED/JPN/MAR in the Fan Mood area. ✅
+- heroNarrative banner GONE — no "Hot Transfer" or "Mood Alert" badges anywhere on the page. ✅
+- Upcoming EPL Games section renders at the top with: featured match hero glass-card (Arsenal vs Coventry City, Aug 21 19:00, Matchweek 1) + 7 compact fixture rows. Real FPL fixtures (not fabricated). ✅
+- EPL Fan Mood carousel shows 12 EPL clubs (ARS, CHE, LIV, MCI, MUN, TOT, NEW, AVL, BHA, WHU, EVE, FUL). All show "Tap to vote" initially. ✅
+- Voted on ARS with 🤩 (95): modal opened → clicked 🤩 → modal closed → ARS card immediately showed "You voted 🔴 🤩 ARS 1 vote" (optimistic update). After page reload, vote persisted (server-side aggregation returned ARS with avgScore=95, voteCount=1). ✅ End-to-end vote flow works.
+- Mobile viewport (375×812): no horizontal overflow (scrollWidth = 375 = viewport width). Compact fixture rows fit. Carousel scrolls horizontally. ✅
+- Wikipedia/CC-BY-SA attribution still present in footer. ✅
+- Dev log: 0 errors, 0 warnings. All API endpoints return 200. ✅
+- bun run lint: clean (0 errors, 0 warnings). ✅
+
+Anti-hallucination verification:
+- EPL fixtures come from the REAL FPL API (https://fantasy.premierleague.com/api/fixtures/). Verified: returned real August 2026 fixtures (Arsenal vs Coventry City, Hull City vs Man Utd, Everton vs Crystal Palace, Ipswich vs Sunderland, etc.) — these are the actual 2026-27 Premier League opening fixtures.
+- When the FPL API is unreachable, the code falls back to webSearch (Wikipedia) — but the webSearch fallback deliberately returns an empty array rather than risk parsing fabrication. The UI then shows the honest empty state.
+- The /api/epl/fan-mood endpoint correctly returned `{moods:[], available:false, count:0}` before any votes were cast — honest empty state, no fabricated moods.
+- The fan-vote API was NOT modified — it already accepted any 3-letter teamCode. We just use EPL club codes in the frontend instead of national team codes.
+
+Stage Summary:
+- Home tab fully pivoted from World Cup to EPL. National-team Fan Mood section + Hot Transfer banner removed; Upcoming EPL Games (FotMob-style) + EPL Fan Mood carousel added at the top.
+- New files (5): src/lib/epl-clubs.ts (pure static dictionary), src/lib/epl-fixtures.ts (FPL API fetcher with 30-min cache + webSearch fallback), src/lib/epl-club-mood.ts (FanVote aggregator with 5-min cache), src/app/api/epl/upcoming/route.ts (20/min rate limit), src/app/api/epl/fan-mood/route.ts (20/min rate limit).
+- Modified src/app/page.tsx: removed heroNarrative + national-team Fan Mood + FAN_MOOD_TEAM_CODES + votesLoading + moodTeamEntries; added EPL state + useEffects + eplMoodEntries + 2 new sections (Upcoming EPL Games, EPL Fan Mood); relabeled Match Sentiments → Recent Match Sentiments with default "All" filter; updated vote modal to use EPL clubs.
+- Anti-hallucination contract upheld: EPL fixtures come from FPL API ONLY (real August 2026 fixtures returned). Honest empty state when no fixtures/votes available. No fabricated kickoff times or moods.
+- Fan-vote flow end-to-end verified: tap EPL club → modal opens → tap mood emoji → optimistic update → POST /api/fan-vote with teamCode="ARS" → server persists → reload confirms vote.
+- Existing functionality preserved: Stories, Recent Match Sentiments (with WC/All filter), Latest Transfer Tweets, Ballon d'Or Race, Wikipedia photo integration (Phases 1-4), footer attribution.
+- Tier emojis (🔥⚡💀🏆🚀) on PlayerCard components across all tabs untouched.
+- Mobile responsive (375px) — no horizontal overflow, carousel scrolls horizontally, compact fixture rows fit.
