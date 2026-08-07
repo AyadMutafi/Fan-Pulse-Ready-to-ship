@@ -230,9 +230,16 @@ export function sanitizeXPostUrlBatch(
       prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1)
     }
     for (const [, count] of prefixCounts) {
-      // If any single 10-char prefix covers >=50% of the X URLs, the batch
-      // is synthetic (seed data). Null out ALL X URLs in the batch.
-      if (count >= xUrlsWithPrefix.length / 2) {
+      // If a MAJORITY (>50%, strictly) of X URLs share the same 10-char
+      // status-ID prefix, the batch is synthetic (seed data). Real X posts
+      // from different authors/days do NOT share a 10-char prefix.
+      //
+      // IMPORTANT: must be strictly `>`, not `>=`. With `>=`, a 2-URL batch
+      // where each URL has a DIFFERENT prefix would trigger (count=1,
+      // 1 >= 2/2 = 1 >= 1 = true) — a false positive that nulls real URLs.
+      // The `>` ensures only a TRUE majority (e.g., 2 of 2, 3 of 4, 3 of 5)
+      // triggers the synthetic-flag, not a 50/50 split.
+      if (count > xUrlsWithPrefix.length / 2) {
         return individuallyValid.map((u) => {
           if (!u) return null
           // Null out X URLs, preserve non-X URLs

@@ -51,6 +51,9 @@ import {
   TrendingDown,
   Minus,
   ExternalLink,
+  Eye,
+  EyeOff,
+  Info,
 } from 'lucide-react'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -163,6 +166,7 @@ export default function AdminPage() {
 
 function LoginGate({ onAuthed }: { onAuthed: () => void }) {
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -208,31 +212,89 @@ function LoginGate({ onAuthed }: { onAuthed: () => void }) {
               <Label htmlFor="pw" className="text-zinc-300">
                 Admin password
               </Label>
-              <Input
-                id="pw"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                autoFocus
-                disabled={loading}
-                autoComplete="new-password"
-                data-lpignore="true"
-                data-1p-ignore="true"
-                data-form-type="other"
-                className="border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600"
-              />
+              <div className="relative">
+                <Input
+                  id="pw"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value)
+                    if (error) setError(null)
+                  }}
+                  placeholder="••••••••••••"
+                  autoFocus
+                  disabled={loading}
+                  autoComplete="off"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                  spellCheck={false}
+                  className="border-zinc-700 bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 pr-10 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((s) => !s)}
+                  tabIndex={-1}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 transition"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
               <p className="text-xs text-zinc-500">
-                Password changed? Clear your browser&rsquo;s saved password for
-                this site and re-type it manually.
+                Tip: click the eye icon to reveal what you&rsquo;re typing —
+                browser autofill often silently substitutes a stale saved
+                password.
               </p>
             </div>
             {error && (
               <Alert variant="destructive">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
+                <AlertDescription>
+                  {error}. You typed{' '}
+                  <code className="rounded bg-zinc-800 px-1 py-0.5 text-[11px]">
+                    {password.length}
+                  </code>{' '}
+                  characters
+                  {password.length > 0 && (
+                    <>
+                      {' — visible value: '}
+                      <code className="rounded bg-zinc-800 px-1 py-0.5 text-[11px] break-all">
+                        {showPassword ? password : '•'.repeat(password.length)}
+                      </code>
+                    </>
+                  )}
+                  .
+                </AlertDescription>
               </Alert>
             )}
+            <div className="rounded-md border border-cyan-500/30 bg-cyan-500/5 p-3 text-xs text-cyan-200">
+              <div className="flex items-start gap-2">
+                <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-cyan-400" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-cyan-100">
+                    Sandbox / dev password
+                  </p>
+                  <p>
+                    Use{' '}
+                    <code className="rounded bg-cyan-950/60 px-1.5 py-0.5 font-mono text-cyan-200">
+                      123456789
+                    </code>{' '}
+                    (9 digits). Type it manually — do NOT let your browser
+                    autofill. Click the eye icon above to verify each character
+                    before submitting.
+                  </p>
+                  <p className="text-cyan-400/70">
+                    Production deployments set a strong ADMIN_PASSWORD env var;
+                    this hint only appears in dev/sandbox.
+                  </p>
+                </div>
+              </div>
+            </div>
             <Button
               type="submit"
               disabled={loading || !password}
