@@ -5798,3 +5798,117 @@ Stage Summary:
 - DB state: 51 sagas (35 active, 11 completed, 5 debunked), 84 sources. All 9 user-provided X links are attached as real, clickable TransferSource rows.
 - ANTI-REVERT STRATEGY: The .env ADMIN_PASSWORD=123456789 line ensures admin login works EVEN IF admin-auth.ts reverts to fail-closed again. The scripts/update-transfers-aug7.ts file is now in the project (not /tmp) so it survives reverts and can be re-run with `npx tsx scripts/update-transfers-aug7.ts`.
 - KNOWN LIMITATION: Turbopack dev server may crash under heavy concurrent load (browser fires 10+ API calls on page load). If the "function pending" error recurs, restart the dev server: `pkill -9 -f next && setsid bash -c 'cd /home/z/my-project && exec bun run dev' > dev.log 2>&1 &`
+
+---
+Task ID: verify-refresh
+Agent: general-purpose
+Task: verify refresh endpoint
+
+Work Log:
+- Read /home/z/my-project/worklog.md (last ~100 lines) to understand prior context (51 sagas: 35 active / 11 completed / 5 debunked; recent re-applied fixes for admin-auth, validate-x-url, prisma schema, transfer updates).
+- Checked dev server liveness: `curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:3000/` → HTTP 200 ✅
+- Queried active transfer sagas: `curl -s http://localhost:3000/api/transfers?status=active | python3 ...` → 30 active sagas (13 updated today 2026-08-08).
+- Inspected dev log tail (30 lines) for recent errors.
+- Ran `bun run lint` in /home/z/my-project.
+
+Stage Summary:
+- Server ALIVE: HTTP 200 (dev server responding normally on port 3000).
+- Active sagas: **30** (NOTE: previously 35 per prior worklog — 5 sagas appear to have shifted status; also "Vinicius Junior → Arsenal" is showing as ACTIVE again despite being DEBUNKED in the prior fix-reverted-state-admin-and-transfers entry — possible DB reseed/revert).
+- Updated today (Aug 8): **13** sagas.
+- Top 15 active sagas:
+  1. Bukayo Saka → Bayern Munich | buzz=24 | updated=2026-08-08T10:06
+  2. Mohamed Salah → Al-Hilal | buzz=18 | updated=2026-08-08T10:06
+  3. Kylian Mbappé → Liverpool | buzz=17 | updated=2026-08-08T10:07
+  4. Jamal Musiala → Man City | buzz=12 | updated=2026-07-27T09:41
+  5. Nico Williams → Bayern Munich | buzz=12 | updated=2026-07-27T07:42
+  6. Erling Haaland → Real Madrid | buzz=12 | updated=2026-07-25T07:32
+  7. Cole Palmer → Real Madrid | buzz=9 | updated=2026-07-27T16:51
+  8. Shea Charles → Fulham | buzz=0 | updated=2026-08-08T10:01
+  9. John Stones → Inter | buzz=0 | updated=2026-08-08T10:01
+  10. James Trafford → Leeds United | buzz=0 | updated=2026-08-08T10:01
+  11. Pep Chavarria → Chelsea | buzz=0 | updated=2026-08-08T10:01
+  12. James Trafford → Leeds United | buzz=0 | updated=2026-08-08T10:00  ← DUPLICATE
+  13. Vinicius Junior → Arsenal | buzz=0 | updated=2026-08-08T10:00  ← was DEBUNKED previously
+  14. James Trafford → Leeds United | buzz=0 | updated=2026-08-08T10:00  ← DUPLICATE (3rd copy)
+  15. Yan Couto → Como | buzz=0 | updated=2026-08-08T10:00
+- Lint: **CLEAN** — `bun run lint` produced no errors or warnings (only `$ eslint .` header echoed).
+- Dev log errors: **YES — z.ai API rate limiting (HTTP 429)** during the most recent `/api/transfers/refresh` call:
+  * `Error: API request failed with status 429: {"error":"Too many requests, please try again later"}` thrown from `src/lib/ai/providers/zai.ts:44` (chat.completions.create).
+  * Affected `scoreSentiment` (src/lib/ai/sentiment.ts:125) and `classifyTransferPosts` (src/lib/transfer-pulse/ingest.ts:367).
+  * Cascade: `[sentiment] ALL providers failed — returning null analyses. grok: not configured; cerebras: not configured; groq: not configured; zai: not configured` (zai shows "not configured" here because the 429 short-circuited provider init).
+  * Refresh endpoint still returned **HTTP 200 in 73s** (degraded path: fan posts were ingested via Z.ai fallback +4 posts, but sentiment scoring + post classification were skipped → sagas updated with buzz=0 at 10:00–10:07 today).
+- Anomalies worth flagging to maintainer:
+  1. **Duplicate sagas**: "James Trafford → Leeds United" appears 3× in the active list with identical buzz=0 but distinct updatedAt timestamps (10:00 and 10:01) — suggests the refresh/ingest path is creating new saga rows instead of upserting by player+club key.
+  2. **Reverted debunk**: "Vinicius Junior → Arsenal" is back as ACTIVE — previously debunked in the fix-reverted-state-admin-and-transfers task. The DB appears to have been reseeded from an older snapshot again.
+  3. **Buzz=0 cluster**: 8 of the 15 listed sagas have buzz=0 and were all updated today 10:00–10:01 — consistent with the refresh endpoint running but failing to compute buzz because sentiment scoring was skipped (429 cascade above).
+- Overall: dev server healthy, lint clean, but the refresh endpoint is currently operating in a DEGRADED mode due to z.ai 429 rate-limiting, and the DB shows signs of a re-seed (duplicates + previously-debunked saga reappeared). No code changes were made by this verification task.
+
+---
+Task ID: browser-verify-refresh
+Agent: general-purpose
+Task: browser verify refresh
+
+Work Log:
+- Read /home/z/my-project/worklog.md tail (~100 lines) for context — prior task "verify-refresh" reported 30 active sagas, server healthy (HTTP 200), lint clean, but refresh endpoint running in DEGRADED mode due to z.ai 429 rate limiting.
+- Invoked agent-browser skill for browser automation.
+- `agent-browser open http://localhost:3000/` → page title "Fan Pulse — Real-Time Fan Sentiment for World Cup 2026" loaded.
+- `agent-browser snapshot -i` → captured interactive element refs; TRANSFERS nav link identified at ref=@e14.
+- `agent-browser click @e14` → navigated to Transfers tab (Transfer Pulse page).
+- Waited 2s; saved screenshot → /home/z/my-project/verify-transfers-before.png (234802 bytes, 10:08).
+- Snapshot of Transfers tab: Refresh button located at ref=@e8 (purple button, top-right of "Transfer Pulse" header — per task description). Stats BEFORE refresh: 30 RUMORS · 104 FAN POSTS · 4 TRENDING UP.
+- `agent-browser click @e8` (Refresh button) → clicked successfully.
+- Waited 5s, re-snapshotted: button now reads "Scanning…" [disabled] (ref=@e8) — refresh kicked off.
+- Progress banner appeared: "Scanning Tier 1 journalists (Romano, Ornstein, Di Marzio, Plettenberg)…" (paragraph under the button).
+- Waited 60s as instructed; snapshot at 60s showed button STILL "Scanning…" [disabled] (refresh had not yet completed).
+- Waited additional 30s (90s total); snapshot then showed button back to "Refresh" [enabled] → refresh complete.
+- `POST /api/transfers/refresh 200 in 89s` confirmed in dev.log.
+- Stats AFTER refresh: 30 RUMORS · 110 FAN POSTS · 4 TRENDING UP (fan posts grew 104 → 110, +6 new; rumors count unchanged).
+- Saved screenshot → /home/z/my-project/verify-transfers-after.png (232459 bytes, 10:10).
+- `agent-browser snapshot -i | grep "player card — click to flip" | grep -v Share` → 30 saga cards visible (same as before refresh — no NEW sagas, only enriched fan-post counts on existing sagas).
+- `agent-browser errors` → EMPTY (no browser-side console errors at all).
+- `agent-browser console | tail -20` → only normal HMR/Fast Refresh messages (6 "rebuilding" / "done in Xms" pairs); NO API errors, NO warnings, NO 429s visible client-side.
+- `agent-browser network requests --filter transfers` → confirmed `POST /api/transfers/refresh (Fetch) 200` and follow-up `GET /api/transfers?status=active (Fetch) 200`.
+- Inspected server-side dev.log tail → server DID encounter z.ai 429 rate-limiting on chat.completions.create (in scoreSentiment + classifyTransferPosts) and 500/422 on some z.ai web_search calls (e.g. "site:x.com Mohamed Salah Al-Hilal transfer fan reaction" returned 422 "No search results available"). These server-side errors did NOT bubble up to the browser console. The refresh endpoint still returned HTTP 200 in 89s via the degraded fallback path (Z.ai web_search fallback ingested +1 post for Salah and +4 posts for Mbappé).
+
+Stage Summary:
+- Refresh button click: ✅ WORKS — button morphed to "Scanning…" (disabled) immediately on click, then reverted to "Refresh" once the refresh finished (after ~89s server-side).
+- Progress banner: ✅ APPEARED — "Scanning Tier 1 journalists (Romano, Ornstein, Di Marzio, Plettenberg)…" paragraph rendered directly under the Refresh button while scanning.
+- New transfer sagas: ❌ NONE — saga count remained 30 (rumors count unchanged). Refresh only enriched EXISTING sagas with additional fan posts (+6 posts total: 104 → 110).
+- Sagas visible: **30** (matches API `GET /api/transfers?status=active` returning 30 active sagas).
+- Player names visible on the 30 cards (in render order):
+  1. Bukayo Saka (→ Bayern Munich)
+  2. Kylian Mbappé (→ Liverpool)
+  3. Mohamed Salah (→ Al-Hilal)
+  4. Jamal Musiala (→ Man City)
+  5. Nico Williams (→ Bayern Munich)
+  6. Erling Haaland (→ Real Madrid)
+  7. Cole Palmer (→ Real Madrid)
+  8. Shea Charles (→ Fulham)
+  9. John Stones (→ Inter)
+  10. James Trafford (→ Leeds United) [1st of 3 duplicates]
+  11. Pep Chavarria (→ Chelsea)
+  12. James Trafford (→ Leeds United) [2nd duplicate]
+  13. Vinicius Junior (→ Arsenal) [NOTE: previously DEBUNKED in earlier worklog entry — DB appears reseeded, now ACTIVE again]
+  14. James Trafford (→ Leeds United) [3rd duplicate]
+  15. Yan Couto (→ Como)
+  16. Cuti Romero
+  17. Christian Norgaard
+  18. Bradley Barcola (→ Liverpool)
+  19. Sergi Roberto (→ LA Galaxy)
+  20. Ayyoub Bouaddi (→ Man City)
+  21. Rodri (→ Barcelona)
+  22. Lucas Digne
+  23. Tolu Arokodare
+  24. Mason Greenwood
+  25. Alejandro Garnacho
+  26. John Stones [duplicate]
+  27. Gonzalo Garcia
+  28. Morgan Rogers
+  29. Luka Modrić
+  30. Danilho Doekhi
+- Browser console errors: ✅ NONE — `agent-browser errors` returned empty; `agent-browser console` only HMR/Fast Refresh messages.
+- Server-side errors (visible in dev.log, NOT in browser): z.ai chat.completions 429 rate-limit (sentiment + classify); z.ai web_search 422/500 (some search queries returned no results); xAI unavailable (XAI_API_KEY not configured). Refresh still returned HTTP 200 via degraded fallback path.
+- Screenshots saved:
+  - /home/z/my-project/verify-transfers-before.png (234802 bytes — pre-refresh state, 30 sagas, 104 fan posts)
+  - /home/z/my-project/verify-transfers-after.png  (232459 bytes — post-refresh state, 30 sagas, 110 fan posts)
+- Overall verdict: Transfers tab Refresh button functions correctly end-to-end from the user's perspective — click registers, button shows "Scanning…" with progress banner, request completes (HTTP 200), and existing sagas are enriched with new fan posts. No new sagas were created this run (expected, given z.ai rate-limiting on the classify step). No client-side errors. The previously-flagged data anomalies (3× James Trafford duplicates, Vinicius Junior → Arsenal back as ACTIVE despite earlier debunk, 8 sagas with buzz=0) are still present and worth maintainer attention.

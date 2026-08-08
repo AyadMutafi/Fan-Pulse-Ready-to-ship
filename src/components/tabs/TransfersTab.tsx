@@ -31,13 +31,14 @@ export default function TransfersTab() {
   const [sortKey, setSortKey] = useState<SortKey>('buzz')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshProgress, setRefreshProgress] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<TransferSagaSummary | null>(null)
+  const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null)
 
   const load = useCallback(
-    async (status: StatusFilter, isRefresh = false) => {
-      if (isRefresh) setRefreshing(true)
-      else setLoading(true)
+    async (status: StatusFilter) => {
+      setLoading(true)
       setError(null)
       try {
         // Always pass the status param explicitly. The API treats 'all' as
@@ -52,11 +53,60 @@ export default function TransfersTab() {
         setError(String(e).slice(0, 120))
       } finally {
         setLoading(false)
-        setRefreshing(false)
       }
     },
     [],
   )
+
+  /**
+   * Deep refresh — calls /api/transfers/refresh which triggers feed-scan
+   * (scans Romano/Ornstein/DiMarzio/Plettenberg for recent posts via Z.ai
+   * web_search) + discovery + ingest. Returns the freshly refreshed sagas.
+   * Shows live progress text so the user knows it's working.
+   */
+  const deepRefresh = useCallback(async () => {
+    setRefreshing(true)
+    setError(null)
+    setRefreshProgress('Scanning Tier 1 journalists (Romano, Ornstein, Di Marzio, Plettenberg)…')
+    try {
+      const res = await fetch('/api/transfers/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+      })
+      if (!res.ok) {
+        if (res.status === 429) {
+          const j = await res.json().catch(() => ({}))
+          throw new Error(j.message || 'Rate limited — wait 30s between refreshes')
+        }
+        throw new Error(`HTTP ${res.status}`)
+      }
+      const json = await res.json()
+      // The refresh endpoint returns active sagas directly — update state
+      if (json.sagas && Array.isArray(json.sagas)) {
+        setSagas(json.sagas)
+      }
+      setLastRefreshAt(new Date())
+      // Show a short summary of what was refreshed
+      const logLines: string[] = json.log || []
+      if (logLines.length > 0) {
+        setRefreshProgress(`Done in ${(json.durationMs / 1000).toFixed(1)}s — ${logLines.join(' · ')}`)
+      } else {
+        setRefreshProgress(`Done in ${(json.durationMs / 1000).toFixed(1)}s`)
+      }
+      // If the current filter isn't 'active', also re-fetch the filtered view
+      if (statusFilter !== 'active') {
+        await load(statusFilter)
+      }
+    } catch (e) {
+      setError(String(e).slice(0, 160))
+      setRefreshProgress('')
+    } finally {
+      setRefreshing(false)
+      // Clear progress text after 6 seconds
+      setTimeout(() => setRefreshProgress(''), 6000)
+    }
+  }, [statusFilter, load])
 
   useEffect(() => {
     load(statusFilter)
@@ -91,15 +141,39 @@ export default function TransfersTab() {
             Fan sentiment around transfer rumors · pre-season bridge to EPL kickoff
           </p>
         </div>
-        <button
-          onClick={() => load(statusFilter, true)}
-          disabled={refreshing}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-[#2D2D2D] border border-[#E0E0E0] dark:border-white/10 text-[11px] font-semibold text-[#666] dark:text-gray-300 hover:border-[#6C2BD9]/40 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={deepRefresh}
+            disabled={refreshing}
+            title="Scan Tier 1 journalists for fresh transfer rumors"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20 hover:bg-[#5A1FB8] focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Scanning…' : 'Refresh'}
+          </button>
+          {lastRefreshAt && !refreshing && !refreshProgress && (
+            <span className="text-[10px] text-[#9CA3AF] dark:text-gray-500">
+              Last refresh: {lastRefreshAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Refresh progress / result banner */}
+      {refreshProgress && (
+        <div className={`rounded-xl p-3 flex items-start gap-2.5 border ${
+          refreshing
+            ? 'bg-[#6C2BD9]/5 border-[#6C2BD9]/20'
+            : 'bg-[#10B981]/5 border-[#10B981]/20'
+        }`}>
+          <RefreshCw className={`size-4 shrink-0 mt-0.5 ${
+            refreshing ? 'animate-spin text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#10B981]'
+          }`} />
+          <p className="text-[11px] text-[#666] dark:text-gray-300 leading-relaxed">
+            {refreshProgress}
+          </p>
+        </div>
+      )}
 
       {/* Anti-hallucination disclaimer banner */}
       <div className="rounded-xl bg-[#FF6B35]/5 border border-[#FF6B35]/15 p-3 flex items-start gap-2.5">

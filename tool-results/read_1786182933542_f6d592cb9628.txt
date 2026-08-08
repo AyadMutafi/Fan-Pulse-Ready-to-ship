@@ -1,0 +1,730 @@
+     1→/**
+     2→ * Transfer Pulse — Z.ai SDK fallback for when XAI_API_KEY is not configured.
+     3→ *
+     4→ * The primary discovery path uses the xAI Responses API `x_search` tool
+     5→ * (src/lib/grok-x-search.ts) to fetch real X posts directly from X's own
+     6→ * data. But that requires `XAI_API_KEY` in .env, which may be missing in
+     7→ * dev/sandbox environments.
+     8→ *
+     9→ * This module provides a FALLBACK that uses the Z.ai SDK's `web_search`
+    10→ * function (which auto-initializes in the Z.ai sandbox without an explicit
+    11→ * API key) to find the SAME real X posts — but via web search indexing
+    12→ * instead of X's own API.
+    13→ *
+    14→ * ANTI-HALLUCINATION CONTRACT (preserved):
+    15→ *   - We only accept URLs matching ^https://(x.com|twitter.com)/<handle>/status/<digits>$
+    16→ *   - For Tier 1 posts: the handle in the URL MUST be in TIER1_HANDLES.
+    17→ *     A fan quoting Romano is rejected (the fan's handle != Romano's).
+    18→ *   - Post text comes from the search-result snippet (Google/Bing indexes
+    19→ *     real tweet text) or from page_reader extraction. We never fabricate.
+    20→ *   - If web_search returns nothing, we return [] (empty) — the caller
+    21→ *     renders an honest empty state.
+    22→ *
+    23→ * FRESHNESS CONTRACT (added after the "stale Salah tweet" incident):
+    24→ *   - Every accepted post MUST have a verifiable creation date.
+    25→ *   - For X posts: the date is decoded from the Snowflake status ID (the
+    26→ *     64-bit ID encodes the millisecond timestamp). This is 100% reliable
+    27→ *     and does NOT depend on web_search metadata being present.
+    28→ *   - For Reddit/web posts: the date comes from web_search's datePublished
+    29→ *     field. If absent, the post is REJECTED (can't verify freshness).
+    30→ *   - Posts older than `maxAgeDays` (default 60) are REJECTED. This prevents
+    31→ *     last year's contract-extension tweet from appearing as "current news."
+    32→ *   - Posts with NO parseable date are REJECTED. No date = no trust.
+    33→ */
+    34→import ZAI from 'z-ai-web-dev-sdk'
+    35→import type { XPost } from '@/lib/grok-x-search'
+    36→import { TIER1_HANDLES } from './tier1-sources'
+    37→import type { TrackedPlayer } from './tracked-players'
+    38→
+    39→const SDK_CALL_DELAY_MS = 2500
+    40→const MAX_QUERIES_PER_PLAYER = 3
+    41→const MAX_RESULTS_PER_QUERY = 10
+    42→const MAX_POSTS_PER_PLAYER = 8
+    43→const RATE_LIMIT_BACKOFF_MS = 8000
+    44→
+    45→/** Twitter/X Snowflake epoch: Nov 4, 2010 01:42:54.657 UTC */
+    46→const TWITTER_EPOCH_MS = 1288834974657
+    47→
+    48→const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+    49→
+    50→interface ZaiSearchResult {
+    51→  url?: string
+    52→  name?: string
+    53→  title?: string
+    54→  snippet?: string
+    55→  description?: string
+    56→  summary?: string
+    57→  datePublished?: string
+    58→  date?: string
+    59→  author?: string
+    60→  source?: string
+    61→  host_name?: string
+    62→}
+    63→
+    64→export interface ZaiFallbackOpts {
+    65→  /** Reject posts older than this many days. Default 60. */
+    66→  maxAgeDays?: number
+    67→}
+    68→
+    69→// ── Snowflake ID → timestamp decoder ─────────────────────────────────────────
+    70→
+    71→/**
+    72→ * Decode a Twitter/X Snowflake status ID into the post's creation Date.
+    73→ *
+    74→ * X's 64-bit status IDs are Snowflake IDs: the top 42 bits encode
+    75→ * milliseconds since the Twitter epoch (Nov 4, 2010 01:42:54.657 UTC).
+    76→ * This is the SAME mechanism X uses internally, so it's 100% reliable for
+    77→ * any real x.com/<handle>/status/<id> URL.
+    78→ *
+    79→ * Returns null if the ID is too short to be a valid Snowflake (pre-2010
+    80→ * IDs don't exist; IDs below ~2^22 are invalid).
+    81→ *
+    82→ * @example
+    83→ *   decodeSnowflakeDate('2064644718034649284') // → the real post date
+    84→ */
+    85→export function decodeSnowflakeDate(statusId: string | number): Date | null {
+    86→  let id: bigint
+    87→  try {
+    88→    id = BigInt(statusId)
+    89→  } catch {
+    90→    return null
+    91→  }
+    92→  // Valid Snowflake IDs are > 2^22 (the timestamp bits must be non-zero)
+    93→  if (id < 1n << 22n) return null
+    94→  // Top 42 bits = ms since Twitter epoch
+    95→  const timestampMs = Number(id >> 22n) + TWITTER_EPOCH_MS
+    96→  const d = new Date(timestampMs)
+    97→  // Sanity check: must be after Twitter epoch and before now + 1 day
+    98→  if (d.getTime() < TWITTER_EPOCH_MS) return null
+    99→  if (d.getTime() > Date.now() + 24 * 3600 * 1000) return null
+   100→  return d
+   101→}
+   102→
+   103→/**
+   104→ * Extract the numeric status ID from an x.com/twitter.com post URL.
+   105→ * Returns null if the URL doesn't match the expected pattern.
+   106→ */
+   107→export function extractStatusId(url: string): string | null {
+   108→  const match = url.match(
+   109→    /^https:\/\/(?:x\.com|twitter\.com)\/[^/]+\/status\/(\d+)/i,
+   110→  )
+   111→  return match ? match[1] : null
+   112→}
+   113→
+   114→/**
+   115→ * Determine a post's creation date with multiple fallback strategies.
+   116→ * Returns null ONLY if no strategy yields a valid date.
+   117→ *
+   118→ * Strategy order for X posts:
+   119→ *   1. Snowflake ID decode (most reliable — encoded in the URL itself)
+   120→ *   2. web_search datePublished / date metadata
+   121→ *
+   122→ * Strategy order for Reddit/web posts:
+   123→ *   1. web_search datePublished / date metadata
+   124→ *   2. null (can't verify freshness → caller rejects)
+   125→ */
+   126→function resolvePostDate(
+   127→  url: string,
+   128→  searchResult: ZaiSearchResult,
+   129→): Date | null {
+   130→  // For X posts, Snowflake decode is authoritative
+   131→  const statusId = extractStatusId(url)
+   132→  if (statusId) {
+   133→    const snowflakeDate = decodeSnowflakeDate(statusId)
+   134→    if (snowflakeDate) return snowflakeDate
+   135→  }
+   136→  // Fall back to web_search metadata
+   137→  const dateRaw = searchResult.datePublished || searchResult.date
+   138→  if (dateRaw) {
+   139→    const d = new Date(dateRaw)
+   140→    if (!isNaN(d.getTime())) return d
+   141→  }
+   142→  return null
+   143→}
+   144→
+   145→/**
+   146→ * Returns true if the post date is within the acceptable freshness window.
+   147→ * Posts with no date are rejected (isFresh = false).
+   148→ */
+   149→function isFresh(date: Date | null, maxAgeDays: number): boolean {
+   150→  if (!date) return false
+   151→  const ageMs = Date.now() - date.getTime()
+   152→  if (ageMs < 0) return false // future-dated = invalid
+   153→  return ageMs <= maxAgeDays * 24 * 60 * 60 * 1000
+   154→}
+   155→
+   156→// ── Tier 1 post discovery (for saga creation) ───────────────────────────────
+   157→
+   158→/**
+   159→ * Find real X posts by Tier 1 journalists about a player's transfer, using
+   160→ * Z.ai web_search. Returns ONLY posts whose URL is a real x.com post AND
+   161→ * whose handle is in TIER1_HANDLES AND whose creation date is within
+   162→ * `maxAgeDays` of now.
+   163→ *
+   164→ * @param player     the tracked player to search for
+   165→ * @param opts.maxAgeDays  reject posts older than this (default 60)
+   166→ */
+   167→export async function fetchTier1PostsViaZai(
+   168→  player: TrackedPlayer,
+   169→  opts: ZaiFallbackOpts = {},
+   170→): Promise<{ posts: XPost[]; error?: string }> {
+   171→  const maxAgeDays = opts.maxAgeDays ?? 60
+   172→  const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
+   173→  const cutoffStr = cutoffDate.toISOString().slice(0, 10)
+   174→
+   175→  let zai: any
+   176→  try {
+   177→    zai = await ZAI.create()
+   178→  } catch (err) {
+   179→    return { posts: [], error: `ZAI init failed: ${String(err).slice(0, 100)}` }
+   180→  }
+   181→
+   182→  // Build queries that target Tier 1 journalists' X posts about this player.
+   183→  // We use site:x.com to restrict to real X post URLs, and add the cutoff
+   184→  // date to bias the search engine toward recent results.
+   185→  const queries = [
+   186→    `site:x.com FabrizioRomano ${player.name} transfer after:${cutoffStr}`,
+   187→    `site:x.com (FabrizioRomano OR David_Ornstein OR Plettigoal) ${player.name} transfer 2026 after:${cutoffStr}`,
+   188→    `FabrizioRomano ${player.name} ${player.fromClubName} transfer x.com 2026`,
+   189→  ].slice(0, MAX_QUERIES_PER_PLAYER)
+   190→
+   191→  const collected: XPost[] = []
+   192→  const seenUrls = new Set<string>()
+   193→  let rejectedStale = 0
+   194→  let rejectedNoDate = 0
+   195→
+   196→  for (const query of queries) {
+   197→    if (collected.length >= MAX_POSTS_PER_PLAYER) break
+   198→    try {
+   199→      await sleep(SDK_CALL_DELAY_MS)
+   200→      console.log(`[transfer-pulse/zai-fallback] web_search: "${query.slice(0, 90)}..."`)
+   201→      const results = (await zai.functions.invoke('web_search', {
+   202→        query,
+   203→        num: MAX_RESULTS_PER_QUERY,
+   204→      })) as ZaiSearchResult[]
+   205→      if (!Array.isArray(results)) continue
+   206→
+   207→      for (const r of results) {
+   208→        if (collected.length >= MAX_POSTS_PER_PLAYER) break
+   209→        const url = String(r.url || '').trim()
+   210→        if (!url) continue
+   211→
+   212→        // Must be a real x.com/<handle>/status/<id> URL
+   213→        const match = url.match(
+   214→          /^https:\/\/(?:x\.com|twitter\.com)\/([^/]+)\/status\/(\d+)/i,
+   215→        )
+   216→        if (!match) continue
+   217→        const handle = match[1]
+   218→        const statusId = match[2]
+   219→        // Handle MUST be a Tier 1 journalist (anti-hallucination gate)
+   220→        if (!TIER1_HANDLES.has(handle.toLowerCase())) continue
+   221→        if (seenUrls.has(url)) continue
+   222→
+   223→        // ── FRESHNESS GATE ───────────────────────────────────────────────
+   224→        // Decode the real post date from the Snowflake ID. This is the
+   225→        // critical fix for the "stale tweet" bug: we no longer trust
+   226→        // web_search metadata (which is often absent or wrong); instead
+   227→        // we decode the timestamp that X itself baked into the status ID.
+   228→        const postDate = resolvePostDate(url, r)
+   229→        if (!postDate) {
+   230→          rejectedNoDate++
+   231→          continue
+   232→        }
+   233→        if (!isFresh(postDate, maxAgeDays)) {
+   234→          rejectedStale++
+   235→          console.log(
+   236→            `[transfer-pulse/zai-fallback] rejecting stale post (${Math.round(
+   237→              (Date.now() - postDate.getTime()) / (24 * 3600 * 1000),
+   238→            )}d old): ${url}`,
+   239→          )
+   240→          continue
+   241→        }
+   242→
+   243→        // Build text from snippet + title (search engines index real tweet text)
+   244→        const snippet = String(r.snippet || r.description || r.summary || '').trim()
+   245→        const title = String(r.name || r.title || '').trim()
+   246→        let text = snippet || title
+   247→        if (title && snippet && !snippet.startsWith(title)) {
+   248→          text = `${title} — ${snippet}`
+   249→        }
+   250→        // If the snippet is just the URL or too short, try page_reader
+   251→        if (text.length < 30 || text === url) {
+   252→          const enriched = await enrichViaPageReader(zai, url)
+   253→          if (enriched && enriched.length > 30) text = enriched
+   254→        }
+   255→        if (text.length < 15) continue
+   256→
+   257→        // ── TRANSFER-KEYWORD GATE (added 2026-07-22) ─────────────────────
+   258→        // Search engines often return tweets that mention the player's name
+   259→        // but aren't transfer rumors (e.g. World Cup stat tweets). Reject
+   260→        // any post whose text doesn't contain at least one transfer-related
+   261→        // keyword. This prevents non-transfer tweets from anchoring sagas.
+   262→        // Also strip the "Missing: X | Show results with: X" Google
+   263→        // annotation that web_search appends to snippets — that's a search-
+   264→        // engine hint, not part of the tweet text.
+   265→        const cleanedText = text
+   266→          .replace(/Missing:\s*[^|]+\|\s*Show results with:[^"]*/gi, '')
+   267→          .replace(/\s+/g, ' ')
+   268→          .trim()
+   269→        const lowerText = cleanedText.toLowerCase()
+   270→        const TRANSFER_KEYWORDS = [
+   271→          'transfer', 'deal', 'move', 'signing', 'signs', 'signed',
+   272→          'agrees', 'agreed', 'bid', 'offer', 'medical', 'contract',
+   273→          'here we go', 'launch', 'approach', 'talks', 'negotiat',
+   274→          'joining', 'joins', 'completed', 'confirmed', 'close to',
+   275→          'reaches', 'verbal', 'personal terms', 'fee',
+   276→        ]
+   277→        const hasTransferKeyword = TRANSFER_KEYWORDS.some((kw) =>
+   278→          lowerText.includes(kw),
+   279→        )
+   280→        if (!hasTransferKeyword) {
+   281→          console.log(
+   282→            `[transfer-pulse/zai-fallback] rejecting non-transfer post for ${player.name}: ` +
+   283→              `no transfer keyword in "${cleanedText.slice(0, 80)}..."`,
+   284→          )
+   285→          continue
+   286→        }
+   287→        text = cleanedText
+   288→
+   289→        seenUrls.add(url)
+   290→        collected.push({
+   291→          url,
+   292→          handle,
+   293→          text: text.slice(0, 1200),
+   294→          postedAt: postDate.toISOString(),
+   295→        })
+   296→      }
+   297→    } catch (err) {
+   298→      const msg = String(err)
+   299→      console.warn(`[transfer-pulse/zai-fallback] web_search failed: ${msg.slice(0, 150)}`)
+   300→      if (msg.includes('429')) {
+   301→        console.log(`[transfer-pulse/zai-fallback] 429 hit, backing off ${RATE_LIMIT_BACKOFF_MS / 1000}s`)
+   302→        await sleep(RATE_LIMIT_BACKOFF_MS)
+   303→        // Retry once after backoff
+   304→        try {
+   305→          const retryResults = (await zai.functions.invoke('web_search', {
+   306→            query,
+   307→            num: MAX_RESULTS_PER_QUERY,
+   308→          })) as ZaiSearchResult[]
+   309→          if (Array.isArray(retryResults)) {
+   310→            for (const r of retryResults) {
+   311→              if (collected.length >= MAX_POSTS_PER_PLAYER) break
+   312→              const url = String(r.url || '').trim()
+   313→              if (!url) continue
+   314→              const match = url.match(
+   315→                /^https:\/\/(?:x\.com|twitter\.com)\/([^/]+)\/status\/(\d+)/i,
+   316→              )
+   317→              if (!match) continue
+   318→              const handle = match[1]
+   319→              if (!TIER1_HANDLES.has(handle.toLowerCase())) continue
+   320→              if (seenUrls.has(url)) continue
+   321→              const postDate = resolvePostDate(url, r)
+   322→              if (!postDate) { rejectedNoDate++; continue }
+   323→              if (!isFresh(postDate, maxAgeDays)) { rejectedStale++; continue }
+   324→              const snippet = String(r.snippet || r.description || r.summary || '').trim()
+   325→              const title = String(r.name || r.title || '').trim()
+   326→              let text = snippet || title
+   327→              if (title && snippet && !snippet.startsWith(title)) {
+   328→                text = `${title} — ${snippet}`
+   329→              }
+   330→              if (text.length < 15) continue
+   331→              seenUrls.add(url)
+   332→              collected.push({ url, handle, text: text.slice(0, 1200), postedAt: postDate.toISOString() })
+   333→            }
+   334→          }
+   335→        } catch {
+   336→          // give up on this query after retry
+   337→        }
+   338→      }
+   339→      // continue to next query
+   340→    }
+   341→  }
+   342→
+   343→  if (rejectedStale > 0 || rejectedNoDate > 0) {
+   344→    console.log(
+   345→      `[transfer-pulse/zai-fallback] ${player.name}: rejected ${rejectedStale} stale, ${rejectedNoDate} no-date posts`,
+   346→    )
+   347→  }
+   348→
+   349→  return { posts: collected }
+   350→}
+   351→
+   352→// ── Fan post discovery (for sentiment ingest) ───────────────────────────────
+   353→
+   354→/**
+   355→ * Find real fan posts reacting to a transfer saga. Uses Z.ai web_search to
+   356→ * find Reddit threads + X posts by FANS (not journalists). Every post
+   357→ * carries a real source URL (reddit.com, x.com, etc.) AND a verifiable
+   358→ * creation date within `maxAgeDays`.
+   359→ *
+   360→ * The sentiment ingest pipeline scores these for excited/skeptical/dreading.
+   361→ *
+   362→ * @param opts.maxAgeDays  reject posts older than this (default 30 — fan
+   363→ *                         reactions are only relevant while fresh)
+   364→ */
+   365→export async function fetchFanPostsViaZai(opts: {
+   366→  playerName: string
+   367→  fromClubName: string
+   368→  toClubName: string
+   369→  maxPosts?: number
+   370→  maxAgeDays?: number
+   371→}): Promise<{ posts: XPost[]; error?: string }> {
+   372→  const maxAgeDays = opts.maxAgeDays ?? 30
+   373→  const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
+   374→  const cutoffStr = cutoffDate.toISOString().slice(0, 10)
+   375→
+   376→  let zai: any
+   377→  try {
+   378→    zai = await ZAI.create()
+   379→  } catch (err) {
+   380→    return { posts: [], error: `ZAI init failed: ${String(err).slice(0, 100)}` }
+   381→  }
+   382→
+   383→  const { playerName, fromClubName, toClubName } = opts
+   384→  const max = opts.maxPosts ?? 15
+   385→
+   386→  // Target fan discussion venues: Reddit + X (fans, not journalists)
+   387→  // The `after:` operator biases the search engine toward recent results.
+   388→  const queries = [
+   389→    `site:reddit.com ${playerName} ${toClubName} transfer after:${cutoffStr}`,
+   390→    `site:x.com ${playerName} ${toClubName} transfer fan reaction after:${cutoffStr}`,
+   391→    `${playerName} ${toClubName} transfer fans reaction reddit 2026`,
+   392→  ]
+   393→
+   394→  const collected: XPost[] = []
+   395→  const seenUrls = new Set<string>()
+   396→  let rejectedStale = 0
+   397→  let rejectedNoDate = 0
+   398→
+   399→  for (const query of queries) {
+   400→    if (collected.length >= max) break
+   401→    try {
+   402→      await sleep(SDK_CALL_DELAY_MS)
+   403→      console.log(`[transfer-pulse/zai-fallback] fan web_search: "${query.slice(0, 90)}..."`)
+   404→      const results = (await zai.functions.invoke('web_search', {
+   405→        query,
+   406→        num: MAX_RESULTS_PER_QUERY,
+   407→      })) as ZaiSearchResult[]
+   408→      if (!Array.isArray(results)) continue
+   409→
+   410→      for (const r of results) {
+   411→        if (collected.length >= max) break
+   412→        const url = String(r.url || '').trim()
+   413→        if (!url || seenUrls.has(url)) continue
+   414→
+   415→        // Detect platform from URL
+   416→        const platform = detectPlatform(url)
+   417→        if (platform === 'unknown') continue
+   418→
+   419→        // For X posts, exclude Tier 1 journalists (we want FAN reactions)
+   420→        const xMatch = url.match(
+   421→          /^https:\/\/(?:x\.com|twitter\.com)\/([^/]+)\/status\//i,
+   422→        )
+   423→        if (xMatch && TIER1_HANDLES.has(xMatch[1].toLowerCase())) {
+   424→          // This is a journalist's post, not a fan's — skip
+   425→          continue
+   426→        }
+   427→
+   428→        // ── FRESHNESS GATE ───────────────────────────────────────────────
+   429→        const postDate = resolvePostDate(url, r)
+   430→        if (!postDate) {
+   431→          rejectedNoDate++
+   432→          continue
+   433→        }
+   434→        if (!isFresh(postDate, maxAgeDays)) {
+   435→          rejectedStale++
+   436→          continue
+   437→        }
+   438→
+   439→        // Build text from snippet + title
+   440→        const snippet = String(r.snippet || r.description || r.summary || '').trim()
+   441→        const title = String(r.name || r.title || '').trim()
+   442→        let text = snippet || title
+   443→        if (title && snippet && !snippet.startsWith(title)) {
+   444→          text = `${title} — ${snippet}`
+   445→        }
+   446→
+   447→        // For Reddit, try .json enrichment to get full post text
+   448→        if (platform === 'reddit' && url.includes('reddit.com/r/')) {
+   449→          try {
+   450→            const jsonUrl = url.replace(/\/?$/, '.json')
+   451→            await sleep(SDK_CALL_DELAY_MS)
+   452→            const pageData = await zai.functions.invoke('page_reader', { url: jsonUrl })
+   453→            const rawContent =
+   454→              pageData?.data?.html ||
+   455→              pageData?.data?.content ||
+   456→              (typeof pageData === 'string' ? pageData : '')
+   457→            const extracted = extractRedditContent(rawContent)
+   458→            if (extracted && extracted.length > text.length) {
+   459→              text = extracted
+   460→            }
+   461→          } catch {
+   462→            // snippet fallback
+   463→          }
+   464→        }
+   465→
+   466→        if (text.length < 20) continue
+   467→
+   468→        // Derive handle from URL
+   469→        let handle = ''
+   470→        if (xMatch) {
+   471→          handle = xMatch[1]
+   472→        } else if (platform === 'reddit') {
+   473→          const rMatch = url.match(/reddit\.com\/(?:u|user)\/([^/?#]+)/i)
+   474→          handle = rMatch ? `u_${rMatch[1]}` : 'reddit'
+   475→        } else {
+   476→          handle = new URL(url).hostname.replace(/^www\./, '')
+   477→        }
+   478→
+   479→        seenUrls.add(url)
+   480→        collected.push({
+   481→          url,
+   482→          handle,
+   483→          text: text.slice(0, 1200),
+   484→          postedAt: postDate.toISOString(),
+   485→        })
+   486→      }
+   487→    } catch (err) {
+   488→      const msg = String(err)
+   489→      console.warn(`[transfer-pulse/zai-fallback] fan web_search failed: ${msg.slice(0, 150)}`)
+   490→      if (msg.includes('429')) {
+   491→        console.log(`[transfer-pulse/zai-fallback] fan 429 hit, backing off ${RATE_LIMIT_BACKOFF_MS / 1000}s`)
+   492→        await sleep(RATE_LIMIT_BACKOFF_MS)
+   493→      }
+   494→    }
+   495→  }
+   496→
+   497→  if (rejectedStale > 0 || rejectedNoDate > 0) {
+   498→    console.log(
+   499→      `[transfer-pulse/zai-fallback] fan posts: rejected ${rejectedStale} stale, ${rejectedNoDate} no-date`,
+   500→    )
+   501→  }
+   502→
+   503→  return { posts: collected }
+   504→}
+   505→
+   506→// ── Journalist-feed discovery (for PUSH-based feed-scan) ─────────────────────
+   507→
+   508→/**
+   509→ * Find real X posts by a SPECIFIC Tier 1 journalist about ANY transfer
+   510→ * (not tied to a tracked player). Used by feed-scan.ts as the PUSH-based
+   511→ * discovery path: "what has Romano tweeted about recently?"
+   512→ *
+   513→ * Strategy:
+   514→ *   1. `site:x.com/<handle>/status` restricts Google/Bing to URLs in the
+   515→ *      journalist's own X profile path. This is the key trick — Google
+   516→ *      indexes individual tweets at x.com/<handle>/status/<id>, and the
+   517→ *      path-prefix restricts results to that journalist's posts only.
+   518→ *   2. The `transfer` keyword + `after:<cutoff>` date bias the search
+   519→ *      toward recent transfer-rumor posts.
+   520→ *   3. Snowflake-decode freshness gate (mirrors fetchTier1PostsViaZai).
+   521→ *   4. Transfer-keyword gate (mirrors fetchTier1PostsViaZai).
+   522→ *
+   523→ * ANTI-HALLUCINATION CONTRACT (preserved):
+   524→ *   - URL must match ^https://x.com/<handle>/status/<digits>$
+   525→ *   - Handle MUST be the requested journalist's handle (case-insensitive)
+   526→ *   - The handle MUST be in TIER1_HANDLES (defense in depth)
+   527→ *   - Post date decoded from Snowflake ID; posts >maxAgeDays rejected
+   528→ *   - Post text must contain a transfer keyword
+   529→ *   - If web_search returns nothing, returns [] (empty) — never fabricates
+   530→ *
+   531→ * @param handle       the journalist's X handle WITHOUT @, e.g. "FabrizioRomano"
+   532→ * @param opts.maxAgeDays  reject posts older than this (default 14)
+   533→ */
+   534→export async function fetchJournalistPostsViaZai(
+   535→  handle: string,
+   536→  opts: ZaiFallbackOpts = {},
+   537→): Promise<{ posts: XPost[]; error?: string }> {
+   538→  const maxAgeDays = opts.maxAgeDays ?? 14
+   539→  const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000)
+   540→  const cutoffStr = cutoffDate.toISOString().slice(0, 10)
+   541→  const cleanHandle = handle.replace(/^@/, '').trim()
+   542→  if (!cleanHandle) return { posts: [], error: 'no handle provided' }
+   543→
+   544→  let zai: any
+   545→  try {
+   546→    zai = await ZAI.create()
+   547→  } catch (err) {
+   548→    return { posts: [], error: `ZAI init failed: ${String(err).slice(0, 100)}` }
+   549→  }
+   550→
+   551→  // Three query variants — Google/Bing index tweets unevenly, so we try
+   552→  // multiple phrasings and dedupe by URL.
+   553→  const queries = [
+   554→    `site:x.com/${cleanHandle}/status transfer after:${cutoffStr}`,
+   555→    `site:x.com/${cleanHandle} transfer deal 2026 after:${cutoffStr}`,
+   556→    `from:${cleanHandle} transfer x.com 2026`,
+   557→  ].slice(0, MAX_QUERIES_PER_PLAYER)
+   558→
+   559→  const collected: XPost[] = []
+   560→  const seenUrls = new Set<string>()
+   561→  let rejectedStale = 0
+   562→  let rejectedNoDate = 0
+   563→  let rejectedNoKeyword = 0
+   564→
+   565→  for (const query of queries) {
+   566→    if (collected.length >= MAX_POSTS_PER_PLAYER) break
+   567→    try {
+   568→      await sleep(SDK_CALL_DELAY_MS)
+   569→      console.log(`[transfer-pulse/zai-fallback] journalist web_search: "${query.slice(0, 90)}..."`)
+   570→      const results = (await zai.functions.invoke('web_search', {
+   571→        query,
+   572→        num: MAX_RESULTS_PER_QUERY,
+   573→      })) as ZaiSearchResult[]
+   574→      if (!Array.isArray(results)) continue
+   575→
+   576→      for (const r of results) {
+   577→        if (collected.length >= MAX_POSTS_PER_PLAYER) break
+   578→        const url = String(r.url || '').trim()
+   579→        if (!url) continue
+   580→
+   581→        // Must be a real x.com/<handle>/status/<id> URL
+   582→        const match = url.match(
+   583→          /^https:\/\/(?:x\.com|twitter\.com)\/([^/]+)\/status\/(\d+)/i,
+   584→        )
+   585→        if (!match) continue
+   586→        const urlHandle = match[1]
+   587→        // Defense in depth: URL handle must be the requested journalist
+   588→        if (urlHandle.toLowerCase() !== cleanHandle.toLowerCase()) continue
+   589→        // And must be in TIER1_HANDLES
+   590→        if (!TIER1_HANDLES.has(urlHandle.toLowerCase())) continue
+   591→        if (seenUrls.has(url)) continue
+   592→
+   593→        // ── FRESHNESS GATE ───────────────────────────────────────────────
+   594→        const postDate = resolvePostDate(url, r)
+   595→        if (!postDate) {
+   596→          rejectedNoDate++
+   597→          continue
+   598→        }
+   599→        if (!isFresh(postDate, maxAgeDays)) {
+   600→          rejectedStale++
+   601→          console.log(
+   602→            `[transfer-pulse/zai-fallback] rejecting stale journalist post (${Math.round(
+   603→              (Date.now() - postDate.getTime()) / (24 * 3600 * 1000),
+   604→            )}d old): ${url}`,
+   605→          )
+   606→          continue
+   607→        }
+   608→
+   609→        // Build text from snippet + title
+   610→        const snippet = String(r.snippet || r.description || r.summary || '').trim()
+   611→        const title = String(r.name || r.title || '').trim()
+   612→        let text = snippet || title
+   613→        if (title && snippet && !snippet.startsWith(title)) {
+   614→          text = `${title} — ${snippet}`
+   615→        }
+   616→        // If the snippet is too short, try page_reader to extract tweet text
+   617→        if (text.length < 30 || text === url) {
+   618→          const enriched = await enrichViaPageReader(zai, url)
+   619→          if (enriched && enriched.length > 30) text = enriched
+   620→        }
+   621→        if (text.length < 15) continue
+   622→
+   623→        // ── TRANSFER-KEYWORD GATE ────────────────────────────────────────
+   624→        const cleanedText = text
+   625→          .replace(/Missing:\s*[^|]+\|\s*Show results with:[^"]*/gi, '')
+   626→          .replace(/\s+/g, ' ')
+   627→          .trim()
+   628→        const lowerText = cleanedText.toLowerCase()
+   629→        const TRANSFER_KEYWORDS = [
+   630→          'transfer', 'deal', 'move', 'signing', 'signs', 'signed',
+   631→          'agrees', 'agreed', 'bid', 'offer', 'medical', 'contract',
+   632→          'here we go', 'launch', 'approach', 'talks', 'negotiat',
+   633→          'joining', 'joins', 'completed', 'confirmed', 'close to',
+   634→          'reaches', 'verbal', 'personal terms', 'fee',
+   635→        ]
+   636→        const hasTransferKeyword = TRANSFER_KEYWORDS.some((kw) =>
+   637→          lowerText.includes(kw),
+   638→        )
+   639→        if (!hasTransferKeyword) {
+   640→          rejectedNoKeyword++
+   641→          continue
+   642→        }
+   643→        text = cleanedText
+   644→
+   645→        seenUrls.add(url)
+   646→        collected.push({
+   647→          url,
+   648→          handle: urlHandle,
+   649→          text: text.slice(0, 1200),
+   650→          postedAt: postDate.toISOString(),
+   651→        })
+   652→      }
+   653→    } catch (err) {
+   654→      const msg = String(err)
+   655→      console.warn(`[transfer-pulse/zai-fallback] journalist web_search failed: ${msg.slice(0, 150)}`)
+   656→      if (msg.includes('429')) {
+   657→        console.log(`[transfer-pulse/zai-fallback] 429 hit, backing off ${RATE_LIMIT_BACKOFF_MS / 1000}s`)
+   658→        await sleep(RATE_LIMIT_BACKOFF_MS)
+   659→      }
+   660→      // continue to next query
+   661→    }
+   662→  }
+   663→
+   664→  if (rejectedStale > 0 || rejectedNoDate > 0 || rejectedNoKeyword > 0) {
+   665→    console.log(
+   666→      `[transfer-pulse/zai-fallback] @${cleanHandle}: rejected ${rejectedStale} stale, ` +
+   667→        `${rejectedNoDate} no-date, ${rejectedNoKeyword} no-keyword posts`,
+   668→    )
+   669→  }
+   670→
+   671→  return { posts: collected }
+   672→}
+   673→
+   674→// ── Internal helpers ────────────────────────────────────────────────────────
+   675→
+   676→async function enrichViaPageReader(zai: any, url: string): Promise<string | null> {
+   677→  try {
+   678→    await sleep(SDK_CALL_DELAY_MS)
+   679→    const pageData = await zai.functions.invoke('page_reader', { url })
+   680→    const raw =
+   681→      pageData?.data?.html ||
+   682→      pageData?.data?.content ||
+   683→      (typeof pageData === 'string' ? pageData : '')
+   684→    if (!raw || raw.length < 100) return null
+   685→    // x.com pages may have OG description meta — extract tweet text
+   686→    const ogMatch = raw.match(/"description"\s*:\s*"([^"]{15,500})"/i)
+   687→    if (ogMatch) return ogMatch[1].replace(/\\"/g, '"')
+   688→    const text = stripHtml(raw).trim()
+   689→    return text.length > 30 ? text.slice(0, 1000) : null
+   690→  } catch {
+   691→    return null
+   692→  }
+   693→}
+   694→
+   695→function detectPlatform(url: string): 'twitter' | 'reddit' | 'web' | 'unknown' {
+   696→  if (/^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\//i.test(url)) return 'twitter'
+   697→  if (/^https?:\/\/(?:www\.)?reddit\.com\//i.test(url)) return 'reddit'
+   698→  if (/^https?:\/\//i.test(url)) return 'web'
+   699→  return 'unknown'
+   700→}
+   701→
+   702→function extractRedditContent(json: string): string | null {
+   703→  try {
+   704→    const parsed = JSON.parse(json)
+   705→    const post = parsed?.[0]?.data?.children?.[0]?.data
+   706→    if (!post) return null
+   707→    const parts = [
+   708→      post.title,
+   709→      post.selftext || '',
+   710→      post.author ? `u/${post.author}` : '',
+   711→    ].filter(Boolean)
+   712→    return parts.join(' — ').slice(0, 1200) || null
+   713→  } catch {
+   714→    return null
+   715→  }
+   716→}
+   717→
+   718→function stripHtml(html: string): string {
+   719→  return html
+   720→    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+   721→    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+   722→    .replace(/<[^>]+>/g, ' ')
+   723→    .replace(/&nbsp;/g, ' ')
+   724→    .replace(/&amp;/g, '&')
+   725→    .replace(/&quot;/g, '"')
+   726→    .replace(/&#39;/g, "'")
+   727→    .replace(/\s+/g, ' ')
+   728→    .trim()
+   729→}
+   730→
