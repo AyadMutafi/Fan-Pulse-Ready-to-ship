@@ -35,6 +35,7 @@ export default function TransfersTab() {
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<TransferSagaSummary | null>(null)
   const [lastRefreshAt, setLastRefreshAt] = useState<Date | null>(null)
+  const [retryAfter, setRetryAfter] = useState(0) // seconds remaining for rate-limit cooldown
 
   const load = useCallback(
     async (status: StatusFilter) => {
@@ -67,17 +68,27 @@ export default function TransfersTab() {
   const deepRefresh = useCallback(async () => {
     setRefreshing(true)
     setError(null)
+    setRetryAfter(0)
     setRefreshProgress('Scanning Tier 1 journalists (Romano, Ornstein, Di Marzio, Plettenberg)…')
+
+    // 90s timeout — feed-scan + ingest can legitimately take 30-60s
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 90_000)
+
     try {
       const res = await fetch('/api/transfers/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
+        signal: controller.signal,
       })
       if (!res.ok) {
         if (res.status === 429) {
           const j = await res.json().catch(() => ({}))
-          throw new Error(j.message || 'Rate limited — wait 30s between refreshes')
+          // Parse Retry-After header or default to 30s
+          const retrySecs = parseInt(res.headers.get('retry-after') || '30', 10)
+          setRetryAfter(retrySecs)
+          throw new Error(j.message || `Rate limited — try again in ${retrySecs}s`)
         }
         throw new Error(`HTTP ${res.status}`)
       }
@@ -99,14 +110,29 @@ export default function TransfersTab() {
         await load(statusFilter)
       }
     } catch (e) {
-      setError(String(e).slice(0, 160))
+      const msg = String(e)
+      if (msg.includes('abort') || msg.includes('timeout') || msg.includes('Timeout')) {
+        setError('Refresh timed out — the server may still be scanning. Try again in 30s.')
+      } else if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+        setError('Network error — check your connection and try again.')
+      } else {
+        setError(msg.slice(0, 160))
+      }
       setRefreshProgress('')
     } finally {
+      clearTimeout(timeoutId)
       setRefreshing(false)
-      // Clear progress text after 6 seconds
-      setTimeout(() => setRefreshProgress(''), 6000)
+      // Clear progress text after 8 seconds
+      setTimeout(() => setRefreshProgress(''), 8000)
     }
   }, [statusFilter, load])
+
+  // Countdown timer for rate-limit cooldown
+  useEffect(() => {
+    if (retryAfter <= 0) return
+    const t = setTimeout(() => setRetryAfter((s) => s - 1), 1000)
+    return () => clearTimeout(t)
+  }, [retryAfter])
 
   useEffect(() => {
     load(statusFilter)
@@ -144,12 +170,12 @@ export default function TransfersTab() {
         <div className="flex flex-col items-end gap-1">
           <button
             onClick={deepRefresh}
-            disabled={refreshing}
-            title="Scan Tier 1 journalists for fresh transfer rumors"
+            disabled={refreshing || retryAfter > 0}
+            title={retryAfter > 0 ? `Rate limited — wait ${retryAfter}s` : 'Scan Tier 1 journalists for fresh transfer rumors'}
             className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20 hover:bg-[#5A1FB8] focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Scanning…' : 'Refresh'}
+            {refreshing ? 'Scanning…' : retryAfter > 0 ? `Wait ${retryAfter}s` : 'Refresh'}
           </button>
           {lastRefreshAt && !refreshing && !refreshProgress && (
             <span className="text-[10px] text-[#9CA3AF] dark:text-gray-500">
