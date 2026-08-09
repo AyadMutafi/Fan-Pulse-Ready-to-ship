@@ -34,7 +34,10 @@ const cspHeader = [
   // Wikipedia (upload.wikimedia.org) hosts all player photos under CC-BY-SA.
   // ui-avatars.com generates the initials-on-purple fallback avatars.
   // flagcdn.com hosts national flag images. data: for inline unoptimized.
-  "img-src 'self' https://flagcdn.com https://upload.wikimedia.org https://ui-avatars.com data:",
+  // crests.football-data.org hosts the authentic official club crest PNGs
+  // for ~50 European clubs (EPL, La Liga, Serie A, Bundesliga, Ligue 1,
+  // Portuguese, Dutch). No API key required for the public crest CDN.
+  "img-src 'self' https://flagcdn.com https://upload.wikimedia.org https://ui-avatars.com https://crests.football-data.org data:",
   "font-src 'self' data:",
   "connect-src 'self' https://cloud.umami.is",
   // Production: 'self' only (clickjacking protection).
@@ -132,6 +135,12 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'ui-avatars.com',
+      },
+      // Football-Data.org public crest CDN — authentic official club
+      // crests for ~50 European clubs. No API key required for images.
+      {
+        protocol: 'https',
+        hostname: 'crests.football-data.org',
       },
     ],
   },

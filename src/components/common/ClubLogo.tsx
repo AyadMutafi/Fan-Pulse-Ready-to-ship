@@ -1,6 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import { getClubCrest, shouldUseDarkText } from '@/lib/club-crests'
+import { getClubLogoUrl } from '@/lib/club-logos'
 
 export interface ClubLogoProps {
   /** 3-4 letter club code (e.g. 'ARS', 'LIV', 'FCB'). */
@@ -19,12 +21,13 @@ export interface ClubLogoProps {
 }
 
 /**
- * ClubLogo — renders a professional SVG football crest with the club's
- * authentic brand colors and monogram.
+ * ClubLogo — renders a football club's authentic official crest.
  *
- * - No external CDN (no broken images, no rate limits, works offline).
- * - Shield shape (classic football badge).
- * - Auto-contrasting monogram text (dark on light fills, white on dark).
+ * - Tries the real PNG logo from Football-Data.org's public CDN first
+ *   (verified per-club in club-logos.ts).
+ * - Falls back to a professional SVG monogram shield (brand colors + code)
+ *   when the real logo isn't available OR fails to load (network error,
+ *   404, broken image). This guarantees the UI never shows a broken image.
  * - Disambiguates colliding club codes via the `name` prop.
  *
  * Drop-in replacement for emoji badges (`⚽🔴🔵`) and plain-text club names.
@@ -36,6 +39,12 @@ export default function ClubLogo({
   title,
   className,
 }: ClubLogoProps) {
+  const logoUrl = getClubLogoUrl(code, name)
+  // Track which URL failed. When logoUrl changes, `imageFailed` auto-resets
+  // to false (since failedUrl no longer matches). Avoids useEffect.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null)
+  const imageFailed = failedUrl === logoUrl
+
   const crest = getClubCrest(code, name)
   const darkText = shouldUseDarkText(crest.primary)
   const textColor = darkText ? '#1A1A1A' : '#FFFFFF'
@@ -44,7 +53,7 @@ export default function ClubLogo({
   // Scale the monogram font with the crest size.
   const fontSize = size < 20 ? 18 : size < 32 ? 20 : 24
 
-  return (
+  const SvgCrest = (
     <svg
       width={size}
       height={size}
@@ -80,5 +89,45 @@ export default function ClubLogo({
         {crest.monogram}
       </text>
     </svg>
+  )
+
+  // No verified logo URL → straight to SVG fallback
+  if (!logoUrl) {
+    return SvgCrest
+  }
+
+  // Have a logo URL → render the image, fall back to SVG on error
+  return (
+    <span
+      className={className}
+      style={{
+        display: 'inline-block',
+        width: size,
+        height: size,
+        flexShrink: 0,
+        verticalAlign: 'middle',
+        position: 'relative',
+      }}
+    >
+      {imageFailed ? (
+        SvgCrest
+      ) : (
+        <img
+          src={logoUrl}
+          alt={label}
+          width={size}
+          height={size}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailedUrl(logoUrl)}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            display: 'inline-block',
+          }}
+        />
+      )}
+    </span>
   )
 }
