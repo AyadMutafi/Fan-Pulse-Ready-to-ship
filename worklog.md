@@ -5992,3 +5992,51 @@ Stage Summary:
 - ROOT CAUSE (external 500): Z.ai platform edge has a stale "deploy failed" state from earlier (when dev.pid pointed to dead PID 1122). The edge does not recheck on its own. This is platform infrastructure (root-owned Caddy PID 2 + Python monitor PID 920 main.py) — cannot be cleared from the sandbox.
 - ACTION NEEDED: User must trigger a redeploy from the Z.ai UI ("return to the generation page to try again"). When the platform re-runs its deploy pipeline, it will detect the healthy dev server (PID 6802, all endpoints 200) and clear the failed state. Everything is ready for this — code is clean, dev server is running, dev.pid is correct, .next cache is fresh.
 - NO CODE CHANGED: No source files modified. Only ran db:push (maintenance), cleared .next cache, restarted dev server, updated dev.pid, appended this worklog entry.
+
+---
+Task ID: add-club-logos
+Agent: Main Agent
+Task: Add club logos to the app — replace emoji badges and plain-text club names with real visual crests.
+
+Work Log:
+- Read worklog.md (last 2 sections) to understand prior context (emergency-deploy-fix-2 completed, app healthy locally).
+- Explored codebase via Explore subagent (Task ID: explore-clubs): identified 6 render sites displaying clubs across 4 components — TransferPulseCard (text-only), TransferSagaDetail (text-only), PlayerCard (text-only), TeamOfTheWeekTab (emoji), FPLTab (emoji), inline HomeTab in page.tsx (emoji, 4 sites: featured fixture, compact fixture rows, fan mood carousel, vote modal).
+- Found NO existing logo utility — all clubs used emoji placeholders (🔴🔵⚽). No club images in public/. Club codes available on all data (fromClubCode/toClubCode/teamCode) but unused.
+- Tested external logo CDNs: Fotmob (403), Premier League badges (403), jsDelivr (404), Wikipedia direct (400/429 rate-limited). All unreliable from sandbox.
+- DECISION: Generate professional SVG crests locally with authentic brand colors. 100% reliable, no external dependency, works for all ~80 clubs, looks better than emoji.
+- Created src/lib/club-crests.ts — comprehensive color library:
+  - 80+ clubs with authentic brand colors (primary + secondary + monogram) across EPL, La Liga, Serie A, Bundesliga, Ligue 1, Portuguese/Dutch, Saudi Pro League, MLS.
+  - Disambiguation for colliding codes: FCB (Barcelona vs Bayern), BRE (Brentford vs Werder Bremen), ALH (Al-Hilal vs Al-Ettifaq), WOL (Wolves vs Wolfsburg) — resolved via name matching.
+  - Alias codes for messy real-world data: BAY→FCB, BAR→FCB, HIL→ALH, CFC→CHE, MCFC→MCI, AVFC→AVL, etc.
+  - Name-based fuzzy fallback: 90+ keyword rules for when codes don't match.
+  - EXTRA_CRESTS for clubs in transfer data but not base map (Union Berlin, Toulouse, Fenerbahce, LA Galaxy, Inter Miami, Deportivo, Rayo Vallecano).
+  - Tested against ALL 58 (code,name) pairs from actual transfer data → 58/58 resolved, 0 fallbacks.
+- Created src/components/common/ClubLogo.tsx — SVG shield crest component:
+  - Classic football shield shape (wide top, narrows to bottom).
+  - Primary fill + secondary accent ring + monogram text.
+  - Auto-contrasting text color (luminance computation — dark text on light fills, white on dark).
+  - Accepts {code, name?, size?, title?, className?} props.
+  - Accessible: role="img", aria-label, <title> element.
+- Integrated ClubLogo into all 6 render sites:
+  - TransferPulseCard.tsx: added 18px crests next to from/to club names (was text-only).
+  - TransferSagaDetail.tsx: added 24px crests in detail modal header (was text-only).
+  - PlayerCard.tsx: added 16/12px crest next to club name on card back (was text-only).
+  - TeamOfTheWeekTab.tsx: replaced emoji badge on formation avatar (16px) + performance list (24px) with ClubLogo.
+  - FPLTab.tsx: replaced emoji badges in Captain Pulse (22px), Differentials (22px), FPL picks (20px) with ClubLogo.
+  - page.tsx HomeTab: replaced emoji in featured fixture (44px home/away), compact fixture rows (24px), fan mood carousel (36px), vote modal (26px) with ClubLogo.
+- Lint: PASSES clean (zero errors).
+- Browser verification (agent-browser):
+  - HOME tab: 42 SVG crests render ✓ (EPL fixtures + fan mood carousel)
+  - TRANSFERS tab: 90 SVG crests render ✓ (2 per card — from + to club, was text-only before)
+  - TOTW/LEAGUE tab: 0 crests — EXPECTED empty state ("EPL kicks off August 21 — Team of the Week will appear after Matchweek 1"). Crests will render automatically when match data exists.
+  - FPL tab: 0 crests — EXPECTED empty state ("FPL data not synced yet"). Crests will render when FPL sync runs.
+  - Console errors: NONE. Browser errors: NONE.
+
+Stage Summary:
+- Created: src/lib/club-crests.ts (430 lines, 80+ clubs, robust resolver), src/components/common/ClubLogo.tsx (SVG shield component).
+- Modified: TransferPulseCard.tsx, TransferSagaDetail.tsx, PlayerCard.tsx, TeamOfTheWeekTab.tsx, FPLTab.tsx, src/app/page.tsx (4 render sites in HomeTab).
+- Replaced ALL emoji club badges (🔴🔵⚽) and plain-text club names with professional SVG crests showing authentic brand colors + monograms.
+- Coverage: 80+ clubs across 7 leagues. Handles messy real-world data (58/58 transfer codes resolved, 0 fallbacks). Disambiguates colliding codes (FCB/BRE/ALH/WOL) via name matching.
+- Reliability: 100% local SVG, no external CDN, no broken images, no rate limits, works offline.
+- Visual: shield shape, brand colors, auto-contrast monogram, scales from 12px to 44px.
+- Verified in browser: TRANSFERS (90 crests) and HOME (42 crests) render correctly. TOTW/FPL show expected empty states (EPL season hasn't started).

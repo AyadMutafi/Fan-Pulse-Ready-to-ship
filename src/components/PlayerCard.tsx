@@ -9,6 +9,7 @@ import { PULSE_FORMULA, type PlayerCardData } from '@/lib/player-card-data'
 import { findNationalTeam } from '@/lib/national-teams'
 import { usePlayerPhoto, usePlayerPhotoLoading } from '@/hooks/usePlayerPhoto'
 import FlagImage from '@/components/common/FlagImage'
+import ClubLogo from '@/components/common/ClubLogo'
 import { toast } from 'sonner'
 
 export type PlayerCardSize = 'full' | 'compact'
@@ -283,8 +284,17 @@ export default function PlayerCard({ data, size = 'full', onView, onShare, class
           {/* Bottom: club + trend */}
           <div className="absolute bottom-0 left-0 right-0 px-2 pb-2">
             <div className="flex items-center justify-between gap-1">
-              <span className={`truncate font-semibold text-[#666] dark:text-[#CCCCCC] ${clubSize}`}>
-                {data.clubName ?? '—'}
+              <span className={`flex items-center gap-1 min-w-0 ${clubSize}`}>
+                {data.clubCode && (
+                  <ClubLogo
+                    code={data.clubCode}
+                    name={data.clubName ?? undefined}
+                    size={size === 'full' ? 16 : 12}
+                  />
+                )}
+                <span className="truncate font-semibold text-[#666] dark:text-[#CCCCCC]">
+                  {data.clubName ?? '—'}
+                </span>
               </span>
               <TrendArrow trend={data.trend} size={size} />
             </div>

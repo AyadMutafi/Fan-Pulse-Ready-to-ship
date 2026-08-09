@@ -7,6 +7,7 @@ import {
   TrendingUp, TrendingDown, Minus, MessageCircle,
 } from 'lucide-react'
 import type { TransferSagaSummary } from '@/components/TransferPulseCard'
+import ClubLogo from '@/components/common/ClubLogo'
 
 interface SagaDetail {
   saga: TransferSagaSummary
@@ -160,10 +161,12 @@ function TransferSagaDetailContent({
             {saga.playerName}
           </h2>
           <div className="flex items-center gap-2 mt-1 text-sm">
+            <ClubLogo code={saga.fromClubCode} name={saga.fromClubName} size={24} />
             <span className="font-medium text-[#666] dark:text-gray-400">
               {saga.fromClubName || '—'}
             </span>
             <ArrowRight className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+            <ClubLogo code={saga.toClubCode} name={saga.toClubName} size={24} />
             <span className="font-bold text-[#1A1A1A] dark:text-gray-100">
               {saga.toClubName}
             </span>

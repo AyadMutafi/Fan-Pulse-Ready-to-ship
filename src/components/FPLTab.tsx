@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { findEPLTeam } from '@/lib/epl-teams'
+import ClubLogo from '@/components/common/ClubLogo'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ function CaptainPulseSection() {
                 {/* Player info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-base shrink-0">{getTeamBadge(c.teamCode)}</span>
+                    <span className="shrink-0"><ClubLogo code={c.teamCode} name={findEPLTeam(c.teamCode)?.name} size={22} /></span>
                     <p className="text-sm font-bold text-[#1A1A1A] dark:text-white truncate">
                       {c.webName}
                     </p>
@@ -244,7 +245,7 @@ function DifferentialsSection() {
                 {/* Player info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-base shrink-0">{getTeamBadge(c.teamCode)}</span>
+                    <span className="shrink-0"><ClubLogo code={c.teamCode} name={findEPLTeam(c.teamCode)?.name} size={22} /></span>
                     <p className="text-sm font-bold text-[#1A1A1A] dark:text-white truncate">
                       {c.webName}
                     </p>
@@ -413,7 +414,7 @@ function YourFPLTeamSection() {
                     key={i}
                     className="flex items-center gap-2 p-2 rounded bg-white/50 dark:bg-white/5"
                   >
-                    <span className="text-sm">{getTeamBadge(p.teamCode)}</span>
+                    <span className="shrink-0"><ClubLogo code={p.teamCode} name={findEPLTeam(p.teamCode)?.name} size={20} /></span>
                     <span className="text-sm font-semibold text-[#1A1A1A] dark:text-white flex-1 truncate">
                       {p.webName}
                       {p.isCaptain && (

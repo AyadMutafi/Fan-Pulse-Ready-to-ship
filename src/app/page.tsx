@@ -28,6 +28,7 @@ import { findNationalTeam, NATIONAL_TEAMS } from '@/lib/national-teams'
 import { EPL_CLUBS, findEPLClub } from '@/lib/epl-clubs'
 import { useFlagMode } from '@/lib/flag-mode'
 import FlagImage from '@/components/common/FlagImage'
+import ClubLogo from '@/components/common/ClubLogo'
 import { FanTalkPanel } from '@/components/FanTalkPanel'
 import { TournamentRetroModal } from '@/components/TournamentRetroTab'
 import { CardCollectionModal } from '@/components/CardCollectionModal'
@@ -910,7 +911,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                     <div className="grid grid-cols-3 items-center gap-2">
                       {/* Home team */}
                       <div className="flex flex-col items-center text-center">
-                        <span className="text-3xl sm:text-4xl mb-1">{featured.homeTeamBadge}</span>
+                        <span className="mb-1"><ClubLogo code={featured.homeTeamCode} name={featured.homeTeamName} size={44} /></span>
                         <span className="text-xs sm:text-sm font-black tracking-tight text-[#1A1A1A] dark:text-white truncate w-full">
                           {featured.homeTeamName}
                         </span>
@@ -937,7 +938,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
 
                       {/* Away team */}
                       <div className="flex flex-col items-center text-center">
-                        <span className="text-3xl sm:text-4xl mb-1">{featured.awayTeamBadge}</span>
+                        <span className="mb-1"><ClubLogo code={featured.awayTeamCode} name={featured.awayTeamName} size={44} /></span>
                         <span className="text-xs sm:text-sm font-black tracking-tight text-[#1A1A1A] dark:text-white truncate w-full">
                           {featured.awayTeamName}
                         </span>
@@ -1020,7 +1021,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                               {f.homeTeamName}
                             </span>
                             <span className="text-base sm:text-lg leading-none shrink-0">{getFanMoodEmoji(homeScore)}</span>
-                            <span className="text-base sm:text-lg shrink-0">{f.homeTeamBadge}</span>
+                            <span className="shrink-0"><ClubLogo code={f.homeTeamCode} name={f.homeTeamName} size={24} /></span>
                           </div>
 
                           {/* Center: score or "vs" */}
@@ -1036,7 +1037,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
 
                           {/* Away team + emoji */}
                           <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                            <span className="text-base sm:text-lg shrink-0">{f.awayTeamBadge}</span>
+                            <span className="shrink-0"><ClubLogo code={f.awayTeamCode} name={f.awayTeamName} size={24} /></span>
                             <span className="text-base sm:text-lg leading-none shrink-0">{getFanMoodEmoji(awayScore)}</span>
                             <span className="text-[11px] sm:text-xs font-bold text-[#1A1A1A] dark:text-white truncate">
                               {f.awayTeamName}
@@ -1128,8 +1129,8 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                           </span>
                         )}
 
-                        {/* Club badge (emoji crest placeholder) */}
-                        <span className="text-3xl leading-none">{entry.badge}</span>
+                        {/* Club badge (SVG crest) */}
+                        <span className="leading-none"><ClubLogo code={entry.code} name={findEPLClub(entry.code)?.name} size={36} /></span>
 
                         {/* Mood emoji — only meaningful when hasVotes */}
                         <span className="mt-1.5 text-3xl sm:text-4xl leading-none">
@@ -1619,8 +1620,8 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                 <CardHeader className="pb-2 pt-4 px-4">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-bold text-[#1A1A1A] dark:text-white flex items-center gap-2">
-                      <span className="text-xl leading-none">
-                        {findEPLClub(selectedVoteTeam)?.badge ?? '⚽'}
+                      <span className="leading-none">
+                        <ClubLogo code={selectedVoteTeam} name={findEPLClub(selectedVoteTeam)?.name} size={26} />
                       </span>
                       {findEPLClub(selectedVoteTeam)?.name ?? selectedVoteTeam} Mood
                     </CardTitle>

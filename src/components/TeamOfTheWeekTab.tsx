@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { findEPLTeam } from '@/lib/epl-teams'
+import ClubLogo from '@/components/common/ClubLogo'
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -256,8 +257,8 @@ export default function TeamOfTheWeekTab() {
                           )}
                           {/* Team badge — top left */}
                           {player && (
-                            <span className="absolute -top-1 -left-1 text-xs bg-white dark:bg-[#2D2D2D] rounded-full size-5 flex items-center justify-center shadow-sm border border-[#E0E0E0] dark:border-white/10">
-                              {getTeamBadge(player.teamCode)}
+                            <span className="absolute -top-1 -left-1 bg-white dark:bg-[#2D2D2D] rounded-full size-6 flex items-center justify-center shadow-sm border border-[#E0E0E0] dark:border-white/10 p-0.5">
+                              <ClubLogo code={player.teamCode} name={findEPLTeam(player.teamCode)?.name} size={16} />
                             </span>
                           )}
                         </div>
@@ -308,7 +309,7 @@ export default function TeamOfTheWeekTab() {
                   key={i}
                   className="flex items-center gap-3 p-2 rounded-lg bg-white/50 dark:bg-white/5"
                 >
-                  <span className="text-lg shrink-0">{getTeamBadge(p.teamCode)}</span>
+                  <span className="shrink-0"><ClubLogo code={p.teamCode} name={findEPLTeam(p.teamCode)?.name} size={24} /></span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-[#1A1A1A] dark:text-white truncate">
                       {p.playerName}

@@ -1,6 +1,7 @@
 'use client'
 
 import { ArrowRight, TrendingUp, TrendingDown, Minus, BadgeCheck, Zap } from 'lucide-react'
+import ClubLogo from '@/components/common/ClubLogo'
 
 export interface TransferSagaSummary {
   id: string
@@ -104,8 +105,10 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
           {saga.playerName}
         </h3>
         <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#666] dark:text-gray-400">
+          <ClubLogo code={saga.fromClubCode} name={saga.fromClubName} size={18} />
           <span className="font-medium">{saga.fromClubName || '—'}</span>
           <ArrowRight className="size-3 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+          <ClubLogo code={saga.toClubCode} name={saga.toClubName} size={18} />
           <span className="font-semibold text-[#1A1A1A] dark:text-gray-200">
             {saga.toClubName}
           </span>
