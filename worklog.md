@@ -6090,3 +6090,43 @@ Stage Summary:
 - All existing consumers (page.tsx, TransferSagaDetail, FPLTab, PlayerCard, TeamOfTheWeekTab, TransferPulseCard) automatically benefit — no consumer code changes needed
 - Dev server healthy (PID 18430, /api/health returns 200)
 - Lint passes clean
+
+---
+Task ID: deploy-fix-3
+Agent: Main Agent
+Task: Fix persistent Z.ai platform deploy failure ("Sorry, there was a problem deploying the code")
+
+Work Log:
+- Read dev.log, build.sh, dev.sh, start.sh, mini-services scripts to understand deploy pipeline
+- Ran `bun run build` locally → exit 0, 60MB package, all 59 routes generated
+- Ran full `.zscripts/build.sh` pipeline → exit 0, tarball created successfully
+- Tested standalone production server (`bun .next/standalone/server.js`) → HTTP 200 in 42ms, /api/health 200
+- Confirmed local dev server healthy (PID 1075, all 14+ API endpoints returning 200)
+- Found stale `.zscripts/dev.pid` (said 1115, actual was 1075) — fixed
+- Identified root cause: Next.js 16 deprecated `middleware.ts` in favor of `proxy.ts`
+    - Every build showed: ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+    - During file-watcher transition, Turbopack threw hard error: Error: Both middleware file "./src/middleware.ts" and proxy file "./src/proxy.ts" are detected.
+- Renamed `src/middleware.ts` → `src/proxy.ts` (Next.js 16 convention)
+    - Renamed export function `middleware()` → `proxy()`
+    - Updated JSDoc to explain the convention change
+    - matcher config unchanged (/api/:path*)
+- Restarted dev server cleanly (killed PID 1075, started fresh → PID 2540)
+- Updated `.zscripts/dev.pid` to 2540
+- Verified dev.log is now completely clean — no deprecation warning, no "both files" error
+- Ran `bun run lint` → exit 0
+- Ran `bun run build` → exit 0, no warnings, "ƒ Proxy (Middleware)" recognized correctly
+- Verified with Agent Browser:
+    - Home tab: renders all sections (stories, EPL fan mood with 12 clubs, sentiments, transfer tweets, Ballon d'Or)
+    - Transfers tab: 10 player cards render, filter/sort buttons work
+    - League tab: Team of the Week renders
+    - FPL tab: Captain Pulse, Differentials, Import squad all render
+    - No console errors, no page errors
+- Verified club logos with VLM: Arsenal (red shield+cannon), Aston Villa (claret/blue), Chelsea (blue lion), Everton (blue tower), Liverpool (red Liver bird) all rendering. No broken images.
+- Committed: 04aad7b "fix(deploy): rename deprecated middleware.ts → proxy.ts (Next.js 16 convention)"
+
+Stage Summary:
+- ROOT CAUSE: Next.js 16 deprecation of `middleware.ts` convention. The build-time deprecation warning (and the hard "both files detected" error during transitions) was the most likely cause of the Z.ai platform rejecting the deploy with the generic "Sorry, there was a problem deploying the code" message.
+- FIX: Renamed `src/middleware.ts` → `src/proxy.ts` with updated function name. Build is now 100% clean (no warnings, no errors, exit 0).
+- VERIFICATION: Build passes, lint passes, standalone server starts, all tabs render in browser, club logos display correctly, no console/page errors.
+- The user's previous "Add the clubs logo" request was already implemented in commit aae52bd/906b84c (ClubLogo component using Football-Data.org CDN for authentic official crests + SVG fallback). Verified rendering with VLM.
+- ACTION NEEDED FROM USER: Trigger a fresh deploy from the Z.ai UI. The code is now clean and should deploy successfully.
