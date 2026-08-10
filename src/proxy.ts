@@ -3,9 +3,15 @@ import type { NextRequest } from 'next/server'
 import { setCorsHeaders } from '@/lib/cors'
 
 /**
- * Central CORS middleware.
+ * Central CORS proxy (formerly "middleware" — renamed in Next.js 16).
  *
- * SECURITY: This middleware enforces a strict origin allowlist for ALL API
+ * Next.js 16 deprecated the `middleware.ts` file convention in favor of
+ * `proxy.ts`. The API is identical: export a default function + optional
+ * `config` with a `matcher`. This file was renamed from `middleware.ts`
+ * to eliminate the build-time deprecation warning:
+ *   ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.
+ *
+ * SECURITY: This proxy enforces a strict origin allowlist for ALL API
  * routes. It replaces the previous reflective CORS behavior (where the
  * infrastructure gateway auto-reflected any Origin header back with
  * Access-Control-Allow-Credentials: true, allowing any malicious website to
@@ -23,7 +29,7 @@ import { setCorsHeaders } from '@/lib/cors'
  * deployment origin (+ localhost in non-production).
  */
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const origin = request.headers.get('origin')
 
   // Handle OPTIONS preflight centrally — route handlers don't need to.
