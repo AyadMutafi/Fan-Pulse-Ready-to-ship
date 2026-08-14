@@ -6130,3 +6130,37 @@ Stage Summary:
 - VERIFICATION: Build passes, lint passes, standalone server starts, all tabs render in browser, club logos display correctly, no console/page errors.
 - The user's previous "Add the clubs logo" request was already implemented in commit aae52bd/906b84c (ClubLogo component using Football-Data.org CDN for authentic official crests + SVG fallback). Verified rendering with VLM.
 - ACTION NEEDED FROM USER: Trigger a fresh deploy from the Z.ai UI. The code is now clean and should deploy successfully.
+
+---
+Task ID: fix-transfers-api-json-error
+Agent: Main Agent
+Task: Fix the Transfers tab error "Failed to load transfer sagas: SyntaxError: Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON". The /api/transfers endpoint was returning an HTML error page instead of JSON.
+
+Work Log:
+- Read worklog.md tail (last ~300 lines) for context — prior tasks (emergency-deploy-fix, emergency-deploy-fix-2, add-club-logos, club-logos, deploy-fix-3) documented recurring platform-edge "deploy failed" HTML page being served externally while local API worked.
+- Verified /api/transfers/route.ts EXISTS at src/app/api/transfers/route.ts (5730 bytes, 146 lines). NOT deleted/moved.
+- Verified all route imports resolve: @/lib/db (exists), @/lib/rate-limit (exists), @/lib/cors (exists), @/lib/validate-x-url (exists), @/lib/transfer-pulse/auto-refresh (exists).
+- Tested local API: `curl http://localhost:3000/api/transfers` → HTTP 200, content-type: application/json, valid JSON body starting with `{"sagas":[{"id":"cmrxli43t002hrn6ecoscml0q","playerName":"Bukayo Saka",...}` (32437 bytes total).
+- Tested external API: `curl https://e1v0s5v6hje1-d.space-z.ai/api/transfers` → HTTP 200, content-type: application/json, valid JSON body (32437 bytes) — platform edge has CLEARED the stale "deploy failed" state. The API works both locally and externally.
+- ROOT CAUSE of user-visible error: The frontend TransfersTab.tsx called `res.json()` directly without verifying content-type. When the platform edge served the "deploy failed" HTML page (during the previous deploy hiccup), `res.json()` threw `SyntaxError: Unexpected token '<', "<!DOCTYPE "...` — the exact error the user reported. The route code itself was already defensive (try/catch returns JSON 500), but the frontend wasn't.
+- Fixed TransfersTab.tsx load() function: now drains body as text on non-OK responses (instead of calling res.json), verifies content-type is application/json before parsing, and throws clear error messages (`API returned ${status}` or `Expected JSON, got ${ct}`) instead of cryptic SyntaxError.
+- Fixed TransfersTab.tsx deepRefresh() function: applied the same defensive pattern. Drain body before throwing on non-OK, verify content-type before parsing. 429 path still parses Retry-After header for cooldown timer.
+- Ran `bun run db:push` — schema already in sync, Prisma client regenerated.
+- Fixed dev.pid mismatch: was 1136 (dead), updated to 1073 (live next-server process, PPID=1058).
+- Ran `bun run lint` → PASSES (zero errors, zero warnings).
+- Ran `bun run build` → PASSES (all 59 routes compiled, standalone output created, no errors). /api/transfers route confirmed in build output.
+- Browser verification (agent-browser):
+  * Opened http://localhost:3000/, clicked TRANSFERS nav link (ref @e14).
+  * Transfers tab loaded successfully — 22+ saga cards rendered (Shea Charles, Christian Norgaard, James Trafford, Vinicius Junior, Ferran Torres, Rodri, Yan Couto, Cuti Romero, John Stones, Pep Chavarria, Bradley Barcola, Sergi Roberto, Ayyoub Bouaddi, Lucas Digne, Tolu Arokodare, Mason Greenwood, Alejandro Garnacho, Gonzalo Garcia, Morgan Rogers, Luka Modrić, etc.).
+  * NO error message visible — "Failed to load transfer sagas" error is GONE.
+  * `agent-browser errors` → EMPTY (no page errors).
+  * `agent-browser console` → NO errors/exceptions (only HMR/Fast Refresh messages).
+  * Network requests: GET /api/transfers?status=active → 200, GET /api/transfers?limit=6&status=active → 200. Both succeeded with valid JSON.
+  * Screenshot saved: /home/z/my-project/verify-transfers-fixed.png (1174456 bytes).
+
+Stage Summary:
+- ROOT CAUSE: Frontend TransfersTab.tsx called res.json() on a non-JSON response. When the platform edge served the "deploy failed" HTML page (a transient deploy hiccup), the JSON parse threw SyntaxError. The /api/transfers route code itself was already defensive (try/catch returns JSON 500) — the bug was purely client-side.
+- FIX: Hardened both fetch call sites in TransfersTab.tsx (load + deepRefresh) to (1) drain body as text on non-OK responses, (2) verify content-type is application/json before parsing, (3) throw clear error messages instead of cryptic SyntaxError. Future HTML responses will surface as "API returned 500" or "Expected JSON, got text/html" — actionable instead of confusing.
+- VERIFICATION: Local API ✓ (200 JSON), external API ✓ (200 JSON, platform edge cleared), browser ✓ (22+ sagas render, no errors, no console errors, network 200s). Lint ✓, Build ✓ (59 routes).
+- EXTERNAL URL STATUS: WORKING — https://e1v0s5v6hje1-d.space-z.ai/api/transfers returns valid JSON (32437 bytes, content-type: application/json). The previous "deploy failed" edge state has cleared.
+- DEFENSIVE LAYER: Even if the platform edge serves HTML again in the future (transient deploy hiccups, infrastructure issues), the Transfers tab will now show a clear "API returned 500" or "Expected JSON, got text/html" message instead of the confusing "SyntaxError: Unexpected token '<'" — users will know it's a server-side issue, not a frontend bug.

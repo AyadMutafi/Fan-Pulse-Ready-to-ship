@@ -47,7 +47,25 @@ export default function TransfersTab() {
         const res = await fetch(`/api/transfers?status=${status}`, {
           cache: 'no-store',
         })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        // Defensive: never call res.json() on a non-OK or non-JSON response.
+        // If the platform edge serves an HTML error page (deploy-failed page,
+        // 500 from infrastructure, etc.), res.json() would throw a confusing
+        // SyntaxError. Drain the body as text and surface a clear message.
+        if (!res.ok) {
+          // Drain body so the connection can be reused, then throw a clear status.
+          await res.text().catch(() => {})
+          throw new Error(`API returned ${res.status}`)
+        }
+        // Verify content-type is JSON before parsing. If the platform returns
+        // HTML with a 200 status (rare but possible during deploys), this
+        // prevents the SyntaxError.
+        const ct = res.headers.get('content-type') || ''
+        if (!ct.includes('application/json')) {
+          const body = await res.text().catch(() => '')
+          throw new Error(
+            `Expected JSON, got ${ct || 'unknown'} (${body.slice(0, 60) || 'empty body'})`,
+          )
+        }
         const json = await res.json()
         setSagas(json.sagas || [])
       } catch (e) {
@@ -83,14 +101,26 @@ export default function TransfersTab() {
         signal: controller.signal,
       })
       if (!res.ok) {
+        // Drain body before throwing so the connection can be reused.
+        // Defensive: don't call res.json() on a non-OK response — the
+        // platform edge may serve HTML for 429/500/etc.
+        await res.text().catch(() => {})
         if (res.status === 429) {
-          const j = await res.json().catch(() => ({}))
           // Parse Retry-After header or default to 30s
           const retrySecs = parseInt(res.headers.get('retry-after') || '30', 10)
           setRetryAfter(retrySecs)
-          throw new Error(j.message || `Rate limited — try again in ${retrySecs}s`)
+          throw new Error(`Rate limited — try again in ${retrySecs}s`)
         }
-        throw new Error(`HTTP ${res.status}`)
+        throw new Error(`API returned ${res.status}`)
+      }
+      // Defensive: verify content-type before parsing. If the platform
+      // returns HTML with a 200 status, this prevents a SyntaxError.
+      const ct = res.headers.get('content-type') || ''
+      if (!ct.includes('application/json')) {
+        const body = await res.text().catch(() => '')
+        throw new Error(
+          `Expected JSON, got ${ct || 'unknown'} (${body.slice(0, 60) || 'empty body'})`,
+        )
       }
       const json = await res.json()
       // The refresh endpoint returns active sagas directly — update state
