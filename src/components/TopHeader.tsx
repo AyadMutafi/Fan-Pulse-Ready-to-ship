@@ -12,10 +12,9 @@ interface TopHeaderProps {
 const tabTitles: Record<TabId, string> = {
   home: 'Home',
   sentiments: 'Sentiments Hub',
-  rate: 'Rate',
-  goals: 'Goals',
-  totw: 'Team of the Week',
   worldcup: 'World Cup',
+  totw: 'Team of the Week',
+  fpl: 'Fantasy',
   transfers: 'Transfer Pulse',
 }
 

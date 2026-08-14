@@ -6164,3 +6164,62 @@ Stage Summary:
 - VERIFICATION: Local API ✓ (200 JSON), external API ✓ (200 JSON, platform edge cleared), browser ✓ (22+ sagas render, no errors, no console errors, network 200s). Lint ✓, Build ✓ (59 routes).
 - EXTERNAL URL STATUS: WORKING — https://e1v0s5v6hje1-d.space-z.ai/api/transfers returns valid JSON (32437 bytes, content-type: application/json). The previous "deploy failed" edge state has cleared.
 - DEFENSIVE LAYER: Even if the platform edge serves HTML again in the future (transient deploy hiccups, infrastructure issues), the Transfers tab will now show a clear "API returned 500" or "Expected JSON, got text/html" message instead of the confusing "SyntaxError: Unexpected token '<'" — users will know it's a server-side issue, not a frontend bug.
+
+---
+Task ID: fix-nav-source-of-truth
+Agent: Main Agent
+Task: Consolidate navigation to ONE source of truth. The nav tabs kept reverting to "LEAGUE" and "FPL" because there were effectively two definitions — Navigation.tsx (had 'league' id + 'nav.league' label = "LEAGUE") and page.tsx (used activeTab === 'league'). Fix: rename tab id 'league' → 'totw', change label "LEAGUE" → "TOTW" and "FPL" → "Fantasy".
+
+Work Log:
+- Read /home/z/my-project/worklog.md tail for context (prior fix-transfers-api-json-error task completed, app healthy).
+- Read src/components/Navigation.tsx — found it already had all 6 tabs BUT used id 'league' (not 'totw'), icon Shield (not Trophy), and labelKey 'nav.league' (translated to "LEAGUE"). The 'fpl' tab used labelKey 'nav.fpl' which translated to "FPL".
+- Read src/app/page.tsx (3355 lines) — confirmed it already imports and uses <Navigation activeTab={activeTab} onTabChange={setActiveTab} />. The inline navigation definition mentioned in the task spec does NOT exist — page.tsx is already correctly using the Navigation component. However, line 3283 checked `activeTab === 'league'` (the old id) which needed to become `'totw'`.
+- Read src/context/LanguageContext.tsx — confirmed translation keys exist: nav.league='LEAGUE', nav.totw='TOTW', nav.fpl='FPL', nav.transfers='TRANSFERS'. Needed to remove nav.league and change nav.fpl from 'FPL' to 'Fantasy'.
+- Read src/components/TopHeader.tsx — found a latent type bug: `Record<TabId, string>` had keys `home/sentiments/rate/goals/totw/worldcup/transfers` — missing 'fpl', had extra 'rate'/'goals' (not valid TabIds), and 'totw' was referencing a non-existent TabId (since TabId was 'league' not 'totw'). This was a type error waiting to happen.
+- Searched for all 'league' tab references across src/ — found only 2 sites using the tab id: Navigation.tsx (type + tabs array) and page.tsx line 3283. The other 'league' matches were unrelated API query params (sentiments/matches routes filter by football league). Clean separation.
+- Verified ctaTargetToTab in use-stories.ts does NOT reference 'league' or 'totw' — no change needed there.
+
+Changes made:
+1. src/components/Navigation.tsx:
+   - Removed Shield from lucide-react import (no longer used); Trophy already imported.
+   - Changed `export type TabId = 'home' | 'sentiments' | 'worldcup' | 'league' | 'fpl' | 'transfers'` → `'totw'` (replaced 'league').
+   - Changed tabs array entry: `{ id: 'league', icon: Shield, labelKey: 'nav.league', href: '#league', isNew: true }` → `{ id: 'totw', icon: Trophy, labelKey: 'nav.totw', href: '#totw', isNew: true }`.
+   - Added comment block marking this as the SINGLE SOURCE OF TRUTH and documenting label mappings (nav.totw → "TOTW", nav.fpl → "Fantasy", nav.transfers → "TRANSFERS").
+2. src/app/page.tsx:
+   - Line 3283: `{activeTab === 'league' && <TeamOfTheWeekTab />}` → `{activeTab === 'totw' && <TeamOfTheWeekTab />}`.
+3. src/context/LanguageContext.tsx:
+   - Removed `'nav.league': 'LEAGUE',` (obsolete key).
+   - Changed `'nav.fpl': 'FPL',` → `'nav.fpl': 'Fantasy',`.
+   - nav.totw='TOTW' and nav.transfers='TRANSFERS' were already correct.
+4. src/components/TopHeader.tsx:
+   - Fixed Record<TabId, string> to match canonical 6 tabs: removed invalid 'rate'/'goals' keys, added missing 'fpl: Fantasy' key. Now: { home, sentiments, worldcup, totw, fpl, transfers } — exactly matches TabId union.
+
+Verification:
+- Ran `bun run lint` → PASSES (zero errors, zero warnings).
+- Ran `bun run build` → PASSES (all 59 routes compiled successfully, standalone output created, no errors).
+- Dev server picked up changes via Fast Refresh (full reload due to LanguageContext change — expected).
+- Browser verification (agent-browser):
+  * Opened http://localhost:3000/, snapshot confirmed all 6 nav links with correct labels:
+    - link "HOME" [ref=e9]
+    - link "SENTIMENTS" [ref=e10]
+    - link "WORLD CUP" [ref=e11]
+    - link "TOTW NEW" [ref=e12]   ← was "LEAGUE"
+    - link "Fantasy NEW" [ref=e13] ← was "FPL"
+    - link "TRANSFERS" [ref=e14]
+  * Tab switching verified end-to-end (URL hash + TopHeader heading + content):
+    - #home → "Home" ✓
+    - #sentiments → "Sentiments Hub" ✓
+    - #world-cup → "World Cup" ✓
+    - #totw → "Team of the Week" ✓
+    - #fpl → "Fantasy" ✓
+    - #transfers → "Transfer Pulse" ✓
+  * `agent-browser errors` → EMPTY (no page errors).
+  * Screenshot saved: /home/z/my-project/verify-nav-totw-fantasy.png (152426 bytes).
+- External URL (https://e1v0s5v6hje1-d.space-z.ai/) still serves the OLD build (shows "LEAGUE"/"FPL") because the platform hasn't redeployed yet. The dev server (Preview Panel) has the correct labels. User needs to trigger a redeploy from the Z.ai UI for the external URL to reflect the changes.
+
+Stage Summary:
+- ROOT CAUSE: Navigation.tsx used tab id 'league' with labelKey 'nav.league' (→ "LEAGUE") and 'fpl' with labelKey 'nav.fpl' (→ "FPL"). page.tsx matched on `activeTab === 'league'`. The task spec's premise of "two navigation definitions" was slightly off — there was only ONE definition (in Navigation.tsx), but it used the wrong ids/labels. TopHeader.tsx had a latent Record<TabId, string> type bug (missing 'fpl', extra 'rate'/'goals', referencing non-existent 'totw' key).
+- FIX: Renamed tab id 'league' → 'totw', changed icon Shield → Trophy, changed label "LEAGUE" → "TOTW" (via nav.totw, already existed), changed label "FPL" → "Fantasy" (via nav.fpl value change), removed obsolete nav.league key, updated page.tsx tab check, fixed TopHeader Record to match canonical TabId union.
+- SINGLE SOURCE OF TRUTH: Navigation.tsx is now the only place that defines the tab list. page.tsx imports <Navigation> and only checks `activeTab === '<id>'` for content rendering. TopHeader.tsx imports TabId type for its Record. No duplicate tab arrays anywhere.
+- VERIFICATION: Lint ✓, Build ✓ (59 routes), browser ✓ (all 6 tabs render with correct labels and switch correctly), no browser errors.
+- DEPLOY NOTE: External URL still serves old build until platform redeploys. Dev server (Preview Panel) shows the correct "TOTW" and "Fantasy" labels.

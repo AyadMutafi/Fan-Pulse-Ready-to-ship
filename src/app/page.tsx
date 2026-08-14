@@ -3280,7 +3280,7 @@ export default function Home() {
                 )}
                 {activeTab === 'sentiments' && <SentimentsTab />}
                 {activeTab === 'worldcup' && <WorldCupTab stages={stages} />}
-                {activeTab === 'league' && <TeamOfTheWeekTab />}
+                {activeTab === 'totw' && <TeamOfTheWeekTab />}
                 {activeTab === 'fpl' && <FPLTab />}
                 {activeTab === 'transfers' && <TransfersTab />}
               </motion.div>

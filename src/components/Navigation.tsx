@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { useLanguage } from '@/context/LanguageContext'
-import { Home, Activity, Globe, Zap, ArrowLeftRight, Trophy, Clapperboard, Shield, BarChart3 } from 'lucide-react'
+import { Home, Activity, Globe, Zap, ArrowLeftRight, Trophy, Clapperboard, BarChart3 } from 'lucide-react'
 
-export type TabId = 'home' | 'sentiments' | 'worldcup' | 'league' | 'fpl' | 'transfers'
+export type TabId = 'home' | 'sentiments' | 'worldcup' | 'totw' | 'fpl' | 'transfers'
 
 interface NavigationProps {
   activeTab: TabId
@@ -18,11 +18,18 @@ interface NavigationProps {
 // The route refactor to real /pages is deferred to September — for now these
 // are same-page anchors that preserve the single-page tab architecture while
 // giving screen-reader + keyboard users proper <a> semantics + aria-current.
+// SINGLE SOURCE OF TRUTH for all navigation tabs.
+// Do NOT define a separate tabs array in page.tsx or anywhere else —
+// import <Navigation> and pass activeTab + onTabChange.
+// Labels resolve via LanguageContext (nav.home, nav.totw, nav.fpl, …).
+//   nav.totw → "TOTW"
+//   nav.fpl → "Fantasy"
+//   nav.transfers → "TRANSFERS"
 const tabs: { id: TabId; icon: typeof Home; labelKey: string; href: string; isNew?: boolean }[] = [
   { id: 'home', icon: Home, labelKey: 'nav.home', href: '#home' },
   { id: 'sentiments', icon: Activity, labelKey: 'nav.sentiments', href: '#sentiments' },
   { id: 'worldcup', icon: Globe, labelKey: 'nav.worldcup', href: '#world-cup' },
-  { id: 'league', icon: Shield, labelKey: 'nav.league', href: '#league', isNew: true },
+  { id: 'totw', icon: Trophy, labelKey: 'nav.totw', href: '#totw', isNew: true },
   { id: 'fpl', icon: BarChart3, labelKey: 'nav.fpl', href: '#fpl', isNew: true },
   { id: 'transfers', icon: ArrowLeftRight, labelKey: 'nav.transfers', href: '#transfers' },
 ]
