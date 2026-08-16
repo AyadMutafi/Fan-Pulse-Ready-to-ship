@@ -6223,3 +6223,29 @@ Stage Summary:
 - SINGLE SOURCE OF TRUTH: Navigation.tsx is now the only place that defines the tab list. page.tsx imports <Navigation> and only checks `activeTab === '<id>'` for content rendering. TopHeader.tsx imports TabId type for its Record. No duplicate tab arrays anywhere.
 - VERIFICATION: Lint ✓, Build ✓ (59 routes), browser ✓ (all 6 tabs render with correct labels and switch correctly), no browser errors.
 - DEPLOY NOTE: External URL still serves old build until platform redeploys. Dev server (Preview Panel) shows the correct "TOTW" and "Fantasy" labels.
+
+---
+Task ID: push-to-github-private
+Agent: Z.ai Code (main)
+Task: Push Fan Pulse project to user's GitHub account (AyadMutafi/Fan-Pulse-Ready-to-ship) as a PRIVATE repo, ensuring no secrets leak and the codebase cannot be copied.
+
+Work Log:
+- Scanned all tracked files for hardcoded secrets (admin passwords, API keys, tokens)
+- Found 3 security issues before pushing:
+  1. `.env` was tracked in git (exposed local DB path)
+  2. `db/custom.db` (SQLite runtime) was tracked
+  3. Hardcoded fallback admin password '123456789' in src/lib/admin-auth.ts (would allow admin takeover on any misconfigured deploy)
+- Fixed all 3: untracked .env + db files, added them to .gitignore, hardened admin-auth to FAIL-CLOSED in production (empty ADMIN_PASSWORD + NODE_ENV=production = deny all admin requests), created .env.example template
+- Platform auto-commit (891c754) intervened mid-push and wiped first round of security commits; re-applied all fixes as commit df2b161 and pushed successfully
+- Created private repo via GitHub API (fine-grained PAT lacked repo-creation scope, so user created empty repo manually)
+- Pushed 1,169 files to main branch using ephemeral credential helper (token never persisted to .git/config)
+- User initially created repo as PUBLIC; token lacked Administration:write scope so could not flip visibility via API — user made it private manually
+- Granted Contents:write permission to PAT, then push succeeded
+- Verified via GitHub API: repo is PRIVATE, .env returns 404, db/custom.db returns 404, .env.example returns 200, admin-auth.ts contains PRODUCTION FAIL-CLOSED logic on remote
+
+Stage Summary:
+- Repo URL: https://github.com/AyadMutafi/Fan-Pulse-Ready-to-ship (PRIVATE)
+- Remote HEAD: df2b161 "security: untrack .env + db, fail-closed admin auth in production, add .env.example"
+- Security posture: .env + SQLite db untracked, admin auth fails closed in production, no hardcoded secrets in repo
+- Token handling: PAT used via ephemeral credential helper, never written to .git/config; PAT is in chat history so user should ROTATE it after confirming everything works
+- z-ai-web-dev-sdk confirmed backend-only (not imported in any client component)
