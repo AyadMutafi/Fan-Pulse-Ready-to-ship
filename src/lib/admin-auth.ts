@@ -4,11 +4,12 @@ import { timingSafeEqual } from 'node:crypto'
 /**
  * Admin authorization for destructive / heavy API routes.
  *
- * SECURITY: The admin password is read from the ADMIN_PASSWORD env var. If
- * the env var is unset (e.g. local dev / sandbox without a configured secret),
- * a fallback dev password `'123456789'` is used so the admin dashboard remains
- * accessible. Production deployments SHOULD always set ADMIN_PASSWORD to a
- * strong secret; when set, the fallback is never used.
+ * SECURITY: The admin password is read from the ADMIN_PASSWORD env var.
+ * PRODUCTION FAIL-CLOSED: if ADMIN_PASSWORD is unset AND NODE_ENV is
+ * 'production', ALL admin requests are denied (empty password never matches).
+ * A fallback dev password ('123456789') is used ONLY in non-production
+ * environments so the admin dashboard remains accessible during local dev.
+ * Production deployments MUST set ADMIN_PASSWORD to a strong secret.
  *
  * Clients authenticate by sending the password in the `x-admin-password`
  * header (preferred) or as the `?admin=` query param (convenience for curl).
@@ -24,13 +25,21 @@ import { timingSafeEqual } from 'node:crypto'
  * ensures password changes take effect immediately after `.env` reload.
  */
 
-// Fallback dev password — used ONLY when ADMIN_PASSWORD env var is unset.
-// This keeps the admin dashboard accessible in local dev / sandbox environments
-// that haven't configured a secret. Production MUST set ADMIN_PASSWORD.
+// Fallback dev password — used ONLY when:
+//   1. ADMIN_PASSWORD env var is unset, AND
+//   2. NODE_ENV is NOT 'production'.
+// In production, the absence of ADMIN_PASSWORD fails CLOSED (all admin
+// requests denied). This guarantees a misconfigured deploy can never be
+// taken over with a known default password.
 const ADMIN_PASSWORD_FALLBACK = '123456789'
 
 function getAdminPassword(): string {
-  return process.env.ADMIN_PASSWORD || ADMIN_PASSWORD_FALLBACK
+  const envPassword = process.env.ADMIN_PASSWORD
+  if (envPassword) return envPassword
+  // Production without a configured secret → deny everything.
+  if (process.env.NODE_ENV === 'production') return ''
+  // Local dev / sandbox convenience only.
+  return ADMIN_PASSWORD_FALLBACK
 }
 
 /**

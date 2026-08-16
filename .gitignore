@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# exception: the .env.example template is safe to commit (no real secrets)
+!.env.example
 
 # vercel
 .vercel
@@ -57,3 +59,7 @@ server.log
 tool-results/
 verify-*.png
 upload/
+# SQLite runtime files (local data, never commit)
+db/custom.db
+db/custom.db-shm
+db/custom.db-wal
