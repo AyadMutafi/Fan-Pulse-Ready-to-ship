@@ -6298,3 +6298,20 @@ Stage Summary:
 - Remote HEAD: 3b87aac on https://github.com/AyadMutafi/Fan-Pulse-Ready-to-ship (private)
 - Runtime posture: container runs as root (no USER directive); acceptable for Fly.io single-app VM with root-owned volume mounts
 - Previous fix (99db384, groupadd/useradd swap) is superseded by this simpler fallback as requested by operator
+
+---
+Task ID: fix-docker-effect-dep
+Agent: Z.ai Code (main)
+Task: Fix Railway Docker build failure "Cannot find package 'effect' from '/app/node_modules/@prisma/config/dist/index.js'".
+
+Work Log:
+- Diagnosed: @prisma/config (transitive dep of prisma@^6.11.1) imports the 'effect' package. The lockfile already had effect@3.18.4 as a transitive dep of @prisma/config, and it was present in local node_modules, but the Docker build (bun install --frozen-lockfile on oven/bun:1.3-debian) failed to hoist effect to a location where @prisma/config could resolve it during 'bunx prisma generate'.
+- Fix: added 'effect' as a DIRECT dependency in package.json (^3.18.4, matching the version already in the lockfile). Ran 'bun install' to update bun.lock (confirmed effect now appears at line 48 in the workspaces.dependencies section of the lockfile). With effect as a direct dep, bun install --frozen-lockfile in Docker is forced to install effect at the top-level node_modules, guaranteeing @prisma/config can resolve it.
+- Committed as 485e615 (package.json + bun.lock) and pushed to GitHub (fast-forward f1760a3..485e615).
+- Verified on remote: package.json contains '"effect": "^3.18.4"'; remote HEAD = 485e615.
+
+Stage Summary:
+- Fixed files: package.json (added "effect": "^3.18.4"), bun.lock (regenerated to register effect as direct dep)
+- Commit: 485e615 "fix(docker): add 'effect' as explicit dependency"
+- Remote HEAD: 485e615 on https://github.com/AyadMutafi/Fan-Pulse-Ready-to-ship (private)
+- This was the THIRD Docker build issue in sequence: (1) addgroup not found [fixed by removing user creation], (2) Railway not building latest commit [poke commit pushed], (3) effect not resolvable [fixed by adding explicit dep]. Build should now progress past 'bunx prisma generate' to the standalone Next.js build stage.
