@@ -2,6 +2,7 @@
 # Fan Pulse — Fly.io Dockerfile
 # Multi-stage build: deps → build → lean runner
 # Keeps SQLite on a persistent Fly volume (no DB migration needed)
+# Deploy marker: 2026-08-17 poke (force Railway webhook re-fire)
 # ─────────────────────────────────────────────────────────────
 #
 # ROOT CAUSE OF PRIOR DEPLOY FAILURES (fixed):
