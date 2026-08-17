@@ -6272,3 +6272,29 @@ Stage Summary:
 - Remote HEAD: 99db384 on https://github.com/AyadMutafi/Fan-Pulse-Ready-to-ship (private)
 - Local docker build: NOT verified (docker CLI absent from sandbox); Railway will build from this commit
 - Alternative considered: removing the user-creation line entirely and dropping --chown flags (simpler, runs as root). Rejected because keeping the nextjs user preserves correct file ownership semantics and the Debian command swap is a minimal, low-risk change.
+
+---
+Task ID: fix-dockerfile-addgroup (fallback applied)
+Agent: Z.ai Code (main)
+Task: Operator requested the full fallback for the Docker build failure — remove user/group creation entirely and run the container as root (acceptable for dev/launch deployment), instead of swapping Alpine addgroup/adduser for Debian groupadd/useradd.
+
+Work Log:
+- Read current Dockerfile (state after prior commit 99db384 which swapped to groupadd/useradd).
+- Removed the entire user-creation block (comment + `RUN groupadd ... && useradd ...`).
+- Stripped `--chown=nextjs:nodejs` from all 8 COPY directives in the runner stage:
+    - 3 standalone Next.js server copies (standalone, static, public)
+    - 4 Prisma copies (schema, .prisma client, @prisma, prisma CLI)
+    - 1 docker-entrypoint.sh copy
+- No `USER` directive added — container runs as root by default (base image default).
+- Updated header comment (lines 19-24) and the db-mkdir comment (lines 85-89) to reflect the simpler root-only approach and document WHY (Fly volumes are root-owned; single-app VM; removes the Debian/Alpine command incompatibility entirely).
+- Verified: zero `addgroup`/`adduser`/`groupadd`/`useradd`/`--chown`/`USER nextjs` command patterns remain in the Dockerfile. The only occurrence of "addgroup" is inside a `#` comment line (22) explaining the historical build failure — no runtime impact.
+- Docker CLI still not available in sandbox; Railway will build from this commit.
+- Committed as 3b87aac and pushed to GitHub (fast-forward 99db384..3b87aac).
+- Verified on remote via GitHub API: only the comment line matches the user-creation patterns; remote HEAD = 3b87aac.
+
+Stage Summary:
+- Fixed file: Dockerfile (removed user creation RUN + stripped all --chown flags; 100 lines total, down from 106)
+- Commit: 3b87aac "fix(docker): fallback — run as root, drop user creation entirely"
+- Remote HEAD: 3b87aac on https://github.com/AyadMutafi/Fan-Pulse-Ready-to-ship (private)
+- Runtime posture: container runs as root (no USER directive); acceptable for Fly.io single-app VM with root-owned volume mounts
+- Previous fix (99db384, groupadd/useradd swap) is superseded by this simpler fallback as requested by operator
