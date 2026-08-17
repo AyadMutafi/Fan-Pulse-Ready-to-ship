@@ -6249,3 +6249,26 @@ Stage Summary:
 - Security posture: .env + SQLite db untracked, admin auth fails closed in production, no hardcoded secrets in repo
 - Token handling: PAT used via ephemeral credential helper, never written to .git/config; PAT is in chat history so user should ROTATE it after confirming everything works
 - z-ai-web-dev-sdk confirmed backend-only (not imported in any client component)
+
+---
+Task ID: fix-dockerfile-addgroup
+Agent: Z.ai Code (main)
+Task: Fix Docker build failure "/bin/sh: 1: addgroup: not found" caused by using Alpine Linux commands on a Debian-based image.
+
+Work Log:
+- Read Dockerfile; identified the failing line (line 60-61): `RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs`
+- Root cause: base image is `oven/bun:1.3-debian` (Debian), but `addgroup`/`adduser` with `--system`/`--uid`/`--gid` flags are BusyBox/Alpine commands. Debian provides `groupadd`/`useradd` (from the `passwd` package, pre-installed on debian-slim).
+- Note: the nextjs user is only used for `--chown` in COPY directives — the container itself runs as root so it can write to the Fly volume. So this change has zero runtime effect; it just makes the image buildable on Debian.
+- Switched to Debian-compatible commands: `groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 -g nodejs nextjs`
+- Added an explanatory comment so future maintainers don't reintroduce the Alpine commands.
+- Scanned the rest of the Dockerfile + docker-entrypoint.sh for any other Alpine-only commands (apk add, busybox, etc.) — none found.
+- Docker CLI is NOT available in this sandbox, so `docker build -t fan-pulse .` could not be run locally for verification. The fix is syntactically correct and the commands (groupadd/useradd) are standard Debian utilities present on debian:bookworm-slim; Railway's auto-deploy will perform the actual build.
+- Committed as 99db384 and pushed to GitHub (fast-forward df2b161..99db384).
+- Verified on remote via GitHub API: line 63-64 of Dockerfile now reads `RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 -g nodejs nextjs`; remote HEAD = 99db384.
+
+Stage Summary:
+- Fixed file: Dockerfile (line 60-64)
+- Commit: 99db384 "fix(docker): use Debian groupadd/useradd instead of Alpine addgroup/adduser"
+- Remote HEAD: 99db384 on https://github.com/AyadMutafi/Fan-Pulse-Ready-to-ship (private)
+- Local docker build: NOT verified (docker CLI absent from sandbox); Railway will build from this commit
+- Alternative considered: removing the user-creation line entirely and dropping --chown flags (simpler, runs as root). Rejected because keeping the nextjs user preserves correct file ownership semantics and the Debian command swap is a minimal, low-risk change.
