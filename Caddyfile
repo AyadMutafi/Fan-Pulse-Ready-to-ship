@@ -13,62 +13,62 @@
 # ─────────────────────────────────────────────────────────────────
 
 :81 {
-	# ── Allowed CORS origins ──────────────────────────────────────
-	# Only these origins receive Access-Control-Allow-* headers.
-	# Add new origins here (must be exact match including scheme).
-	@cors_allowed {
-		expression {http.request.header.origin}.matches("^(https://e1v0s5v6hje1-d\\.space-z\\.ai|https://fan-pulse\\.fly\\.dev|http://localhost:3000|http://127\\.0\\.0\\.1:3000)$")
-	}
+        # ── Allowed CORS origins ──────────────────────────────────────
+        # Only these origins receive Access-Control-Allow-* headers.
+        # Add new origins here (must be exact match including scheme).
+        @cors_allowed {
+                expression {http.request.header.origin}.matches("^(https://e1v0s5v6hje1-d\\.space-z\\.ai|https://fanpulse\\.space-z\\.ai|https://fan-pulse\\.fly\\.dev|http://localhost:3000|http://127\\.0\\.0\\.1:3000)$")
+        }
 
-	# ── XTransformPort routing (sandbox multi-port support) ───────
-	@transform_port_query {
-		query XTransformPort=*
-	}
+        # ── XTransformPort routing (sandbox multi-port support) ───────
+        @transform_port_query {
+                query XTransformPort=*
+        }
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+        handle @transform_port_query {
+                reverse_proxy localhost:{query.XTransformPort} {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
 
-	# ── Default: proxy to Next.js (port 3000) ────────────────────
-	handle {
-		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
+        # ── Default: proxy to Next.js (port 3000) ────────────────────
+        handle {
+                reverse_proxy localhost:3000 {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
 
-			# SECURITY: Strip any CORS headers from the upstream response
-			# so we have full control over what the client receives.
-			# This prevents reflective CORS from leaking through.
-			header_down -Access-Control-Allow-Origin
-			header_down -Access-Control-Allow-Credentials
-			header_down -Access-Control-Allow-Methods
-			header_down -Access-Control-Allow-Headers
-			header_down -Access-Control-Max-Age
-			header_down -Access-Control-Expose-Headers
-		}
+                        # SECURITY: Strip any CORS headers from the upstream response
+                        # so we have full control over what the client receives.
+                        # This prevents reflective CORS from leaking through.
+                        header_down -Access-Control-Allow-Origin
+                        header_down -Access-Control-Allow-Credentials
+                        header_down -Access-Control-Allow-Methods
+                        header_down -Access-Control-Allow-Headers
+                        header_down -Access-Control-Max-Age
+                        header_down -Access-Control-Expose-Headers
+                }
 
-		# Apply strict CORS: only allowed origins get headers.
-		handle @cors_allowed {
-			header {
-				Access-Control-Allow-Origin "{http.request.header.origin}"
-				Access-Control-Allow-Credentials "true"
-				Access-Control-Allow-Methods "GET, POST, OPTIONS"
-				Access-Control-Allow-Headers "Content-Type, x-admin-password"
-				Access-Control-Max-Age "3600"
-				Vary "Origin"
-			}
-		}
+                # Apply strict CORS: only allowed origins get headers.
+                handle @cors_allowed {
+                        header {
+                                Access-Control-Allow-Origin "{http.request.header.origin}"
+                                Access-Control-Allow-Credentials "true"
+                                Access-Control-Allow-Methods "GET, POST, OPTIONS"
+                                Access-Control-Allow-Headers "Content-Type, x-admin-password"
+                                Access-Control-Max-Age "3600"
+                                Vary "Origin"
+                        }
+                }
 
-		# For non-allowed origins: explicitly set Vary: Origin (no ACAO).
-		# Browsers will block cross-origin responses without ACAO.
-		handle {
-			header Vary "Origin"
-		}
-	}
+                # For non-allowed origins: explicitly set Vary: Origin (no ACAO).
+                # Browsers will block cross-origin responses without ACAO.
+                handle {
+                        header Vary "Origin"
+                }
+        }
 }
