@@ -16,8 +16,11 @@
 # The prisma CLI is copied from the deps stage so `bunx prisma db push`
 # in docker-entrypoint.sh resolves locally (no npm download at runtime).
 #
-# The container runs as root (no USER nextjs) because Fly volumes mount
-# as root-owned — a non-root user cannot create the SQLite DB file.
+# The container runs entirely as root. Fly volumes mount as root-owned,
+# so a non-root user cannot create the SQLite DB file. Running as root
+# is acceptable for a Fly.io single-app VM and removes the need for
+# user/group creation (which previously failed with `addgroup: not found`
+# because the base image is Debian, not Alpine).
 # ─────────────────────────────────────────────────────────────
 
 # ── Stage 1: Install deps + generate Prisma client ──
@@ -55,27 +58,19 @@ ENV HOSTNAME=0.0.0.0
 # SQLite DB lives on a persistent Fly volume mounted at /app/db
 ENV DATABASE_URL=file:/app/db/custom.db
 
-# The nextjs user is created for file ownership, but the container runs
-# as root (see comment below the db mkdir) so it can write to the Fly volume.
-# NOTE: base image is oven/bun:1.3-debian (Debian), so we use groupadd/useradd
-# (Debian/Ubuntu) — NOT addgroup/adduser, which are Alpine/BusyBox commands
-# and are not available on this image.
-RUN groupadd --system --gid 1001 nodejs && \
-    useradd --system --uid 1001 -g nodejs nextjs
-
 # Copy the standalone Next.js server (self-contained)
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 
 # Copy Prisma schema + the full Prisma client + CLI.
 # The CLI (node_modules/prisma) is needed by docker-entrypoint.sh to run
 # `bunx prisma db push` on first boot. Without it, bunx tries to download
 # prisma from npm at runtime — which fails on a fresh Fly volume.
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
 
 # Create the node_modules/.bin/prisma symlink so `bunx prisma` resolves to
 # the locally-installed CLI instead of downloading from npm.
@@ -84,14 +79,14 @@ RUN mkdir -p node_modules/.bin && \
 
 # Entrypoint script: ensures the SQLite DB exists before starting the server.
 # This COPY works now that .dockerignore no longer excludes the file.
-COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
 # Create the db directory (the Fly volume mounts over this on first boot).
-# The volume is root-owned by default, so we intentionally run the container
-# as root (no USER nextjs) — this lets the entrypoint write the SQLite DB
-# file to the mounted volume without permission errors. The Next.js server
-# also runs as root, which is acceptable for a Fly.io single-app VM.
+# The volume is root-owned by default and the container runs as root,
+# so the entrypoint can write the SQLite DB file to the mounted volume
+# without permission errors. Running as root is acceptable for a
+# Fly.io single-app VM.
 RUN mkdir -p /app/db
 
 EXPOSE 3000
