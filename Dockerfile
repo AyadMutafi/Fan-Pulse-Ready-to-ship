@@ -57,8 +57,11 @@ ENV DATABASE_URL=file:/app/db/custom.db
 
 # The nextjs user is created for file ownership, but the container runs
 # as root (see comment below the db mkdir) so it can write to the Fly volume.
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+# NOTE: base image is oven/bun:1.3-debian (Debian), so we use groupadd/useradd
+# (Debian/Ubuntu) — NOT addgroup/adduser, which are Alpine/BusyBox commands
+# and are not available on this image.
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 -g nodejs nextjs
 
 # Copy the standalone Next.js server (self-contained)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
