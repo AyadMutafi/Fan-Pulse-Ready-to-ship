@@ -34,3 +34,8 @@ fi
 
 echo "[entrypoint] Starting Next.js server..."
 exec "$@"
+
+# ── AUTO-SEED: If database is empty, seed it automatically ──
+echo "[entrypoint] Checking if database needs seeding..."
+SEED_RESULT=$(curl -s -X POST -H "x-admin-password: ${ADMIN_PASSWORD:-fanpulse2026}" http://localhost:3000/api/world-cup/seed?force=true 2>/dev/null || echo "SEED_FAILED")
+echo "[entrypoint] Seed result: ${SEED_RESULT:0:200}"
