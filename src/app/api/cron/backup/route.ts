@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { execSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
+import { timingSafeEqual } from 'node:crypto'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60 // allow up to 60s for the backup to complete
@@ -120,7 +121,7 @@ function timingSafeEqualStr(a: string, b: string): boolean {
   const bufB = Buffer.from(b, 'utf-8')
   if (bufA.length !== bufB.length) return false
   try {
-    const { timingSafeEqual } = require('node:crypto')
+    // timingSafeEqual already imported
     return timingSafeEqual(bufA, bufB)
   } catch {
     return false
