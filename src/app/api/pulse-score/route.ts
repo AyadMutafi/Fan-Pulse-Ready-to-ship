@@ -1,3 +1,4 @@
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { db, getDb } from '@/lib/db'
 import { computePlayerPulseScore } from '@/lib/pulse-engine'
@@ -15,6 +16,11 @@ import { computePlayerPulseScore } from '@/lib/pulse-engine'
  * "Based on N real fan posts" UI in the pulse breakdown modal.
  */
 export async function GET(request: NextRequest) {
+  const ip = getClientIp(request as any)
+  const rl = rateLimit(`endpoint:${ip}`, 20, 60_000)
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } })
+  }
   try {
     const { searchParams } = new URL(request.url)
     const playerId = searchParams.get('playerId')

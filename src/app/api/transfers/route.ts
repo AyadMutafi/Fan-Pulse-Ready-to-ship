@@ -82,8 +82,14 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    // ANTI-HALLUCINATION: Filter out sagas where the sources array is empty
+    // but tier1Count > 0 (the hallucination pattern). A saga must have at
+    // least 1 real source URL to appear in the API response.
+    const verifiedSagas = sagas.filter(s => s.sources.length > 0 || s.tier1Count === 0)
+
+
     const res = NextResponse.json({
-      sagas: sagas.map((s) => {
+      sagas: verifiedSagas.map((s) => {
         // Anti-hallucination: batch-sanitize source URLs. The seed script
         // generates all journalist source URLs with a shared "2059000000"
         // snowflake prefix — the batch check detects this clustering and

@@ -1,8 +1,14 @@
+import { rateLimit, getClientIp } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import type { EliteCrisisSelection, Player, StageStatus } from '@/types'
 
 export async function GET(request: NextRequest) {
+  const ip = getClientIp(request as any)
+  const rl = rateLimit(`endpoint:${ip}`, 20, 60_000)
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } })
+  }
   try {
     const { searchParams } = new URL(request.url)
     const stageId = searchParams.get('stageId')

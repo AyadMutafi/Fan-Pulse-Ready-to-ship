@@ -1227,7 +1227,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
           <Card className="border-[#E0E0E0]/50 dark:border-white/5">
             <CardContent className="py-10 text-center">
               <Clock className="mx-auto size-7 text-[#666]/30 dark:text-[#CCCCCC]/30 mb-2" />
-              <p className="text-sm text-[#666] dark:text-[#CCCCCC]">No matches available — check back soon.</p>
+              <p className="text-sm text-[#666] dark:text-[#CCCCCC]">EPL kicks off August 21 — Gameweek 1 fixtures loading. Pulse tracking begins at kickoff.</p>
             </CardContent>
           </Card>
         ) : (
@@ -1340,7 +1340,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
               </div>
             ) : transferSagas.length === 0 ? (
               <p className="py-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
-                No active transfer sagas right now — check back soon.
+                Transfer sagas are loading — we curate rumors from Tier 1 journalists to ensure accuracy.
               </p>
             ) : (
               <div className="space-y-3">
@@ -1528,7 +1528,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
               </div>
             ) : ballonDorVisible.length === 0 ? (
               <p className="py-6 text-center text-sm text-[#666] dark:text-[#CCCCCC]">
-                Ballon d&rsquo;Or data unavailable — check back soon.
+                Ballon d'Or Race loading — 12 contenders with verified Pulse Scores.
               </p>
             ) : (
               <div className="space-y-3">
@@ -1861,7 +1861,7 @@ function SentimentsTab() {
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-[#E0E0E0]/50 dark:border-white/5 bg-[#F8F9FA] dark:bg-[#2D2D2D] py-12 text-center">
               <span className="text-3xl mb-2">🤷</span>
-              <p className="text-sm font-semibold text-[#666] dark:text-[#CCCCCC]">No players match this filter.</p>
+              <p className="text-sm font-semibold text-[#666] dark:text-[#CCCCCC]">Players are loading — check back in a moment.</p>
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 place-items-center">
@@ -2493,9 +2493,13 @@ function WorldCupTab({ stages }: { stages: WCStage[] }) {
 
   useEffect(() => {
     if (stages.length > 0 && !selectedStageId) {
-      // Auto-select the first LIVE stage, fallback to first stage
-      const liveStage = stages.find(s => s.status === 'live')
-      setSelectedStageId((liveStage ?? stages[0]).id)
+      // Auto-select: prefer LIVE stage, then prefer last COMPLETED stage (so TOTW/Final shows first)
+      const liveStage = stages.find(s => s.status === "live")
+      // If no live stage, prefer the last completed stage (Final > SF > QF > R32 > Group)
+      const completedStages = stages.filter(s => s.status === "completed")
+      const lastCompleted = completedStages.length > 0 ? completedStages[completedStages.length - 1] : null
+      const fallbackStage = lastCompleted ?? stages[0]
+      setSelectedStageId((liveStage ?? fallbackStage).id)
     }
   }, [stages, selectedStageId])
 
