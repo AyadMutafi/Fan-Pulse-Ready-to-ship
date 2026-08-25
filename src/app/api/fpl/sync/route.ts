@@ -265,8 +265,20 @@ export async function POST(request: NextRequest) {
     })
   } catch (err) {
     console.error('[api/fpl/sync] Error:', err)
+    // Return actual error message to admin (auth already verified) so
+    // production issues can be diagnosed without server log access.
+    const errorMsg =
+      err instanceof Error
+        ? `${err.name}: ${err.message}`
+        : typeof err === 'string'
+        ? err
+        : JSON.stringify(err)
     return NextResponse.json(
-      { error: 'Sync failed — check server logs' },
+      {
+        error: 'Sync failed — see details',
+        details: errorMsg,
+        stage: 'during-sync',
+      },
       { status: 500 },
     )
   }
