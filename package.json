@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 >> dev.log 2>&1",
-    "build": "next build "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && rm -f .next/standalone/.env""build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && rm -f .next/standalone/.env" cp -r .next/static .next/standalone/.next/ "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && rm -f .next/standalone/.env""build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && rm -f .next/standalone/.env" cp -r public .next/standalone/",
-    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
+    "build": "next build "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/""build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/" cp -r .next/static .next/standalone/.next/ "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/""build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/" cp -r public .next/standalone/",
+    "start": "NODE_ENV=production node .next/standalone/server.js",
     "lint": "eslint .",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
