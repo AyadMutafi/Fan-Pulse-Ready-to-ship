@@ -1,10 +1,13 @@
 # ─────────────────────────────────────────────────────────────
-# Fan Pulse — Render.com Dockerfile (Node.js)
+# Fan Pulse — Render.com Dockerfile (Node.js + OpenSSL)
 # ─────────────────────────────────────────────────────────────
 
 # ── Stage 1: Install deps + generate Prisma client ──
 FROM node:20-slim AS deps
 WORKDIR /app
+
+# Install OpenSSL (required by Prisma)
+RUN apt-get update -y && apt-get install -y openssl
 
 COPY package.json ./
 COPY prisma ./prisma
@@ -16,6 +19,8 @@ RUN npx prisma generate
 FROM node:20-slim AS builder
 WORKDIR /app
 
+RUN apt-get update -y && apt-get install -y openssl
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
@@ -24,6 +29,9 @@ RUN npm run build
 # ── Stage 3: Lean runner ──
 FROM node:20-slim AS runner
 WORKDIR /app
+
+# Install OpenSSL in the runner (required by Prisma at runtime)
+RUN apt-get update -y && apt-get install -y openssl
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -45,7 +53,7 @@ RUN chmod +x docker-entrypoint.sh
 # Create db directory
 RUN mkdir -p /app/db /data
 
-EXPOSE 3000
+EXPOSE 10000
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["sh", "-c", "node server.js"]
