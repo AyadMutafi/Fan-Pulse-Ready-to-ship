@@ -1,6 +1,5 @@
 # ─────────────────────────────────────────────────────────────
 # Fan Pulse — Render.com Dockerfile (Node.js)
-# Switched from Bun to Node.js to fix Prisma transitive dependency issues
 # ─────────────────────────────────────────────────────────────
 
 # ── Stage 1: Install deps + generate Prisma client ──
@@ -34,11 +33,9 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Copy Prisma files for runtime
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# Copy the FULL node_modules (needed for prisma CLI at runtime)
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Copy entrypoint
 COPY docker-entrypoint.sh ./

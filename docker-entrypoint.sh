@@ -5,7 +5,7 @@ echo "[entrypoint] DATABASE_URL=${DATABASE_URL}"
 echo "[entrypoint] Checking for SQLite DB at ${DB_PATH}..."
 if [ ! -f "$DB_PATH" ]; then
   echo "[entrypoint] No DB file found — creating fresh SQLite DB with schema..."
-  npx prisma db push --skip-generate --accept-data-loss
+  npx --yes prisma db push --skip-generate --accept-data-loss
   echo "[entrypoint] DB created. Auto-seed will run on server startup."
   touch /app/db/.fresh-db
 else
