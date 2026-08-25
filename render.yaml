@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Fan Pulse — Render.com Blueprint
+# ─────────────────────────────────────────────────────────────────────────────
+# Render reads this file when you click "New +" → "Blueprint" and select this
+# repo. It creates the web service automatically with the correct settings —
+# no manual dashboard configuration needed.
+#
+# After the first deploy, Render also auto-deploys on every push to `main`.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: fan-pulse
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Render pings the root URL ("/") by default. The app returns 200 from
+    # the homepage, so no explicit healthCheckPath is needed.
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render injects PORT automatically — Dockerfile already EXPOSEs 10000.
+      - key: HOSTNAME
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        value: file:/data/fanpulse.db
+      # ── Secrets (set these in the Render dashboard after first deploy) ──
+      # ADMIN_PASSWORD  — required to access /admin (the auto-seed endpoint
+      #                    uses this; the app DENIES admin access in prod if
+      #                    unset). Use a strong random string, e.g.
+      #                    `openssl rand -base64 32`.
+      - key: ADMIN_PASSWORD
+        sync: false
+      # ZAI_API_KEY  — z-ai-web-dev-sdk (LLM, web search, page reader)
+      - key: ZAI_API_KEY
+        sync: false
+      # GROQ_API_KEY — Groq Llama-3 sentiment scoring
+      - key: GROQ_API_KEY
+        sync: false
+      # XAI_API_KEY  — Grok / xAI Live Search (real social posts)
+      - key: XAI_API_KEY
+        sync: false
