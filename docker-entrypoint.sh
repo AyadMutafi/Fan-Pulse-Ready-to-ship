@@ -16,7 +16,7 @@ if [ ! -f "$DB_PATH" ]; then
   # First deploy (or volume wipe). prisma db push creates the file AND applies
   # the schema in one step. --accept-data-loss is safe here because there is
   # no data to lose yet.
-  bunx prisma db push --skip-generate --accept-data-loss
+  npx prisma db push --skip-generate --accept-data-loss
   echo "[entrypoint] DB created. Seeding initial match data via API after server boot..."
   touch /app/db/.fresh-db
 else
@@ -28,7 +28,7 @@ else
   # proper migrations at deploy time, not silently on every container boot.
   #
   # If you need to apply a schema change, SSH in and run:
-  #   bunx prisma db push --skip-generate
+  #   npx prisma db push --skip-generate
   # (without --accept-data-loss, so Prisma will prompt if data is at risk)
 fi
 
