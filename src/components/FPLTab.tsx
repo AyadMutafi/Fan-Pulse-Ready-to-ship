@@ -102,7 +102,7 @@ function CaptainPulseSection() {
         <CardContent className="py-8 text-center">
           <AlertCircle className="mx-auto size-8 text-[#F59E0B]/50 mb-2" />
           <p className="text-sm text-[#666] dark:text-[#CCCCCC]">
-            FPL data not synced yet. An admin needs to run the FPL sync to populate captain candidates.
+            Syncing FPL data from fantasy.premierleague.com. Captain candidates appear here shortly after the sync completes — usually within a minute of startup.
           </p>
         </CardContent>
       </Card>
@@ -501,7 +501,7 @@ export default function FPLTab() {
       {/* Disclaimer */}
       <p className="text-[11px] text-[#666] dark:text-[#CCCCCC] text-center">
         FPL data from fantasy.premierleague.com. Fan sentiment from Fan Pulse community votes.
-        An admin must run /api/fpl/sync to populate player data.
+        Player data auto-syncs on startup and can be refreshed via /api/cron/fpl-refresh.
       </p>
     </div>
   )

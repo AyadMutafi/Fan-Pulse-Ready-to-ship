@@ -96,7 +96,7 @@ export interface FPLBootstrapEvent {
   is_next: boolean
   finished: boolean
   average_entry_score: number
-  highest_score: number
+  highest_score: number | null  // null for unplayed gameweeks
 }
 
 interface FPLBootstrapResponse {

@@ -63,3 +63,4 @@ upload/
 db/custom.db
 db/custom.db-shm
 db/custom.db-wal
+package-lock.json

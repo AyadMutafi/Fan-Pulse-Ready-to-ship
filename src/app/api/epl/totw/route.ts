@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
           matchweek: 0,
           type,
           hasMatchData: false,
-          message: 'EPL kicks off Aug 21 — Team of the Week will appear after Matchweek 1',
+          message: 'Syncing EPL match data — Team of the Week appears after Matchweek 1 finishes.',
         },
         {
           headers: {
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest) {
         hasMatchData: generated.hasMatchData,
         message: generated.hasMatchData
           ? undefined
-          : 'EPL kicks off Aug 21 — Team of the Week will appear after Matchweek 1',
+          : 'Syncing EPL match data — Team of the Week appears after Matchweek 1 finishes.',
       },
       {
         headers: {

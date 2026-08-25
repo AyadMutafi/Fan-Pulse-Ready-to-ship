@@ -1227,7 +1227,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
           <Card className="border-[#E0E0E0]/50 dark:border-white/5">
             <CardContent className="py-10 text-center">
               <Clock className="mx-auto size-7 text-[#666]/30 dark:text-[#CCCCCC]/30 mb-2" />
-              <p className="text-sm text-[#666] dark:text-[#CCCCCC]">EPL kicks off August 21 — Gameweek 1 fixtures loading. Pulse tracking begins at kickoff.</p>
+              <p className="text-sm text-[#666] dark:text-[#CCCCCC]">Syncing live EPL fixtures from Fantasy Premier League. Pulse tracking begins as soon as match data is available.</p>
             </CardContent>
           </Card>
         ) : (

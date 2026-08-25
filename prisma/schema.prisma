@@ -315,7 +315,10 @@ model FPLGameweek {
   isNext       Boolean  @default(false)
   finished     Boolean  @default(false)
   averageScore Int      @default(0)
-  highestScore Int      @default(0)
+  // Nullable — FPL API returns null for unplayed gameweeks (highest_score
+  // is only set after the gameweek finishes). Prisma's @default(0) on a
+  // non-null field rejects null on upsert.create, so we mark it nullable.
+  highestScore Int?
   syncedAt     DateTime @default(now())
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

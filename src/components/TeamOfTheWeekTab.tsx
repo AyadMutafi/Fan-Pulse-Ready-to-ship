@@ -200,11 +200,12 @@ export default function TeamOfTheWeekTab() {
           <CardContent className="py-12 text-center">
             <Clock className="mx-auto size-10 text-[#6C2BD9]/30 dark:text-[#8B5CF6]/30 mb-3" />
             <h3 className="text-lg font-bold text-[#1A1A1A] dark:text-white mb-1">
-              EPL kicks off August 21
+              Syncing EPL match data
             </h3>
             <p className="text-sm text-[#666] dark:text-[#CCCCCC] max-w-md mx-auto">
-              The Team of the Week will appear here after Matchweek 1 is complete.
-              Until then, vote on club moods in the EPL Fan Mood section on the Home tab.
+              The Team of the Week will appear here once the latest matchweek is
+              complete and our FPL data sync finishes. Vote on club moods in the
+              EPL Fan Mood section on the Home tab in the meantime.
             </p>
           </CardContent>
         </Card>
