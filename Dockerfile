@@ -27,6 +27,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=10000
 
 # Copy standalone build
 COPY --from=builder /app/.next/standalone ./
@@ -47,4 +48,4 @@ RUN mkdir -p /app/db /data
 EXPOSE 3000
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "node server.js"]
