@@ -70,9 +70,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Render injects PORT at runtime; default to 10000 (Render's standard).
 ENV PORT=10000
 ENV HOSTNAME=0.0.0.0
-# SQLite DB lives at /data (writable, ephemeral on Render free tier —
-# instrumentation.ts auto-seeds it on first boot, so ephemeral is fine).
-ENV DATABASE_URL="file:/data/fanpulse.db"
+# Default DATABASE_URL — Render dashboard may override this with
+# file:/data/custom.db (matching .env.example). The entrypoint script reads
+# this env var dynamically and initializes the correct file path.
+ENV DATABASE_URL="file:/data/custom.db"
 
 # OpenSSL (Prisma) + curl (Render healthchecks) + ca-certificates (outbound TLS)
 RUN apt-get update && apt-get install -y --no-install-recommends \
