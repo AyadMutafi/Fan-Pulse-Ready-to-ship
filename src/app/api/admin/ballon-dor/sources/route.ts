@@ -150,6 +150,31 @@ export async function POST(request: NextRequest) {
       extraction = await extractSocial(playerName, pageResult.text, url)
     }
 
+    // ── Auto-create contender FIRST (before source upsert) ──────────────
+    // The BallonDorSource.contender relation requires the BallonDorContender
+    // row to exist BEFORE the source is created (foreign key constraint).
+    // If the contender doesn't exist, create a stub row first.
+    const existingContender = await db.ballonDorContender.findUnique({
+      where: { name: playerName },
+    })
+
+    if (!existingContender) {
+      await db.ballonDorContender.create({
+        data: {
+          name: playerName,
+          nationCode: 'UNK',
+          position: 'UNK',
+          clubName: 'Unknown',
+          clubCode: 'UNK',
+          ballonDorScore: 50,
+          previousScore: 50,
+          trend: 'stable',
+          reason: 'Added via admin source curation',
+          verifiedMatchFact: '',
+        },
+      })
+    }
+
     // ── Store the source ──────────────────────────────────────────────────
     const source = await db.ballonDorSource.upsert({
       where: { url },
@@ -180,28 +205,6 @@ export async function POST(request: NextRequest) {
         isActive: true,
       },
     })
-
-    // ── Auto-create contender if it doesn't exist ─────────────────────────
-    const existingContender = await db.ballonDorContender.findUnique({
-      where: { name: playerName },
-    })
-
-    if (!existingContender) {
-      await db.ballonDorContender.create({
-        data: {
-          name: playerName,
-          nationCode: 'UNK',
-          position: 'UNK',
-          clubName: 'Unknown',
-          clubCode: 'UNK',
-          ballonDorScore: 50,
-          previousScore: 50,
-          trend: 'stable',
-          reason: 'Added via admin source curation',
-          verifiedMatchFact: '',
-        },
-      })
-    }
 
     // ── Trigger recompute for this player ─────────────────────────────────
     const recompute = await recomputePlayer(db, playerName)

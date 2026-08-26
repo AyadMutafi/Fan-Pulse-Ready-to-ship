@@ -200,6 +200,23 @@ export async function register() {
         )
       }
 
+      // ── JOB 4: Ballon d'Or seed (if empty) ──────────────────────────────
+      // Seeds BallonDorContender rows from VERIFIED_BALLON_DOR_CONTENDERS
+      // on first boot. Idempotent — skips contenders that already exist.
+      const bdCount = await db.ballonDorContender.count().catch(() => 0)
+      if (bdCount === 0) {
+        console.log('[instrumentation] Ballon d\'Or DB empty — auto-seeding contenders...')
+        try {
+          const { seedFromHardcoded } = await import('@/lib/ballon-dor-admin/recompute')
+          const result = await seedFromHardcoded(db, false)
+          console.log(`[instrumentation] Ballon d'Or seeded: ${result.seeded} contenders added`)
+        } catch (bdErr) {
+          console.error('[instrumentation] Ballon d\'Or seed failed (non-fatal):', bdErr)
+        }
+      } else {
+        console.log(`[instrumentation] Ballon d\'Or OK — ${bdCount} contenders.`)
+      }
+
       await db.$disconnect()
     } catch (error) {
       console.error('[instrumentation] Startup failed (non-fatal):', error)
