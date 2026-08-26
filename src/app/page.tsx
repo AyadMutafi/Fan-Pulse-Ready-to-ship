@@ -405,7 +405,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
   }
   const { t } = useLanguage()
   const { markSeen: markCardSeen } = useCardCollection()
-  const [matchFilter, setMatchFilter] = useState<'ALL' | 'WC'>('ALL')
+  const [matchFilter, setMatchFilter] = useState<'ALL' | 'EPL' | 'WC'>('EPL')
   const [apiMatches, setApiMatches] = useState<Array<{
     id: string; home: string; away: string; homeFlag: string; awayFlag: string
     score: string; homeSentiment: number; awaySentiment: number; live: boolean; league: string
@@ -438,7 +438,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
   useEffect(() => {
     async function fetchMatches() {
       try {
-        const res = await fetch('/api/matches?league=WC')
+        const res = await fetch('/api/recent-matches?limit=12')
         if (res.ok) {
           const data = await res.json()
           const mapped = (data.matches || []).map((m: any) => ({
@@ -699,7 +699,9 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
 
   const filteredMatches = (matchFilter === 'ALL'
     ? apiMatches
-    : apiMatches.filter(m => m.league.startsWith('WC'))
+    : matchFilter === 'EPL'
+    ? apiMatches.filter(m => m.league === 'EPL' || m.status === 'upcoming')
+    : apiMatches.filter(m => m.league.startsWith('WC') || m.league.startsWith('Round') || m.league.startsWith('Final') || m.league.startsWith('Semi') || m.league.startsWith('Quarter'))
   ).slice(0, 24) // Limit to 24 cards max for performance
 
   // ── Ballon d'Or: derived display values ──
@@ -1199,12 +1201,12 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                 />
               </h2>
               <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
-                Fan reactions from recent matches · WC now archived
+                Fan reactions from recent matches · EPL live · WC archived
               </p>
             </div>
           </div>
           <div className="flex gap-1.5 shrink-0">
-            {(['WC', 'ALL'] as const).map((filter) => (
+            {(['EPL', 'WC', 'ALL'] as const).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setMatchFilter(filter)}
@@ -1216,7 +1218,7 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
                   }
                 `}
               >
-                {filter === 'ALL' ? '⚽ All' : '🏆 World Cup'}
+                {filter === 'ALL' ? '⚽ All' : filter === 'EPL' ? '⚽ EPL' : '🏆 World Cup'}
               </button>
             ))}
           </div>

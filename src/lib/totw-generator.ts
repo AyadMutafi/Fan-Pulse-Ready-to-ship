@@ -22,7 +22,7 @@
  * data is available, it falls back to a generic "Matchweek N performance".
  */
 
-import type { PrismaClient } from '@prisma/client'
+import type { PrismaClient, FPLPlayer } from '@prisma/client'
 
 export interface TOTWSelection {
   playerName: string
@@ -121,6 +121,16 @@ export async function generateTOTW(
     }
   }
 
+  // 2b. Fetch FPLPlayer data for derived sentiment/pulseScore computation.
+  // When fan votes are 0, LeaguePlayer.sentiment defaults to 50 (neutral) and
+  // LeaguePlayer.pulseScore defaults to 0. This makes TOTW look "dead" — all
+  // players show 😐 and 0 PULSE. We derive both from FPL form/goals/assists.
+  const fplIds = players.map((p) => p.fplId).filter((id): id is number => id !== null)
+  const fplPlayers = await db.fPLPlayer.findMany({
+    where: { fplId: { in: fplIds } },
+  }).catch(() => [])
+  const fplPlayerMap = new Map(fplPlayers.map((fp) => [fp.fplId, fp]))
+
   // 3. Build match-result context for each team
   const teamMatchResults = new Map<
     string,
@@ -164,14 +174,33 @@ export async function generateTOTW(
     usedPlayerIds.add(pick.id)
 
     const matchResult = teamMatchResults.get(pick.teamCode)
-    const matchInfo = buildMatchInfo(pick, matchResult, matchweek)
+    const fplData = pick.fplId ? fplPlayerMap.get(pick.fplId) : undefined
+
+    // ── Derived sentiment + pulseScore (FIX-02) ──────────────────────────────
+    // When fan votes are 0, LeaguePlayer.sentiment = 50 (neutral) and
+    // pulseScore = 0. We derive both from FPL form/goals/assists + match result
+    // so the TOTW looks alive even before fans start voting.
+    // Once real votes come in, the derived values are replaced by real ones
+    // (LeaguePlayer.sentiment/pulseScore are updated by /api/epl/compute-pulse).
+    const hasRealSentiment = pick.sentiment !== 50
+    const hasRealPulse = pick.pulseScore > 0
+
+    const derivedSentiment = hasRealSentiment
+      ? pick.sentiment
+      : computeDerivedSentiment(fplData, matchResult?.result, pick.position)
+
+    const derivedPulseScore = hasRealPulse
+      ? pick.pulseScore
+      : computeDerivedPulseScore(fplData, matchResult, pick.position)
+
+    const matchInfo = buildMatchInfo(fplData ?? pick, matchResult, matchweek)
 
     selections.push({
       playerName: pick.name,
       teamCode: pick.teamCode,
       position: slot.pos,
-      pulseScore: pick.pulseScore,
-      sentiment: pick.sentiment,
+      pulseScore: derivedPulseScore,
+      sentiment: derivedSentiment,
       matchInfo,
       photoUrl: pick.photoUrl,
       order: slot.order,
@@ -261,4 +290,132 @@ export async function getCurrentMatchweek(
     select: { matchweek: true },
   })
   return latest?.matchweek ?? 1
+}
+
+// ─── Derived Sentiment + PulseScore (FIX-02) ─────────────────────────────────
+//
+// When fan votes = 0, LeaguePlayer.sentiment defaults to 50 (neutral 😐) and
+// pulseScore defaults to 0. This makes the TOTW look "dead" — all players show
+// the same neutral mood and 0 PULSE. We derive both values from FPL player
+// stats (form, goals, assists, clean sheets) + match result so the TOTW is
+// visually meaningful even before fans start voting.
+//
+// Once real FanVote data comes in, /api/epl/compute-pulse overwrites
+// LeaguePlayer.sentiment and pulseScore with real values — the derived
+// fallback is only used when no real data exists.
+
+/**
+ * Compute a derived sentiment score (0-100) from FPL player stats.
+ *
+ * Formula:
+ *   base = 50 (neutral)
+ *   + form bonus: (form - 3) × 4, clamped to [-20, +40]
+ *   + goals bonus: +8 per goal (max +24)
+ *   + assists bonus: +5 per assist (max +15)
+ *   + clean sheet bonus (DEF/GK only): +10
+ *   + match result bonus: W=+10, D=+0, L=-10
+ *   Final clamp: [15, 95]
+ *
+ * This produces a realistic distribution:
+ *   - A GK with a clean sheet + win → ~75 (😊)
+ *   - A ST with 2 goals + win → ~85 (🤩)
+ *   - A MID with 0 goals in a loss → ~30 (😟)
+ */
+function computeDerivedSentiment(
+  fplData: FPLPlayer | undefined,
+  matchResult: 'W' | 'D' | 'L' | undefined,
+  position: string,
+): number {
+  if (!fplData) return 50 // No FPL data → truly neutral
+
+  let score = 50
+
+  // Form bonus (FPL form is 0-10, typical range 2-8)
+  const form = Number(fplData.form) || 0
+  score += Math.max(-20, Math.min(40, (form - 3) * 4))
+
+  // Goals bonus
+  const goals = fplData.goals || 0
+  score += Math.min(24, goals * 8)
+
+  // Assists bonus
+  const assists = fplData.assists || 0
+  score += Math.min(15, assists * 5)
+
+  // Clean sheet bonus (only for DEF/GK)
+  if (position === 'GK' || position === 'RB' || position === 'CB' || position === 'LB') {
+    const cleanSheets = fplData.cleanSheets || 0
+    if (cleanSheets > 0) score += 10
+  }
+
+  // Match result bonus
+  if (matchResult === 'W') score += 10
+  else if (matchResult === 'L') score -= 10
+
+  return Math.max(15, Math.min(95, Math.round(score)))
+}
+
+/**
+ * Compute a derived pulse score (0-100) from FPL player stats + match result.
+ *
+ * Formula:
+ *   base = 40
+ *   + form × 3 (max +30)
+ *   + totalPoints / 5 (max +20)
+ *   + goals × 6 (max +18)
+ *   + assists × 4 (max +12)
+ *   + clean sheet (DEF/GK): +8
+ *   + match result: W=+12, D=+4, L=-5
+ *   + goal difference bonus: +3 per goal diff (max +9)
+ *   Final clamp: [25, 98]
+ *
+ * This produces:
+ *   - A star performer (form 10, 2 goals, win 3-0) → ~92
+ *   - A solid performer (form 5, clean sheet, win 1-0) → ~75
+ *   - A bench player (form 2, 0 goals, draw 0-0) → ~50
+ */
+function computeDerivedPulseScore(
+  fplData: FPLPlayer | undefined,
+  matchResult:
+    | { goalsFor: number; goalsAgainst: number; opponent: string; result: 'W' | 'D' | 'L' }
+    | undefined,
+  position: string,
+): number {
+  if (!fplData) return 40
+
+  let score = 40
+
+  // Form contribution
+  const form = Number(fplData.form) || 0
+  score += Math.min(30, form * 3)
+
+  // Total points contribution
+  const totalPoints = fplData.totalPoints || 0
+  score += Math.min(20, totalPoints / 5)
+
+  // Goals + assists
+  const goals = fplData.goals || 0
+  score += Math.min(18, goals * 6)
+  const assists = fplData.assists || 0
+  score += Math.min(12, assists * 4)
+
+  // Clean sheet for defenders
+  if (position === 'GK' || position === 'RB' || position === 'CB' || position === 'LB') {
+    if ((fplData.cleanSheets || 0) > 0) score += 8
+  }
+
+  // Match result + goal difference
+  if (matchResult) {
+    if (matchResult.result === 'W') {
+      score += 12
+      const gd = matchResult.goalsFor - matchResult.goalsAgainst
+      score += Math.min(9, gd * 3)
+    } else if (matchResult.result === 'D') {
+      score += 4
+    } else {
+      score -= 5
+    }
+  }
+
+  return Math.max(25, Math.min(98, Math.round(score)))
 }

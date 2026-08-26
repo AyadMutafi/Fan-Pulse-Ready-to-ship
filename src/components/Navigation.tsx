@@ -25,13 +25,13 @@ interface NavigationProps {
 //   nav.totw → "TOTW"
 //   nav.fpl → "Fantasy"
 //   nav.transfers → "TRANSFERS"
-const tabs: { id: TabId; icon: typeof Home; labelKey: string; href: string; isNew?: boolean }[] = [
-  { id: 'home', icon: Home, labelKey: 'nav.home', href: '#home' },
-  { id: 'sentiments', icon: Activity, labelKey: 'nav.sentiments', href: '#sentiments' },
-  { id: 'worldcup', icon: Globe, labelKey: 'nav.worldcup', href: '#world-cup' },
-  { id: 'totw', icon: Trophy, labelKey: 'nav.totw', href: '#totw', isNew: true },
-  { id: 'fpl', icon: BarChart3, labelKey: 'nav.fpl', href: '#fpl', isNew: true },
-  { id: 'transfers', icon: ArrowLeftRight, labelKey: 'nav.transfers', href: '#transfers' },
+const tabs: { id: TabId; icon: typeof Home; labelKey: string; shortLabel: string; href: string; isNew?: boolean }[] = [
+  { id: 'home', icon: Home, labelKey: 'nav.home', shortLabel: 'Home', href: '#home' },
+  { id: 'sentiments', icon: Activity, labelKey: 'nav.sentiments', shortLabel: 'Pulse', href: '#sentiments' },
+  { id: 'worldcup', icon: Globe, labelKey: 'nav.worldcup', shortLabel: 'WC', href: '#world-cup' },
+  { id: 'totw', icon: Trophy, labelKey: 'nav.totw', shortLabel: 'TOTW', href: '#totw', isNew: true },
+  { id: 'fpl', icon: BarChart3, labelKey: 'nav.fpl', shortLabel: 'FPL', href: '#fpl', isNew: true },
+  { id: 'transfers', icon: ArrowLeftRight, labelKey: 'nav.transfers', shortLabel: 'Transfers', href: '#transfers' },
 ]
 
 export default function Navigation({ activeTab, onTabChange, onOpenStories }: NavigationProps) {
@@ -166,13 +166,13 @@ export default function Navigation({ activeTab, onTabChange, onOpenStories }: Na
 
       {/* ── Mobile Bottom Tab Bar ────────────────────────────── */}
       <nav role="navigation" aria-label="Main navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl bg-white/80 dark:bg-[#1A1A1A]/80 border-t border-black/5 dark:border-white/5 safe-area-bottom">
-        <div className="flex items-center justify-around py-1.5 px-1">
+        <div className="flex items-center justify-around py-1 px-0.5 overflow-x-auto scrollbar-none">
           {/* Stories button — featured first item with gradient accent */}
           {onOpenStories && (
             <button
               onClick={onOpenStories}
               aria-label="Open Stories"
-              className="relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg min-w-[48px] focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 transition-colors duration-200 text-[#FF6B35]"
+              className="relative flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg min-w-[42px] focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 transition-colors duration-200 text-[#FF6B35] shrink-0"
             >
               <div className="relative">
                 <span className="flex size-[18px] items-center justify-center bg-gradient-to-br from-[#6C2BD9] to-[#FF6B35] rounded-md">
@@ -180,7 +180,7 @@ export default function Navigation({ activeTab, onTabChange, onOpenStories }: Na
                 </span>
                 <span className="absolute -top-1 -right-1.5 size-1.5 rounded-full bg-[#FF6B35]" />
               </div>
-              <span className="text-[11px] font-bold">Stories</span>
+              <span className="text-[10px] font-bold">Stories</span>
             </button>
           )}
           {tabs.map((tab) => {
@@ -195,8 +195,8 @@ export default function Navigation({ activeTab, onTabChange, onOpenStories }: Na
                 onClick={() => onTabChange(tab.id)}
                 aria-current={isActive ? 'page' : undefined}
                 className={`
-                  relative flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg min-w-[48px] focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
-                  transition-colors duration-200
+                  relative flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg min-w-[42px] focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2
+                  transition-colors duration-200 shrink-0
                   ${isActive
                     ? 'text-[#6C2BD9] dark:text-[#8B5CF6]'
                     : 'text-[#6B7280] dark:text-gray-400'
@@ -209,7 +209,7 @@ export default function Navigation({ activeTab, onTabChange, onOpenStories }: Na
                     <span className="absolute -top-1 -right-1.5 size-1.5 rounded-full bg-[#6C2BD9]" />
                   )}
                 </div>
-                <span className={`text-[11px] ${isActive ? 'font-bold' : 'font-semibold'}`}>{t(tab.labelKey)}</span>
+                <span className={`text-[10px] ${isActive ? 'font-bold' : 'font-semibold'}`}>{tab.shortLabel}</span>
                 {isActive && (
                   <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-0.5 w-4 rounded-full bg-[#6C2BD9] dark:bg-[#8B5CF6]" />
                 )}

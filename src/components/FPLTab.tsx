@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Zap, TrendingUp, Star, PoundSterling, Users, Activity, Search, AlertCircle, Loader2,
+  Zap, TrendingUp, Star, PoundSterling, Users, Activity, Search, AlertCircle, Loader2, RefreshCw,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -439,6 +439,27 @@ function YourFPLTeamSection() {
 // ── Main FPL Tab ─────────────────────────────────────────────
 
 export default function FPLTab() {
+  const [syncInfo, setSyncInfo] = useState<{ message: string; freshness: string } | null>(null)
+
+  // Fetch last-sync timestamp for trust signal (FIX-03)
+  useEffect(() => {
+    async function fetchSyncInfo() {
+      try {
+        const res = await fetch('/api/fpl/last-sync')
+        if (res.ok) {
+          const data = await res.json()
+          setSyncInfo({
+            message: data.message || 'Unknown',
+            freshness: data.freshness || 'stale',
+          })
+        }
+      } catch {
+        // Non-fatal
+      }
+    }
+    fetchSyncInfo()
+  }, [])
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -498,11 +519,25 @@ export default function FPLTab() {
         <YourFPLTeamSection />
       </section>
 
-      {/* Disclaimer */}
-      <p className="text-[11px] text-[#666] dark:text-[#CCCCCC] text-center">
-        FPL data from fantasy.premierleague.com. Fan sentiment from Fan Pulse community votes.
-        Player data auto-syncs on startup and can be refreshed via /api/cron/fpl-refresh.
-      </p>
+      {/* Disclaimer + Last Synced trust signal */}
+      <div className="flex flex-col items-center gap-1.5">
+        <p className="text-[11px] text-[#666] dark:text-[#CCCCCC] text-center">
+          FPL data from fantasy.premierleague.com. Fan sentiment from Fan Pulse community votes.
+          Player data auto-syncs on startup and can be refreshed via /api/cron/fpl-refresh.
+        </p>
+        {syncInfo && (
+          <div className={`flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+            syncInfo.freshness === 'fresh'
+              ? 'text-[#10B981] border-[#10B981]/30 bg-[#10B981]/5'
+              : syncInfo.freshness === 'stale'
+              ? 'text-[#F59E0B] border-[#F59E0B]/30 bg-[#F59E0B]/5'
+              : 'text-[#666] border-[#E0E0E0] dark:border-white/10'
+          }`}>
+            <RefreshCw className="size-2.5" />
+            <span>FPL data: {syncInfo.message}</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

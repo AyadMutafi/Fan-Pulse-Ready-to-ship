@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Trophy, Clock, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import { Trophy, Clock, ChevronLeft, ChevronRight, Calendar, RefreshCw } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -93,6 +93,26 @@ export default function TeamOfTheWeekTab() {
   const [data, setData] = useState<TOTWData | null>(null)
   const [loading, setLoading] = useState(true)
   const [hasMatchData, setHasMatchData] = useState(true)
+  const [syncInfo, setSyncInfo] = useState<{ message: string; freshness: string } | null>(null)
+
+  // Fetch last-sync timestamp for trust signal (FIX-03)
+  useEffect(() => {
+    async function fetchSyncInfo() {
+      try {
+        const res = await fetch('/api/fpl/last-sync')
+        if (res.ok) {
+          const data = await res.json()
+          setSyncInfo({
+            message: data.message || 'Unknown',
+            freshness: data.freshness || 'stale',
+          })
+        }
+      } catch {
+        // Non-fatal — trust signal is optional
+      }
+    }
+    fetchSyncInfo()
+  }, [])
 
   const fetchTOTW = useCallback(async (mw: number, t: 'totw' | 'flops') => {
     setLoading(true)
@@ -357,10 +377,24 @@ export default function TeamOfTheWeekTab() {
         </Card>
       )}
 
-      {/* Disclaimer */}
-      <p className="text-[11px] text-[#666] dark:text-[#CCCCCC] text-center">
-        Based on verified EPL match data + real fan sentiment. Player photos: Wikipedia/CC-BY-SA.
-      </p>
+      {/* Disclaimer + Last Synced trust signal */}
+      <div className="flex flex-col items-center gap-1.5">
+        <p className="text-[11px] text-[#666] dark:text-[#CCCCCC] text-center">
+          Based on verified EPL match data + real fan sentiment. Player photos: Wikipedia/CC-BY-SA.
+        </p>
+        {syncInfo && (
+          <div className={`flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+            syncInfo.freshness === 'fresh'
+              ? 'text-[#10B981] border-[#10B981]/30 bg-[#10B981]/5'
+              : syncInfo.freshness === 'stale'
+              ? 'text-[#F59E0B] border-[#F59E0B]/30 bg-[#F59E0B]/5'
+              : 'text-[#666] border-[#E0E0E0] dark:border-white/10'
+          }`}>
+            <RefreshCw className="size-2.5" />
+            <span>FPL data: {syncInfo.message}</span>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
