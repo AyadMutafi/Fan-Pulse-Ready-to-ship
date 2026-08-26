@@ -55,8 +55,30 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
 }
 
-function findPlayerForPosition(players: TOTWPlayerData[], pos: string): TOTWPlayerData | undefined {
-  return players.find((p) => p.position === pos)
+// Build a map of player order → player. The backend assigns each player a
+// unique `order` field (0-10) matching the formation slots below:
+//   0=GK, 1=RB, 2=CB, 3=CB, 4=LB, 5=CM, 6=CAM, 7=CM, 8=RW, 9=ST, 10=LW
+// Using `order` (not `position`) prevents the same player appearing twice
+// when two slots share a position (e.g. both CB slots, both CM slots).
+function buildPlayerOrderMap(players: TOTWPlayerData[]): Map<number, TOTWPlayerData> {
+  const map = new Map<number, TOTWPlayerData>()
+  for (const p of players) {
+    if (!map.has(p.order)) {
+      map.set(p.order, p)
+    }
+  }
+  return map
+}
+
+// Compute the flat slot index (0-10) from row/column position.
+// FORMATION_ROWS = [[GK], [RB,CB,CB,LB], [CM,CAM,CM], [RW,ST,LW]]
+// Row 0 starts at index 0, Row 1 at 1, Row 2 at 5, Row 3 at 8.
+function flatSlotIndex(rowIndex: number, colIndex: number): number {
+  let index = 0
+  for (let i = 0; i < rowIndex; i++) {
+    index += FORMATION_ROWS[i].length
+  }
+  return index + colIndex
 }
 
 function getTeamBadge(code: string): string {
@@ -212,14 +234,16 @@ export default function TeamOfTheWeekTab() {
       )}
 
       {/* Formation card */}
-      {!loading && hasMatchData && players.length > 0 && (
+      {!loading && hasMatchData && players.length > 0 && (() => {
+        const playerByOrder = buildPlayerOrderMap(players)
+        return (
         <Card className="glass-card border-[#E0E0E0]/50 dark:border-white/5">
           <CardContent className="p-4">
             <div className="pitch-bg rounded-xl p-4 sm:p-6 space-y-5 sm:space-y-6">
               {FORMATION_ROWS.map((row, ri) => (
                 <div key={ri} className="flex justify-center gap-4 sm:gap-8">
                   {row.map((slot, ci) => {
-                    const player = findPlayerForPosition(players, slot.pos)
+                    const player = playerByOrder.get(flatSlotIndex(ri, ci))
                     return (
                       <motion.div
                         key={`${ri}-${ci}`}
@@ -294,7 +318,8 @@ export default function TeamOfTheWeekTab() {
             </div>
           </CardContent>
         </Card>
-      )}
+        )
+      })()}
 
       {/* Match info list — what each player did */}
       {!loading && hasMatchData && players.length > 0 && (
