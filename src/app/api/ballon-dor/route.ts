@@ -18,7 +18,7 @@ import {
   getBallonDorContenders,
   getBallonDorMovers,
   auditContenderOrigins,
-  BALLON_DOR_FRAMING,
+  getBallonDorFraming,
   type BallonDorContender,
 } from '@/lib/ballon-dor'
 
@@ -37,7 +37,7 @@ interface CacheEntry {
       biggestRiser: BallonDorContender | null
       biggestFaller: BallonDorContender | null
     }
-    framing: typeof BALLON_DOR_FRAMING
+    framing: ReturnType<typeof getBallonDorFraming>
   }
 }
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
@@ -56,7 +56,7 @@ function buildPayload() {
   return {
     contenders: getBallonDorContenders(),
     movers: getBallonDorMovers(),
-    framing: BALLON_DOR_FRAMING,
+    framing: getBallonDorFraming(),
   }
 }
 

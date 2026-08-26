@@ -66,6 +66,10 @@ export interface BallonDorContender {
  * of the actual Ballon d'Or (which is voted by 100 journalists + national
  * team captains/coaches). Surfaced in the UI so no reader can mistake the
  * ranking for a forecast.
+ *
+ * `lastUpdated` is computed dynamically by getBallonDorFraming() — it returns
+ * the most recent Friday (the weekly refresh day). This keeps the date current
+ * without requiring manual updates.
  */
 export const BALLON_DOR_FRAMING = {
   title: "Ballon d'Or Race",
@@ -74,9 +78,35 @@ export const BALLON_DOR_FRAMING = {
     "The Ballon d'Or is decided by 100 journalists. This is what the other 8 billion fans think.",
   disclaimer:
     "Fan-sentiment ranking. The actual Ballon d'Or is voted by journalists and national team captains/coaches. This reflects fan opinion, not the official vote.",
-  lastUpdated: '2026-07-22',
+  lastUpdated: '2026-07-22', // overridden by getBallonDorFraming() at runtime
   ceremonyDate: 'October 2026',
 } as const
+
+/**
+ * Get the framing with a dynamically-computed `lastUpdated` date.
+ *
+ * Returns the most recent Friday at or before the current date. This makes the
+ * "Updated YYYY-MM-DD" label refresh weekly without requiring manual edits.
+ * (Fan sentiment is re-aggregated weekly, so the date reflects the last
+ * aggregation cycle, not the actual moment a fan voted.)
+ */
+export function getBallonDorFraming(): typeof BALLON_DOR_FRAMING {
+  const now = new Date()
+  // Get the most recent Friday: days since Friday = (day + 2) % 7
+  // (Sunday=0, Monday=1, ..., Friday=5, Saturday=6)
+  const dayOfWeek = now.getUTCDay() // 0=Sun, 5=Fri
+  const daysSinceFriday = (dayOfWeek + 2) % 7
+  const lastFriday = new Date(now)
+  lastFriday.setUTCDate(now.getUTCDate() - daysSinceFriday)
+  lastFriday.setUTCHours(0, 0, 0, 0)
+  const yyyy = lastFriday.getUTCFullYear()
+  const mm = String(lastFriday.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(lastFriday.getUTCDate()).padStart(2, '0')
+  return {
+    ...BALLON_DOR_FRAMING,
+    lastUpdated: `${yyyy}-${mm}-${dd}`,
+  }
+}
 
 // ── Verified contender pool ──────────────────────────────────────────────────
 //
