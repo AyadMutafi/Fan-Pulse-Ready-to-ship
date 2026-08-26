@@ -30,10 +30,79 @@
 
 const FPL_SYNC_MAX_AGE_MS = 6 * 60 * 60 * 1000 // 6 hours
 
+/**
+ * Ensure the Z.ai SDK config file exists.
+ *
+ * The z-ai-web-dev-sdk reads its config from a `.z-ai-config` JSON file
+ * (NOT from env vars). It checks 3 paths:
+ *   1. {process.cwd()}/.z-ai-config
+ *   2. {os.homedir()}/.z-ai-config
+ *   3. /etc/.z-ai-config
+ *
+ * On the Z.ai sandbox, /etc/.z-ai-config exists with a session token.
+ * On Render/production, NONE of these files exist → ZAI.create() throws
+ * "Configuration file not found" → page_reader/web_search fail with
+ * "Z.ai SDK unavailable".
+ *
+ * This function creates the config file from env vars if it doesn't exist.
+ * Set ZAI_API_KEY (and optionally ZAI_BASE_URL) in the Render dashboard.
+ */
+async function ensureZaiConfig(): Promise<void> {
+  const fs = await import('node:fs')
+  const path = await import('node:path')
+  const os = await import('node:os')
+
+  const configPaths = [
+    path.join(process.cwd(), '.z-ai-config'),
+    path.join(os.homedir(), '.z-ai-config'),
+    '/etc/.z-ai-config',
+  ]
+
+  // Check if any config file already exists (Z.ai sandbox has /etc/.z-ai-config)
+  for (const p of configPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, 'utf-8')
+        const config = JSON.parse(content)
+        if (config.baseUrl && config.apiKey) {
+          console.log(`[instrumentation] Z.ai config found at ${p}`)
+          return // Already configured
+        }
+      }
+    } catch {
+      // Continue checking
+    }
+  }
+
+  // No config file found — create one from env vars
+  const apiKey = process.env.ZAI_API_KEY
+  if (!apiKey) {
+    console.warn('[instrumentation] ZAI_API_KEY env var not set — Z.ai SDK features (page_reader, web_search) will be unavailable')
+    return
+  }
+
+  const config = {
+    baseUrl: process.env.ZAI_BASE_URL || 'https://internal-api.z.ai/v1',
+    apiKey,
+  }
+
+  // Write to the first writable path (cwd is always writable)
+  const targetPath = configPaths[0] // {cwd}/.z-ai-config
+  try {
+    fs.writeFileSync(targetPath, JSON.stringify(config), { mode: 0o600 })
+    console.log(`[instrumentation] ✓ Created Z.ai config at ${targetPath} from ZAI_API_KEY env var`)
+  } catch (err) {
+    console.error(`[instrumentation] Failed to write Z.ai config to ${targetPath}:`, err)
+  }
+}
+
 export async function register() {
   // Only run on the server (not during build)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     try {
+      // ── JOB 0: Ensure Z.ai SDK config exists (before any AI calls) ──────
+      await ensureZaiConfig()
+
       const { PrismaClient } = await import('@prisma/client')
       const db = new PrismaClient()
 

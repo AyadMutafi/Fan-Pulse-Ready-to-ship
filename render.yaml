@@ -34,6 +34,8 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       # ZAI_API_KEY  — z-ai-web-dev-sdk (LLM, web search, page reader)
+      # REQUIRED for Curation Studio. instrumentation.ts creates the
+      # .z-ai-config file from this env var on startup.
       - key: ZAI_API_KEY
         sync: false
       # GROQ_API_KEY — Groq Llama-3 sentiment scoring
