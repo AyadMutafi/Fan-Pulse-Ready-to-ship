@@ -74,23 +74,37 @@ async function ensureZaiConfig(): Promise<void> {
     }
   }
 
-  // No config file found — create one from env vars
+  // No config file found — create one from env vars.
+  // The Z.ai SDK requires a config with: baseUrl, apiKey, and optionally
+  // token, chatId, userId (for session-based auth used on the Z.ai platform).
+  //
+  // On production (Render), set these env vars:
+  //   ZAI_API_KEY   — the API key (or "Z.ai" if using session token)
+  //   ZAI_TOKEN     — the JWT session token (from /etc/.z-ai-config on sandbox)
+  //   ZAI_CHAT_ID   — the chat session ID
+  //   ZAI_USER_ID   — the user ID
+  //   ZAI_BASE_URL  — defaults to https://internal-api.z.ai/v1
   const apiKey = process.env.ZAI_API_KEY
   if (!apiKey) {
     console.warn('[instrumentation] ZAI_API_KEY env var not set — Z.ai SDK features (page_reader, web_search) will be unavailable')
     return
   }
 
-  const config = {
+  const config: Record<string, string> = {
     baseUrl: process.env.ZAI_BASE_URL || 'https://internal-api.z.ai/v1',
     apiKey,
   }
+
+  // Optional session-based auth fields (needed for the Z.ai platform token)
+  if (process.env.ZAI_TOKEN) config.token = process.env.ZAI_TOKEN
+  if (process.env.ZAI_CHAT_ID) config.chatId = process.env.ZAI_CHAT_ID
+  if (process.env.ZAI_USER_ID) config.userId = process.env.ZAI_USER_ID
 
   // Write to the first writable path (cwd is always writable)
   const targetPath = configPaths[0] // {cwd}/.z-ai-config
   try {
     fs.writeFileSync(targetPath, JSON.stringify(config), { mode: 0o600 })
-    console.log(`[instrumentation] ✓ Created Z.ai config at ${targetPath} from ZAI_API_KEY env var`)
+    console.log(`[instrumentation] ✓ Created Z.ai config at ${targetPath} from env vars`)
   } catch (err) {
     console.error(`[instrumentation] Failed to write Z.ai config to ${targetPath}:`, err)
   }

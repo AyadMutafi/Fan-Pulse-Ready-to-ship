@@ -33,14 +33,22 @@ services:
       #                    `openssl rand -base64 32`.
       - key: ADMIN_PASSWORD
         sync: false
-      # ZAI_API_KEY  — z-ai-web-dev-sdk (LLM, web search, page reader)
+      # ZAI_API_KEY  — z-ai-web-dev-sdk (page_reader, web_search)
       # REQUIRED for Curation Studio. instrumentation.ts creates the
-      # .z-ai-config file from this env var on startup.
+      # .z-ai-config file from these env vars on startup.
+      # Option B (sandbox token): copy all 5 values from /etc/.z-ai-config
+      # Option A (proper key): set only ZAI_API_KEY from https://z.ai/
       - key: ZAI_API_KEY
+        sync: false
+      - key: ZAI_TOKEN
+        sync: false
+      - key: ZAI_CHAT_ID
+        sync: false
+      - key: ZAI_USER_ID
         sync: false
       # GROQ_API_KEY — Groq Llama-3 sentiment scoring
       - key: GROQ_API_KEY
         sync: false
-      # XAI_API_KEY  — Grok / xAI Live Search (real social posts)
+      # XAI_API_KEY  — Grok / xAI Live Search (real social posts from X.com)
       - key: XAI_API_KEY
         sync: false
