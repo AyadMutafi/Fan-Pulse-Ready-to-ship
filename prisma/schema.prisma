@@ -390,6 +390,79 @@ model CuratedLink {
   @@index([platform, postedAt])
 }
 
+// ── Ballon d'Or Source-Fed Pipeline (admin curation + AI scoring) ────────────
+// Admin pastes a URL (stats page, journalist article, or social post) for a
+// specific player. The AI reads the page via page_reader and extracts either
+// statistics, article sentiment, or fan sentiment depending on sourceType.
+// Computed componentScore per row feeds into the per-player aggregate in
+// BallonDorContender.
+//
+// ANTI-HALLUCINATION CONTRACT:
+//   - Every url MUST start with https:// and be from an allowlisted domain.
+//   - content is extracted by page_reader. If page_reader fails, the URL is
+//     SKIPPED — never fabricated.
+//   - extractedData is LLM-extracted from the REAL page content only.
+
+model BallonDorSource {
+  id              String   @id @default(cuid())
+  playerName      String // matches BallonDorContender.name (case-sensitive)
+  sourceType      String // "stats" | "article" | "social"
+  url             String   @unique
+  platform        String   @default("web") // "twitter" | "reddit" | "web" | ...
+  author          String   @default("")
+  content         String   @default("") // extracted text, max 2000 chars
+  postedAt        DateTime @default(now())
+  extractedData   String   @default("{}") // JSON blob (shape depends on sourceType)
+  componentScore  Float    @default(50) // 0-100
+  componentLabel  String   @default("neutral")
+  topQuote        String?
+  analysisError   String?
+  curatedAt       DateTime @default(now())
+  curatedBy       String   @default("founder")
+  isActive        Boolean  @default(true)
+
+  contender       BallonDorContender? @relation(fields: [playerName], references: [name], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([playerName, sourceType, postedAt])
+  @@index([sourceType, postedAt])
+  @@index([platform, postedAt])
+}
+
+/// One row per player. Seeded from VERIFIED_BALLON_DOR_CONTENDERS on first
+/// deploy. ballonDorScore is a composite derived from BallonDorSource rows.
+model BallonDorContender {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  nationCode      String
+  position        String
+  clubName        String
+  clubCode        String
+  ballonDorScore  Float    @default(50)
+  previousScore   Float    @default(50)
+  trend           String   @default("stable")
+  reason          String   @default("")
+  awardWon        String?
+  verifiedMatchFact String @default("")
+  photoUrl        String?
+  // Component breakdown (denormalized at recompute time)
+  statsScore      Float    @default(50)
+  articleScore    Float    @default(50)
+  socialScore     Float    @default(50)
+  statsSourceCount    Int  @default(0)
+  articleSourceCount  Int  @default(0)
+  socialSourceCount   Int  @default(0)
+  lastRecomputedAt DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  isActive        Boolean  @default(true)
+
+  sources         BallonDorSource[]
+
+  @@index([ballonDorScore])
+  @@index([trend])
+  @@index([nationCode])
+}
+
 // ── Pulse Score Engine Models ────────────────────────────────────────────────
 
 /// Per-player breakdown of the 4 weighted Pulse Score components.

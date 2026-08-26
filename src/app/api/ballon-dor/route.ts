@@ -21,6 +21,7 @@ import {
   getBallonDorFraming,
   type BallonDorContender,
 } from '@/lib/ballon-dor'
+import { db } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,10 +44,55 @@ interface CacheEntry {
 const CACHE_TTL_MS = 60 * 60 * 1000 // 1 hour
 let cache: CacheEntry | null = null
 
-function buildPayload() {
-  // Anti-hallucination gate: if any contender name does not trace to a
-  // verified source, refuse to serve. This is a programming-error guard,
-  // not a runtime condition — it should never fire in production.
+/**
+ * Build the payload. Reads from the DB (BallonDorContender table) first;
+ * if the DB is empty, falls back to the hardcoded VERIFIED_BALLON_DOR_CONTENDERS
+ * array and runs the anti-hallucination audit.
+ */
+async function buildPayload() {
+  // ── Try DB first ────────────────────────────────────────────────────────
+  try {
+    const dbContenders = await db.ballonDorContender.findMany({
+      where: { isActive: true },
+      orderBy: { ballonDorScore: 'desc' },
+    })
+
+    if (dbContenders.length > 0) {
+      // Map DB rows to the public API shape
+      const contenders: BallonDorContender[] = dbContenders.map((c) => ({
+        name: c.name,
+        nationCode: c.nationCode,
+        position: c.position,
+        clubName: c.clubName,
+        clubCode: c.clubCode,
+        ballonDorScore: c.ballonDorScore,
+        trend: c.trend as 'rising' | 'stable' | 'falling',
+        reason: c.reason,
+        awardWon: c.awardWon ?? undefined,
+        verifiedMatchFact: c.verifiedMatchFact,
+      }))
+
+      // Compute movers from DB data
+      const risers = contenders.filter((c) => c.trend === 'rising')
+      const fallers = contenders.filter((c) => c.trend === 'falling')
+      const biggestRiser = risers.length > 0
+        ? risers.sort((a, b) => b.ballonDorScore - a.ballonDorScore)[0]
+        : null
+      const biggestFaller = fallers.length > 0
+        ? fallers.sort((a, b) => b.ballonDorScore - a.ballonDorScore)[0]
+        : null
+
+      return {
+        contenders,
+        movers: { biggestRiser, biggestFaller },
+        framing: getBallonDorFraming(),
+      }
+    }
+  } catch (dbErr) {
+    console.warn('[api/ballon-dor] DB read failed, falling back to hardcoded:', dbErr)
+  }
+
+  // ── Fallback: hardcoded data + audit ────────────────────────────────────
   const offenders = auditContenderOrigins()
   if (offenders.length > 0) {
     throw new Error(
@@ -90,7 +136,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const payload = buildPayload()
+    const payload = await buildPayload()
     cache = { at: now, payload }
     const res = NextResponse.json({ ...payload, cachedAt: now, cached: false })
     setCorsHeaders(res, request)
