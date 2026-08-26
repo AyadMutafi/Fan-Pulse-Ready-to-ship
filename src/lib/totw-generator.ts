@@ -106,12 +106,17 @@ export async function generateTOTW(
   }
 
   // 2. Get all LeaguePlayers for this league/season
-  const players = await db.leaguePlayer.findMany({
+  // NOTE: We do NOT orderBy pulseScore here — when fan votes are 0, all
+  // players have pulseScore=0, so desc/asc return the same order (DB
+  // insertion order = Arsenal first). Instead, we fetch all players,
+  // compute derived scores from FPL data + match results, and sort
+  // in-memory by derived score. This ensures TOTW picks big winners
+  // and FLOPS picks big losers.
+  const rawPlayers = await db.leaguePlayer.findMany({
     where: { league, season },
-    orderBy: { pulseScore: type === 'totw' ? 'desc' : 'asc' },
   })
 
-  if (players.length === 0) {
+  if (rawPlayers.length === 0) {
     return {
       formation: '4-3-3',
       players: [],
@@ -122,10 +127,7 @@ export async function generateTOTW(
   }
 
   // 2b. Fetch FPLPlayer data for derived sentiment/pulseScore computation.
-  // When fan votes are 0, LeaguePlayer.sentiment defaults to 50 (neutral) and
-  // LeaguePlayer.pulseScore defaults to 0. This makes TOTW look "dead" — all
-  // players show 😐 and 0 PULSE. We derive both from FPL form/goals/assists.
-  const fplIds = players.map((p) => p.fplId).filter((id): id is number => id !== null)
+  const fplIds = rawPlayers.map((p) => p.fplId).filter((id): id is number => id !== null)
   const fplPlayers = await db.fPLPlayer.findMany({
     where: { fplId: { in: fplIds } },
   }).catch(() => [])
@@ -154,53 +156,101 @@ export async function generateTOTW(
     })
   }
 
+  // 3b. Compute derived pulseScore for ALL players and sort in-memory.
+  // This is the critical fix: when LeaguePlayer.pulseScore = 0 for everyone
+  // (no fan votes), the DB orderBy returns the same order for both 'desc'
+  // (TOTW) and 'asc' (FLOPS) — so both pick the same Arsenal players.
+  // By computing derived scores from FPL form/goals/assists + match result,
+  // we ensure TOTW picks big WINNERS and FLOPS picks big LOSERS.
+  const playersWithDerived = rawPlayers.map((p) => {
+    const matchResult = teamMatchResults.get(p.teamCode)
+    const fplData = p.fplId ? fplPlayerMap.get(p.fplId) : undefined
+
+    const hasRealSentiment = p.sentiment !== 50
+    const hasRealPulse = p.pulseScore > 0
+
+    const derivedSentiment = hasRealSentiment
+      ? p.sentiment
+      : computeDerivedSentiment(fplData, matchResult?.result, p.position)
+
+    const derivedPulseScore = hasRealPulse
+      ? p.pulseScore
+      : computeDerivedPulseScore(fplData, matchResult, p.position)
+
+    return {
+      ...p,
+      _derivedPulseScore: derivedPulseScore,
+      _derivedSentiment: derivedSentiment,
+      _matchResult: matchResult,
+      _fplData: fplData,
+    }
+  })
+
+  // Sort by derived pulseScore: TOTW = highest first, FLOPS = lowest first
+  playersWithDerived.sort((a, b) =>
+    type === 'totw'
+      ? b._derivedPulseScore - a._derivedPulseScore
+      : a._derivedPulseScore - b._derivedPulseScore,
+  )
+
   // 4. Assign each player to their best formation slot
   // For each formation slot, pick the top-scoring eligible player
   const usedPlayerIds = new Set<string>()
+  const teamPickCount = new Map<string, number>() // max 3 per team for diversity
+  const MAX_PER_TEAM = 3
   const selections: TOTWSelection[] = []
 
   for (const slot of FORMATION_433) {
-    // Find players eligible for this slot
-    const eligible = players.filter((p) => {
+    // Find players eligible for this slot (not used, right position, team not full)
+    const eligible = playersWithDerived.filter((p) => {
       if (usedPlayerIds.has(p.id)) return false
       const possibleSlots = POSITION_MAP[p.position] ?? []
-      return possibleSlots.includes(slot.pos)
+      if (!possibleSlots.includes(slot.pos)) return false
+      // Team diversity: max MAX_PER_TEAM players from the same team
+      const teamCount = teamPickCount.get(p.teamCode) ?? 0
+      if (teamCount >= MAX_PER_TEAM) return false
+      return true
     })
 
-    if (eligible.length === 0) continue
+    if (eligible.length === 0) {
+      // Fallback: ignore team diversity if we can't fill the slot
+      const eligibleNoDiversity = playersWithDerived.filter((p) => {
+        if (usedPlayerIds.has(p.id)) return false
+        const possibleSlots = POSITION_MAP[p.position] ?? []
+        return possibleSlots.includes(slot.pos)
+      })
+      if (eligibleNoDiversity.length === 0) continue
+      const pick = eligibleNoDiversity[0]
+      usedPlayerIds.add(pick.id)
+      teamPickCount.set(pick.teamCode, (teamPickCount.get(pick.teamCode) ?? 0) + 1)
 
-    // Pick the top player for this slot (already sorted by pulseScore)
+      const matchInfo = buildMatchInfo(pick._fplData ?? pick, pick._matchResult, matchweek)
+      selections.push({
+        playerName: pick.name,
+        teamCode: pick.teamCode,
+        position: slot.pos,
+        pulseScore: pick._derivedPulseScore,
+        sentiment: pick._derivedSentiment,
+        matchInfo,
+        photoUrl: pick.photoUrl,
+        order: slot.order,
+      })
+      continue
+    }
+
+    // Pick the top player for this slot (already sorted by derived pulseScore)
     const pick = eligible[0]
     usedPlayerIds.add(pick.id)
+    teamPickCount.set(pick.teamCode, (teamPickCount.get(pick.teamCode) ?? 0) + 1)
 
-    const matchResult = teamMatchResults.get(pick.teamCode)
-    const fplData = pick.fplId ? fplPlayerMap.get(pick.fplId) : undefined
-
-    // ── Derived sentiment + pulseScore (FIX-02) ──────────────────────────────
-    // When fan votes are 0, LeaguePlayer.sentiment = 50 (neutral) and
-    // pulseScore = 0. We derive both from FPL form/goals/assists + match result
-    // so the TOTW looks alive even before fans start voting.
-    // Once real votes come in, the derived values are replaced by real ones
-    // (LeaguePlayer.sentiment/pulseScore are updated by /api/epl/compute-pulse).
-    const hasRealSentiment = pick.sentiment !== 50
-    const hasRealPulse = pick.pulseScore > 0
-
-    const derivedSentiment = hasRealSentiment
-      ? pick.sentiment
-      : computeDerivedSentiment(fplData, matchResult?.result, pick.position)
-
-    const derivedPulseScore = hasRealPulse
-      ? pick.pulseScore
-      : computeDerivedPulseScore(fplData, matchResult, pick.position)
-
-    const matchInfo = buildMatchInfo(fplData ?? pick, matchResult, matchweek)
+    const matchInfo = buildMatchInfo(pick._fplData ?? pick, pick._matchResult, matchweek)
 
     selections.push({
       playerName: pick.name,
       teamCode: pick.teamCode,
       position: slot.pos,
-      pulseScore: derivedPulseScore,
-      sentiment: derivedSentiment,
+      pulseScore: pick._derivedPulseScore,
+      sentiment: pick._derivedSentiment,
       matchInfo,
       photoUrl: pick.photoUrl,
       order: slot.order,
