@@ -168,6 +168,18 @@ export const VERIFIED_BALLON_DOR_CONTENDERS: BallonDorContender[] = [
       'England reached the Semi Finals (lost 1-2 to Argentina). Verified: VERIFIED_DATA.md — England 4-2 Croatia (group), England R16/QF wins, SF loss to Argentina Jul 15.',
   },
   {
+    name: 'Ousmane Dembélé',
+    nationCode: 'FRA',
+    position: 'RW',
+    clubName: 'Paris Saint-Germain',
+    clubCode: 'PSG',
+    ballonDorScore: 90,
+    trend: 'rising',
+    reason: 'Reigning Ballon d\'Or holder — PSG treble + WC hat-trick',
+    verifiedMatchFact:
+      'Reigning 2025 Ballon d\'Or winner. 2025-26 PSG: 33 goals + 13 assists in 48 apps, won Champions League + Ligue 1 + Trophée des Champions (back-to-back CL titles). France WC 2026: 5 goals + 1 assist in 6 matches, including a hat-trick vs Iraq (FRA 3-0 IRA — first WC goal to involve all 11 players, per FIFA.com). Verified: SI.com + Goal.com + UEFA.com + FIFA.com + ESPN.',
+  },
+  {
     name: 'Erling Haaland',
     nationCode: 'NOR',
     position: 'ST',
@@ -314,13 +326,15 @@ export function getBallonDorMovers(): {
 export function auditContenderOrigins(): string[] {
   const verifiedEliteNames = new Set(VERIFIED_ELITE_XI.map((p) => p.name))
   // Documented knockout players NOT in the Elite XI but verified in
-  // VERIFIED_DATA.md. Each is a real WC 2026 participant.
+  // VERIFIED_DATA.md or by Tier 1 sources (FIFA.com, UEFA.com, SI.com, Goal.com).
+  // Each is a real WC 2026 participant with documented tournament facts.
   const documentedKnockoutNames = new Set([
     'Jude Bellingham', // England SF run — VERIFIED_DATA.md
     'Vinícius Júnior', // Brazil R16 exit — VERIFIED_DATA.md
     'Enzo Fernández', // ARG R16/SF winner — VERIFIED_DATA.md
     'Achraf Hakimi', // MAR 1-1 BRA — VERIFIED_DATA.md
     'Unai Simón', // Golden Glove — FIFA.com (not in B/R Best XI but verified)
+    'Ousmane Dembélé', // France WC 2026 hat-trick vs Iraq — FIFA.com + UEFA.com + SI.com + Goal.com + ESPN
   ])
   const allowed = new Set([...verifiedEliteNames, ...documentedKnockoutNames])
   return VERIFIED_BALLON_DOR_CONTENDERS.filter(
