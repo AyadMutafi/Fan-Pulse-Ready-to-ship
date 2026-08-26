@@ -217,6 +217,24 @@ export async function register() {
         console.log(`[instrumentation] Ballon d\'Or OK — ${bdCount} contenders.`)
       }
 
+      // ── JOB 5: Transfer saga seed (if empty) ─────────────────────────────
+      // Seeds TransferSaga rows with verified sagas from Tier 1 journalists.
+      // Without this, the Transfers tab is empty on cold starts because the
+      // background scanner needs the Z.ai SDK (which may be unavailable).
+      const sagaCount = await db.transferSaga.count().catch(() => 0)
+      if (sagaCount === 0) {
+        console.log('[instrumentation] Transfer DB empty — auto-seeding verified sagas...')
+        try {
+          const { seedTransferSagas } = await import('@/lib/transfer-pulse/seed')
+          const result = await seedTransferSagas(db)
+          console.log(`[instrumentation] Transfer sagas seeded: ${result.seeded} added, ${result.skipped} skipped`)
+        } catch (tsErr) {
+          console.error('[instrumentation] Transfer seed failed (non-fatal):', tsErr)
+        }
+      } else {
+        console.log(`[instrumentation] Transfer sagas OK — ${sagaCount} sagas.`)
+      }
+
       await db.$disconnect()
     } catch (error) {
       console.error('[instrumentation] Startup failed (non-fatal):', error)
