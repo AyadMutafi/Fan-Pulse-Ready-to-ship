@@ -77,6 +77,8 @@ export async function GET(request: NextRequest) {
       'teamOfTheWeek',
       'socialPost',
       'curatedLink',
+      'ballonDorContender',
+      'ballonDorSource',
     ]
 
     for (const table of tables) {
@@ -110,6 +112,43 @@ export async function GET(request: NextRequest) {
         clientVersion: e.clientVersion,
       }
     }
+  }
+
+  // ── Check Z.ai SDK config status ────────────────────────────────────────
+  try {
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const os = await import('node:os')
+    const configPaths = [
+      path.join(process.cwd(), '.z-ai-config'),
+      path.join(os.homedir(), '.z-ai-config'),
+      '/etc/.z-ai-config',
+    ]
+    const zaiConfigStatus: Record<string, unknown> = {
+      ZAI_API_KEY_set: !!process.env.ZAI_API_KEY,
+      ZAI_TOKEN_set: !!process.env.ZAI_TOKEN,
+      ZAI_CHAT_ID_set: !!process.env.ZAI_CHAT_ID,
+      ZAI_USER_ID_set: !!process.env.ZAI_USER_ID,
+      configFiles: [] as Array<{ path: string; exists: boolean; valid: boolean }>,
+    }
+    for (const p of configPaths) {
+      let exists = false
+      let valid = false
+      try {
+        if (fs.existsSync(p)) {
+          exists = true
+          const content = fs.readFileSync(p, 'utf-8')
+          const config = JSON.parse(content)
+          valid = !!(config.baseUrl && config.apiKey)
+        }
+      } catch {
+        // File doesn't exist or is invalid
+      }
+      zaiConfigStatus.configFiles.push({ path: p, exists, valid })
+    }
+    diagnostics.zaiConfig = zaiConfigStatus
+  } catch (e) {
+    diagnostics.zaiConfig = { error: String(e) }
   }
 
   return NextResponse.json(diagnostics, { status: 200 })
