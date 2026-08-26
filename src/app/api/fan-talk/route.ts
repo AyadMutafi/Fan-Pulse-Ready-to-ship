@@ -5,6 +5,7 @@ import {
   fetchLiveFanTalk,
 } from '@/lib/live-fan-talk'
 import { NATIONAL_TEAMS } from '@/lib/national-teams'
+import { findEPLTeam } from '@/lib/epl-teams'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
 
 /**
@@ -82,7 +83,8 @@ export async function GET(request: NextRequest) {
     // ── H1: Validate teamCodes BEFORE any SDK call ────────────────────────
     // Previously, arbitrary teamCodes (5000-char strings, nonexistent teams)
     // were passed straight to fetchLiveFanTalk → 5-6s SDK call per request.
-    // Now: max 2 codes, each exactly 3 letters, must exist in NATIONAL_TEAMS.
+    // Now: max 2 codes, each exactly 3 letters, must exist in NATIONAL_TEAMS
+    // OR in EPL_TEAMS (for club matches — EPL team codes like ARS, CHE, LIV).
     // Invalid input returns 400 instantly with zero SDK cost.
     if (teamCodes.length === 0) {
       return NextResponse.json(
@@ -103,7 +105,10 @@ export async function GET(request: NextRequest) {
           { status: 400 },
         )
       }
-      if (!NATIONAL_TEAMS.find((t) => t.code === code)) {
+      // Accept BOTH national team codes (WC) AND EPL club codes (ARS, CHE, etc.)
+      const isNationalTeam = NATIONAL_TEAMS.find((t) => t.code === code)
+      const isEplTeam = findEPLTeam(code)
+      if (!isNationalTeam && !isEplTeam) {
         return NextResponse.json(
           { error: `Unknown team code: ${code}` },
           { status: 400 },

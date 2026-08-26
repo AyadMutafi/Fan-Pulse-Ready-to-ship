@@ -24,6 +24,7 @@ import ZAI from 'z-ai-web-dev-sdk'
 import type { PrismaClient } from '@prisma/client'
 import { searchXPosts } from './grok-x-search'
 import { scoreSentiment } from './ai'
+import { findEPLTeam } from '@/lib/epl-teams'
 
 // ── Fake author detection ────────────────────────────────────────────────────
 
@@ -198,7 +199,10 @@ export async function fetchLiveFanTalk(
   // When matchId is provided, look for an existing monitor scoped to that
   // matchId first. Only if none exists do we fall back to a team-code-only
   // match (and then create a new matchId-scoped monitor if still none).
-  const matchLabel = `${codes.join(' vs ')} — WC 2026`
+  // Detect league from team codes: EPL teams (ARS, CHE, etc.) vs national teams.
+  const isEplMatch = codes.every((c) => Boolean(findEPLTeam(c)))
+  const leagueLabel = isEplMatch ? 'EPL 2026-27' : 'WC 2026'
+  const matchLabel = `${codes.join(' vs ')} — ${leagueLabel}`
   const teamCodesJson = JSON.stringify(codes)
 
   let monitor = matchId
@@ -242,11 +246,14 @@ export async function fetchLiveFanTalk(
       })
     : // No matchId — fall back to matching by team code in matchLabel.
       // This is the legacy path for calls that don't pass a matchId.
+      // NOTE: SQLite does not support `mode: 'insensitive'` (it's already
+      // case-insensitive by default for ASCII strings). Using it causes a
+      // PrismaClientValidationError. We use plain `contains` instead.
       await database.curatedLink.findMany({
         where: {
           isActive: true,
           OR: codes.map((c) => ({
-            matchLabel: { contains: c, mode: 'insensitive' as const },
+            matchLabel: { contains: c },
           })),
         },
         orderBy: { postedAt: 'desc' },
