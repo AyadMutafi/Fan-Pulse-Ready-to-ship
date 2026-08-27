@@ -156,7 +156,8 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
   return (
     <div
       onClick={() => onClick(saga)}
-      className="group relative w-full text-left rounded-2xl glass-card glass-hover glass-card-mobile-flat border border-[#E0E0E0] dark:border-white/10 p-4 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 hover:shadow-lg hover:shadow-[#6C2BD9]/5 transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+      className="group relative w-full text-left rounded-2xl border border-[#E0E0E0] dark:border-white/10 p-4 hover:shadow-lg transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#00A862] focus-visible:ring-offset-2"
+      style={{ background: '#FAFAF7' }}
     >
       {/* Credibility label — top right */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5">
@@ -185,7 +186,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
         <div className="flex items-center gap-1.5 mt-1 text-[11px] text-[#666] dark:text-gray-400">
           <ClubLogo code={saga.fromClubCode} name={saga.fromClubName} size={18} />
           <span className="font-medium">{saga.fromClubName || '—'}</span>
-          <ArrowRight className="size-3 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+          <ArrowRight className="size-3" style={{ color: '#00A862' }} />
           <ClubLogo code={saga.toClubCode} name={saga.toClubName} size={18} />
           <span className="font-semibold text-[#1A1A1A] dark:text-gray-200">
             {saga.toClubName}
@@ -351,7 +352,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
                 {approvalLabel}
               </span>
               <span className="text-[#6B7280] dark:text-gray-400">
-                Fan Pulse: <span className="font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">{pulseScore}/10</span>
+                Fan Pulse: <span className="font-bold" style={{ color: '#00A862' }}>{pulseScore}/10</span>
               </span>
               <span className="text-[#6B7280] dark:text-gray-400">
                 {total} {total === 1 ? 'vote' : 'votes'}
@@ -374,7 +375,11 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
               e.stopPropagation()
               setShowShareCard(true)
             }}
-            className="w-full mt-2 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 bg-[#6C2BD9]/10 text-[#6C2BD9] dark:bg-[#8B5CF6]/10 dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/20 dark:hover:bg-[#8B5CF6]/20 transition-colors"
+            className="w-full mt-2 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-colors"
+            style={{
+              background: 'rgba(0,168,98,0.1)',
+              color: '#00A862',
+            }}
           >
             <Share2 className="size-3" />
             Share result

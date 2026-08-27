@@ -187,11 +187,8 @@ export default function TeamOfTheWeekTab() {
           variant={type === 'totw' ? 'default' : 'outline'}
           size="sm"
           onClick={() => setType('totw')}
-          className={`flex items-center gap-1.5 ${
-            type === 'totw'
-              ? 'bg-[#6C2BD9] text-white hover:bg-[#5A1BB8]'
-              : 'border-[#E0E0E0] dark:border-white/10'
-          }`}
+          className={`flex items-center gap-1.5 ${type === 'totw' ? 'text-white' : 'border-[#E0E0E0] dark:border-white/10'}`}
+          style={type === 'totw' ? { backgroundColor: '#00A862' } : undefined}
         >
           <Trophy className="size-3.5" />
           Team of the Week
@@ -224,7 +221,7 @@ export default function TeamOfTheWeekTab() {
           Prev
         </Button>
         <div className="flex items-center gap-2 text-sm font-semibold text-[#1A1A1A] dark:text-white">
-          <Calendar className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
+          <Calendar className="size-4" style={{ color: '#00A862' }} />
           Matchweek {matchweek}
         </div>
         <Button
@@ -264,7 +261,7 @@ export default function TeamOfTheWeekTab() {
       {!loading && !hasMatchData && (
         <Card className="glass-card border-[#E0E0E0]/50 dark:border-white/5">
           <CardContent className="py-12 text-center">
-            <Clock className="mx-auto size-10 text-[#6C2BD9]/30 dark:text-[#8B5CF6]/30 mb-3" />
+            <Clock className="mx-auto size-10 mb-3" style={{ color: 'rgba(0,168,98,0.3)' }} />
             <h3 className="text-lg font-bold text-[#1A1A1A] dark:text-white mb-1">
               Syncing EPL match data
             </h3>
@@ -285,7 +282,7 @@ export default function TeamOfTheWeekTab() {
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-bold text-[#666] dark:text-[#CCCCCC] uppercase tracking-wide flex items-center gap-1.5">
-                  <span className="text-[#6C2BD9] dark:text-[#8B5CF6]">●</span>
+                  <span style={{ color: '#00A862' }}>●</span>
                   {isFlops ? 'Worst Performances' : 'Tournament-Defining Moments'}
                 </h3>
                 <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
@@ -380,7 +377,7 @@ export default function TeamOfTheWeekTab() {
                         }
                       >
                         <div className="relative">
-                          <div className="flex size-10 sm:size-12 items-center justify-center rounded-full border-2 border-[#6C2BD9]/30 dark:border-[#8B5CF6]/30 bg-white dark:bg-[#2D2D2D] shadow-md overflow-hidden">
+                          <div className="flex size-10 sm:size-12 items-center justify-center rounded-full border-2 bg-white dark:bg-[#2D2D2D] shadow-md overflow-hidden" style={{ borderColor: 'rgba(0,168,98,0.3)' }}>
                             {player?.photoUrl ? (
                               <img
                                 src={player.photoUrl}
@@ -389,7 +386,7 @@ export default function TeamOfTheWeekTab() {
                                 loading="lazy"
                               />
                             ) : player ? (
-                              <span className="text-xs font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">
+                              <span className="text-xs font-bold" style={{ color: '#00A862' }}>
                                 {getInitials(player.playerName)}
                               </span>
                             ) : (
@@ -418,7 +415,7 @@ export default function TeamOfTheWeekTab() {
                         </p>
                         {/* Position badge */}
                         {player && (
-                          <span className="text-[8px] font-bold px-1 py-0.5 rounded border border-[#6C2BD9]/30 text-[#6C2BD9] dark:border-[#8B5CF6]/30 dark:text-[#8B5CF6]">
+                          <span className="text-[8px] font-bold px-1 py-0.5 rounded border" style={{ borderColor: 'rgba(0,168,98,0.3)', color: '#00A862' }}>
                             {slot.pos}
                           </span>
                         )}

@@ -138,6 +138,45 @@
   }
 }
 
+/* ── Design System Override: Purple → Pitch Green ────────────────────── */
+/* The old theme used purple (#6C2BD9 / #8B5CF6) as the accent color.
+   The new design uses pitch green (#00A862) — the color of football.
+   This CSS override maps all old purple classes to the new pitch green,
+   so we don't need to update 73+ individual className references.
+   The override is at the component layer so it takes precedence. */
+@layer components {
+  /* Primary accent — buttons, active states, badges */
+  .bg-\[\#6C2BD9\] { background-color: #00A862 !important; }
+  .hover\:bg-\[\#5A1FBF\]:hover { background-color: #009455 !important; }
+  .hover\:bg-\[\#5A1BB8\]:hover { background-color: #009455 !important; }
+  .text-\[\#6C2BD9\] { color: #00A862 !important; }
+  .dark\:text-\[\#8B5CF6\] { color: #00C773 !important; }
+  .dark\:bg-\[\#8B5CF6\] { background-color: #00C773 !important; }
+  .border-\[\#6C2BD9\]\/30 { border-color: rgba(0,168,98,0.3) !important; }
+  .dark\:border-\[\#8B5CF6\]\/30 { border-color: rgba(0,199,115,0.3) !important; }
+  .border-\[\#6C2BD9\]\/40 { border-color: rgba(0,168,98,0.4) !important; }
+  .dark\:border-\[\#8B5CF6\]\/40 { border-color: rgba(0,199,115,0.4) !important; }
+  .bg-\[\#6C2BD9\]\/10 { background-color: rgba(0,168,98,0.1) !important; }
+  .bg-\[\#6C2BD9\]\/15 { background-color: rgba(0,168,98,0.15) !important; }
+  .dark\:bg-\[\#8B5CF6\]\/10 { background-color: rgba(0,199,115,0.1) !important; }
+  .dark\:bg-\[\#8B5CF6\]\/15 { background-color: rgba(0,199,115,0.15) !important; }
+  .dark\:bg-\[\#8B5CF6\]\/20 { background-color: rgba(0,199,115,0.2) !important; }
+  .shadow-\[\#6C2BD9\]\/5 { box-shadow: 0 0 0 0 transparent !important; }
+  .shadow-\[\#6C2BD9\]\/20 { box-shadow: 0 2px 8px rgba(0,168,98,0.2) !important; }
+  .ring-\[\#6C2BD9\] { --tw-ring-color: #00A862 !important; }
+  .text-\[\#8B5CF6\] { color: #00C773 !important; }
+  .bg-\[\#8B5CF6\] { background-color: #00C773 !important; }
+
+  /* Glass card override — replace with clean surface */
+  .glass-card {
+    background: #FAFAF7 !important;
+    backdrop-filter: none !important;
+  }
+  .dark .glass-card {
+    background: #1A1D23 !important;
+  }
+}
+
 /* ── Custom Scrollbar ─────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;

@@ -186,7 +186,7 @@ export default function TransfersTab() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center size-8 rounded-lg bg-[#6C2BD9] shadow-md shadow-[#6C2BD9]/20">
+            <div className="flex items-center justify-center size-8 rounded-lg" style={{ background: '#00A862', boxShadow: '0 2px 8px rgba(0,168,98,0.2)' }}>
               <ArrowLeftRight className="size-4 text-white" />
             </div>
             <h2 className="text-xl font-extrabold text-[#1A1A1A] dark:text-white">
@@ -202,7 +202,8 @@ export default function TransfersTab() {
             onClick={deepRefresh}
             disabled={refreshing || retryAfter > 0}
             title={retryAfter > 0 ? `Rate limited — wait ${retryAfter}s` : 'Scan Tier 1 journalists for fresh transfer rumors'}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#6C2BD9] text-white shadow-md shadow-[#6C2BD9]/20 hover:bg-[#5A1FB8] focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white shadow-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ background: '#00A862', boxShadow: '0 2px 8px rgba(0,168,98,0.2)' }}
           >
             <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             {refreshing ? 'Scanning…' : retryAfter > 0 ? `Wait ${retryAfter}s` : 'Refresh'}
@@ -223,8 +224,8 @@ export default function TransfersTab() {
             : 'bg-[#10B981]/5 border-[#10B981]/20'
         }`}>
           <RefreshCw className={`size-4 shrink-0 mt-0.5 ${
-            refreshing ? 'animate-spin text-[#6C2BD9] dark:text-[#8B5CF6]' : 'text-[#10B981]'
-          }`} />
+            refreshing ? 'animate-spin' : ''
+          }`} style={{ color: '#00A862' }} />
           <p className="text-[11px] text-[#666] dark:text-gray-300 leading-relaxed">
             {refreshProgress}
           </p>
@@ -245,7 +246,7 @@ export default function TransfersTab() {
       {/* Quick stats */}
       {!loading && sagas.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
-          <MiniStat icon={<ArrowLeftRight className="size-3.5 text-[#6C2BD9] dark:text-[#8B5CF6]" />} label="Rumors" value={String(sagas.length)} />
+          <MiniStat icon={<ArrowLeftRight className="size-3.5" style={{ color: '#00A862' }} />} label="Rumors" value={String(sagas.length)} />
           <MiniStat icon={<Zap className="size-3.5 text-[#FF6B35]" />} label="Fan posts" value={String(totalBuzz)} />
           <MiniStat icon={<TrendingUp className="size-3.5 text-[#10B981]" />} label="Trending up" value={String(hotCount)} />
         </div>
@@ -258,11 +259,12 @@ export default function TransfersTab() {
             <button
               key={p.id}
               onClick={() => setStatusFilter(p.id)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                 statusFilter === p.id
-                  ? 'bg-white dark:bg-[#2D2D2D] text-[#6C2BD9] dark:text-[#8B5CF6] shadow-sm'
+                  ? 'bg-white dark:bg-[#2D2D2D] shadow-sm'
                   : 'text-[#6B7280] dark:text-gray-400 hover:text-[#666] dark:hover:text-gray-300'
               }`}
+              style={statusFilter === p.id ? { color: '#00A862' } : {}}
             >
               {p.label}
             </button>
@@ -273,11 +275,12 @@ export default function TransfersTab() {
             <button
               key={s.id}
               onClick={() => setSortKey(s.id)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2 ${
+              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
                 sortKey === s.id
-                  ? 'bg-white dark:bg-[#2D2D2D] text-[#6C2BD9] dark:text-[#8B5CF6] shadow-sm'
+                  ? 'bg-white dark:bg-[#2D2D2D] shadow-sm'
                   : 'text-[#6B7280] dark:text-gray-400 hover:text-[#666] dark:hover:text-gray-300'
               }`}
+              style={sortKey === s.id ? { color: '#00A862' } : {}}
             >
               {s.label}
             </button>
