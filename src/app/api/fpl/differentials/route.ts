@@ -72,8 +72,42 @@ export async function GET(request: NextRequest) {
       teamSentiments.set(v.teamCode, existing)
     }
 
-    // If no fan votes at all, return honest empty state
-    if (teamSentiments.size === 0) {
+    // ── Cold-start fix: derive sentiment proxy from FPL form when no fan votes ──
+    // Without this, the Differentials section is permanently empty on production
+    // (no FanVote data until users click vote buttons, and DB is wiped on cold starts).
+    // We derive a per-team sentiment from the AVERAGE FPL player form for that team.
+    // Once real fan votes come in, they override the derived values.
+    const useDerived = teamSentiments.size === 0
+    let derivedTeamSentiment: Map<string, number> | null = null
+
+    if (useDerived) {
+      derivedTeamSentiment = new Map<string, number>()
+      // Group players by team, compute average form → map to 0-100 sentiment
+      const teamForms = new Map<string, number[]>()
+      for (const p of fplPlayers) {
+        const form = Number(p.form) || 0
+        if (!teamForms.has(p.teamCode)) teamForms.set(p.teamCode, [])
+        teamForms.get(p.teamCode)!.push(form)
+      }
+      for (const [team, forms] of teamForms) {
+        const avgForm = forms.reduce((a, b) => a + b, 0) / forms.length
+        // Map form (0-15) to sentiment (20-95):
+        // form 0 → 20, form 5 → 50, form 10 → 75, form 15 → 95
+        const sentiment = Math.round(Math.max(20, Math.min(95, 20 + avgForm * 5)))
+        derivedTeamSentiment.set(team, sentiment)
+      }
+    }
+
+    // Helper: get sentiment for a team (real votes first, derived fallback)
+    const getSentiment = (teamCode: string): number | null => {
+      const real = teamSentiments.get(teamCode)
+      if (real) return real.avg
+      if (derivedTeamSentiment) return derivedTeamSentiment.get(teamCode) ?? null
+      return null
+    }
+
+    // If no sentiment data at all (not even derived), return honest empty state
+    if (teamSentiments.size === 0 && (!derivedTeamSentiment || derivedTeamSentiment.size === 0)) {
       return NextResponse.json(
         {
           candidates: [],
@@ -88,10 +122,10 @@ export async function GET(request: NextRequest) {
     // Build candidates
     const candidates: DifferentialCandidate[] = []
     for (const p of fplPlayers) {
-      const sentimentAgg = teamSentiments.get(p.teamCode)
-      if (!sentimentAgg) continue // no sentiment data for this team
+      const sentiment = getSentiment(p.teamCode)
+      if (sentiment === null) continue // no sentiment data for this team
 
-      const { score, type } = computeDifferentialScore(sentimentAgg.avg, p.ownershipPct)
+      const { score, type } = computeDifferentialScore(sentiment, p.ownershipPct)
       if (score < 15) continue // not divergent enough
 
       candidates.push({
@@ -104,12 +138,12 @@ export async function GET(request: NextRequest) {
         ownershipPct: p.ownershipPct,
         form: p.form,
         totalPoints: p.totalPoints,
-        fanSentiment: sentimentAgg.avg,
+        fanSentiment: sentiment,
         differentialScore: score,
         differentialType: type,
         reason: getDifferentialReason({
           webName: p.webName,
-          fanSentiment: sentimentAgg.avg,
+          fanSentiment: sentiment,
           ownershipPct: p.ownershipPct,
           form: p.form,
           totalPoints: p.totalPoints,

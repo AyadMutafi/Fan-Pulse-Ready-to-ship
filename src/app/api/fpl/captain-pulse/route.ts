@@ -110,7 +110,10 @@ export async function GET(request: NextRequest) {
 
     // Sort by captainPulseScore desc, take top N
     candidates.sort((a, b) => b.captainPulseScore - a.captainPulseScore)
-    const top = candidates.slice(0, limit)
+    const top = candidates.slice(0, limit).map((c, i) => ({
+      ...c,
+      rank: i + 1,
+    }))
 
     return NextResponse.json(
       { candidates: top, available: top.length > 0, count: top.length },

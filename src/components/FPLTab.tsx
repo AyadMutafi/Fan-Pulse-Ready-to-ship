@@ -211,7 +211,7 @@ function DifferentialsSection() {
         <CardContent className="py-8 text-center">
           <AlertCircle className="mx-auto size-8 text-[#F59E0B]/50 mb-2" />
           <p className="text-sm text-[#666] dark:text-[#CCCCCC]">
-            {reason ?? 'No differentials available yet. Vote on club moods to unlock sentiment divergences.'}
+            {reason ?? 'Differentials will appear once FPL data is synced. Vote on club moods on the Home tab to add real fan sentiment.'}
           </p>
         </CardContent>
       </Card>
