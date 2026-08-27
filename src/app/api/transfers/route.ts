@@ -79,6 +79,9 @@ export async function GET(request: NextRequest) {
           orderBy: { reportedAt: 'desc' },
           take: 3, // top 3 Tier 1 sources for the card
         },
+        votes: {
+          select: { vote: true, sessionId: true },
+        },
       },
     })
 
@@ -136,6 +139,19 @@ export async function GET(request: NextRequest) {
             headline: src.headline,
             reportedAt: src.reportedAt,
           })),
+          // ── Fan vote aggregation ──
+          // "Is this a good signing?" — live approval percentage
+          voteCounts: {
+            good: (s as { votes?: { vote: string }[] }).votes?.filter((v) => v.vote === 'good').length ?? 0,
+            mixed: (s as { votes?: { vote: string }[] }).votes?.filter((v) => v.vote === 'mixed').length ?? 0,
+            bad: (s as { votes?: { vote: string }[] }).votes?.filter((v) => v.vote === 'bad').length ?? 0,
+            total: (s as { votes?: { vote: string }[] }).votes?.length ?? 0,
+          },
+          // Credibility label: completed → "Confirmed", active → "Reported", debunked → "Debunked"
+          credibilityLabel:
+            s.status === 'completed' ? 'Confirmed'
+            : s.status === 'debunked' ? 'Debunked'
+            : 'Reported',
         }
       }),
       count: sagas.length,

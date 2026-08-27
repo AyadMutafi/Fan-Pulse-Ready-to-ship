@@ -732,6 +732,7 @@ model TransferSaga {
   sources  TransferSource[]
   posts    TransferPost[]
   timeline SentimentTimeline[]
+  votes    TransferVote[]
 
   @@unique([playerName, toClubCode])
   @@index([status, buzzVolume])
@@ -793,4 +794,24 @@ model SentimentTimeline {
 
   @@unique([sagaId, date])
   @@index([sagaId, date])
+}
+
+/// Fan vote on a transfer saga — "Is this a good signing?"
+/// One vote per session per saga (enforced by @@unique).
+/// The aggregate (good/total) drives the "Fan approval: 82%" display.
+model TransferVote {
+  id        String   @id @default(cuid())
+  sagaId    String
+  saga      TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
+  /// "good" | "mixed" | "bad" — maps to 👍 / 😐 / 👎
+  vote      String
+  /// Session ID from localStorage — prevents duplicate votes.
+  /// Same as FanVote.sessionId pattern.
+  sessionId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sagaId, sessionId])
+  @@index([sagaId, vote])
+  @@index([sessionId])
 }

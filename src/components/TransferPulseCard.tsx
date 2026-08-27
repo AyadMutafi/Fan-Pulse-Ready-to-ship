@@ -1,6 +1,7 @@
 'use client'
 
-import { ArrowRight, TrendingUp, TrendingDown, Minus, BadgeCheck, Zap } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { ArrowRight, TrendingUp, TrendingDown, Minus, BadgeCheck, Zap, ThumbsUp, ThumbsDown, Meh } from 'lucide-react'
 import ClubLogo from '@/components/common/ClubLogo'
 
 export interface TransferSagaSummary {
@@ -25,22 +26,24 @@ export interface TransferSagaSummary {
   lastUpdatedAt: string
   resolvedAt: string | null
   resolutionUrl: string | null
-  /**
-   * Wikipedia/CC-BY-SA photo URL for the transfer TARGET player
-   * (https://upload.wikimedia.org/...). NULL when no photo exists — the
-   * card renders an initials fallback. Populated by the admin
-   * /api/fetch-player-photos batch endpoint.
-   */
+  resolutionNotes?: string | null
   playerPhotoUrl?: string | null
   topSources: {
     journalistName: string
     journalistHandle: string
     outlet: string
-    // null when the URL failed snowflake validation (fabricated seed data)
     url: string | null
     headline: string
     reportedAt: string
   }[]
+  // ── Fan vote aggregation (from /api/transfers) ──
+  voteCounts?: {
+    good: number
+    mixed: number
+    bad: number
+    total: number
+  }
+  credibilityLabel?: string
 }
 
 interface TransferPulseCardProps {
@@ -73,34 +76,107 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
   const sBadge = statusBadge(saga.status)
   const topSrc = saga.topSources[0]
 
+  // ── Fan voting state ──
+  const [userVote, setUserVote] = useState<string | null>(null)
+  const [voteCounts, setVoteCounts] = useState(saga.voteCounts ?? { good: 0, mixed: 0, bad: 0, total: 0 })
+  const [voting, setVoting] = useState(false)
+
+  // Load user's previous vote from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`transfer_vote_${saga.id}`)
+      if (stored) setUserVote(stored)
+    } catch {}
+  }, [saga.id])
+
+  // Compute live percentages
+  const total = voteCounts.total
+  const goodPct = total > 0 ? Math.round((voteCounts.good / total) * 100) : 0
+  const mixedPct = total > 0 ? Math.round((voteCounts.mixed / total) * 100) : 0
+  const badPct = total > 0 ? Math.round((voteCounts.bad / total) * 100) : 0
+  const pulseScore = total > 0
+    ? Math.round(((voteCounts.good * 10 + voteCounts.mixed * 5 + voteCounts.bad * 0) / total) * 10) / 10
+    : 0
+  const approvalLabel = goodPct >= 70 ? '🔥 Excellent' : goodPct >= 50 ? '👍 Good' : goodPct >= 30 ? '😐 Mixed' : '👎 Poor'
+
+  // Handle vote
+  async function handleVote(vote: 'good' | 'mixed' | 'bad', e: React.MouseEvent) {
+    e.stopPropagation() // Don't trigger card click
+    if (voting || userVote === vote) return
+
+    setVoting(true)
+    setUserVote(vote)
+    try {
+      localStorage.setItem(`transfer_vote_${saga.id}`, vote)
+    } catch {}
+
+    // Get or create session ID
+    let sessionId = ''
+    try {
+      sessionId = localStorage.getItem('fan_session_id') || ''
+      if (!sessionId) {
+        sessionId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+        localStorage.setItem('fan_session_id', sessionId)
+      }
+    } catch {
+      sessionId = `s_${Date.now()}`
+    }
+
+    try {
+      const res = await fetch(`/api/transfers/${saga.id}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vote, sessionId }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setVoteCounts({
+          good: Math.round((data.good / 100) * (total + 1)),
+          mixed: Math.round((data.mixed / 100) * (total + 1)),
+          bad: Math.round((data.bad / 100) * (total + 1)),
+          total: data.totalVotes,
+        })
+      }
+    } catch (err) {
+      console.error('Vote failed:', err)
+    } finally {
+      setVoting(false)
+    }
+  }
+
   // Stacked sentiment bar widths (excited / skeptical / dreading / neutral)
   const neutralPct = Math.max(0, 100 - saga.excitedPct - saga.skepticalPct - saga.dreadingPct)
 
   // ANTI-MISLEADING-DATA: when there are 0 fan posts, we must NOT render the
   // 0% / 0% / 0% sentiment bar — that presents empty data as zero-sentiment.
-  // Instead show an honest "No fan posts yet" placeholder. The sentiment bar
-  // only renders once ingestSagaPosts has analyzed at least one real post.
   const hasFanPosts = saga.buzzVolume > 0
 
   return (
-    <button
+    <div
       onClick={() => onClick(saga)}
-      className="group relative w-full text-left rounded-2xl glass-card glass-hover glass-card-mobile-flat border border-[#E0E0E0] dark:border-white/10 p-4 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 hover:shadow-lg hover:shadow-[#6C2BD9]/5 transition-all duration-200 focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
+      className="group relative w-full text-left rounded-2xl glass-card glass-hover glass-card-mobile-flat border border-[#E0E0E0] dark:border-white/10 p-4 hover:border-[#6C2BD9]/40 dark:hover:border-[#8B5CF6]/40 hover:shadow-lg hover:shadow-[#6C2BD9]/5 transition-all duration-200 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#6C2BD9] focus-visible:ring-offset-2"
     >
-      {/* RUMOR label — anti-hallucination, always visible */}
+      {/* Credibility label — top right */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5">
         {sBadge && (
           <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider ${sBadge.cls}`}>
             {sBadge.label}
           </span>
         )}
-        <span className="px-1.5 py-0.5 rounded bg-[#FF6B35]/10 text-[#FF6B35] text-[8px] font-extrabold tracking-wider border border-[#FF6B35]/20">
-          RUMOR
+        {/* Credibility label: ✅ Confirmed / 📰 Reported / 💬 Rumour */}
+        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold tracking-wider border ${
+          saga.credibilityLabel === 'Confirmed'
+            ? 'bg-[#10B981]/10 text-[#10B981] border-[#10B981]/20'
+            : saga.credibilityLabel === 'Debunked'
+            ? 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20'
+            : 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20'
+        }`}>
+          {saga.credibilityLabel === 'Confirmed' ? '✅' : saga.credibilityLabel === 'Debunked' ? '❌' : '📰'} {saga.credibilityLabel ?? 'Reported'}
         </span>
       </div>
 
       {/* Player + move header */}
-      <div className="pr-16">
+      <div className="pr-24">
         <h3 className="text-[15px] font-bold text-[#1A1A1A] dark:text-white leading-tight">
           {saga.playerName}
         </h3>
@@ -207,7 +283,89 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
           <span>{topSrc.outlet}</span>
         </div>
       )}
-    </button>
+
+      {/* ── FAN VOTING SECTION ──────────────────────────────────────────── */}
+      {/* "Is this a good signing?" — the core of the transfer feedback loop */}
+      <div className="mt-3 pt-3 border-t border-[#E0E0E0]/60 dark:border-white/5">
+        <p className="text-[11px] font-bold text-[#1A1A1A] dark:text-white text-center mb-2">
+          Is this a good signing?
+        </p>
+
+        {/* Voting buttons */}
+        <div className="flex gap-1.5">
+          <button
+            onClick={(e) => handleVote('good', e)}
+            disabled={voting}
+            className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+              userVote === 'good'
+                ? 'bg-[#10B981] text-white'
+                : 'bg-[#10B981]/10 text-[#10B981] hover:bg-[#10B981]/20'
+            } disabled:opacity-50`}
+          >
+            <ThumbsUp className="size-3" />
+            Good
+          </button>
+          <button
+            onClick={(e) => handleVote('mixed', e)}
+            disabled={voting}
+            className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+              userVote === 'mixed'
+                ? 'bg-[#F59E0B] text-white'
+                : 'bg-[#F59E0B]/10 text-[#F59E0B] hover:bg-[#F59E0B]/20'
+            } disabled:opacity-50`}
+          >
+            <Meh className="size-3" />
+            Mixed
+          </button>
+          <button
+            onClick={(e) => handleVote('bad', e)}
+            disabled={voting}
+            className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+              userVote === 'bad'
+                ? 'bg-[#EF4444] text-white'
+                : 'bg-[#EF4444]/10 text-[#EF4444] hover:bg-[#EF4444]/20'
+            } disabled:opacity-50`}
+          >
+            <ThumbsDown className="size-3" />
+            Bad
+          </button>
+        </div>
+
+        {/* Live results */}
+        {total > 0 && (
+          <div className="mt-2.5 space-y-1.5">
+            {/* Approval bar */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-[#10B981]">{goodPct}%</span>
+              <div className="flex-1 h-2 rounded-full bg-[#E0E0E0] dark:bg-white/10 overflow-hidden">
+                <div className="h-full bg-[#10B981] transition-all duration-500" style={{ width: `${goodPct}%` }} />
+              </div>
+              <span className="text-[10px] font-bold text-[#EF4444]">{badPct}%</span>
+            </div>
+
+            {/* Fan Pulse score + vote count */}
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="font-bold text-[#1A1A1A] dark:text-white">
+                {approvalLabel}
+              </span>
+              <span className="text-[#6B7280] dark:text-gray-400">
+                Fan Pulse: <span className="font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">{pulseScore}/10</span>
+              </span>
+              <span className="text-[#6B7280] dark:text-gray-400">
+                {total} {total === 1 ? 'vote' : 'votes'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Call to vote (before voting) */}
+        {total === 0 && (
+          <p className="text-[10px] text-center text-[#6B7280] dark:text-gray-400 mt-1.5">
+            Be the first to vote
+          </p>
+        )}
+      </div>
+    </div>
   )
 }
 
