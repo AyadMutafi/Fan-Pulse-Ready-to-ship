@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowRight, TrendingUp, TrendingDown, Minus, BadgeCheck, Zap, ThumbsUp, ThumbsDown, Meh } from 'lucide-react'
+import { ArrowRight, TrendingUp, TrendingDown, Minus, BadgeCheck, Zap, ThumbsUp, ThumbsDown, Meh, Share2 } from 'lucide-react'
 import ClubLogo from '@/components/common/ClubLogo'
+import ShareableTransferCard from '@/components/ShareableTransferCard'
 
 export interface TransferSagaSummary {
   id: string
@@ -80,6 +81,7 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
   const [userVote, setUserVote] = useState<string | null>(null)
   const [voteCounts, setVoteCounts] = useState(saga.voteCounts ?? { good: 0, mixed: 0, bad: 0, total: 0 })
   const [voting, setVoting] = useState(false)
+  const [showShareCard, setShowShareCard] = useState(false)
 
   // Load user's previous vote from localStorage
   useEffect(() => {
@@ -364,7 +366,29 @@ export default function TransferPulseCard({ saga, onClick }: TransferPulseCardPr
             Be the first to vote
           </p>
         )}
+
+        {/* Share button — only shows after voting */}
+        {total > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowShareCard(true)
+            }}
+            className="w-full mt-2 py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 bg-[#6C2BD9]/10 text-[#6C2BD9] dark:bg-[#8B5CF6]/10 dark:text-[#8B5CF6] hover:bg-[#6C2BD9]/20 dark:hover:bg-[#8B5CF6]/20 transition-colors"
+          >
+            <Share2 className="size-3" />
+            Share result
+          </button>
+        )}
       </div>
+
+      {/* Shareable card modal */}
+      {showShareCard && (
+        <ShareableTransferCard
+          saga={{ ...saga, voteCounts }}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
     </div>
   )
 }
