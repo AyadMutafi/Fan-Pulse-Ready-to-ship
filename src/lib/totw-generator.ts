@@ -33,6 +33,8 @@ export interface TOTWSelection {
   matchInfo: string
   photoUrl: string | null
   order: number
+  /** Fan sentiment trend — derived from match result: W=rising, L=falling, D=stable */
+  trend: 'rising' | 'stable' | 'falling'
 }
 
 export interface TOTWResult {
@@ -225,6 +227,9 @@ export async function generateTOTW(
       teamPickCount.set(pick.teamCode, (teamPickCount.get(pick.teamCode) ?? 0) + 1)
 
       const matchInfo = buildMatchInfo(pick._fplData ?? pick, pick._matchResult, matchweek)
+      const trend: 'rising' | 'stable' | 'falling' =
+        pick._matchResult?.result === 'W' ? 'rising' :
+        pick._matchResult?.result === 'L' ? 'falling' : 'stable'
       selections.push({
         playerName: pick.name,
         teamCode: pick.teamCode,
@@ -234,6 +239,7 @@ export async function generateTOTW(
         matchInfo,
         photoUrl: pick.photoUrl,
         order: slot.order,
+        trend,
       })
       continue
     }
@@ -244,6 +250,9 @@ export async function generateTOTW(
     teamPickCount.set(pick.teamCode, (teamPickCount.get(pick.teamCode) ?? 0) + 1)
 
     const matchInfo = buildMatchInfo(pick._fplData ?? pick, pick._matchResult, matchweek)
+    const trend: 'rising' | 'stable' | 'falling' =
+      pick._matchResult?.result === 'W' ? 'rising' :
+      pick._matchResult?.result === 'L' ? 'falling' : 'stable'
 
     selections.push({
       playerName: pick.name,
@@ -254,6 +263,7 @@ export async function generateTOTW(
       matchInfo,
       photoUrl: pick.photoUrl,
       order: slot.order,
+      trend,
     })
   }
 

@@ -95,6 +95,7 @@ export async function GET(request: NextRequest) {
                 matchInfo: p.matchInfo,
                 photoUrl: p.photoUrl,
                 order: p.order,
+                trend: (p as { trend?: string }).trend ?? 'stable',
               })),
           },
           matchweek,
