@@ -44,6 +44,25 @@ const FORMATION_ROWS: { pos: string }[][] = [
   [{ pos: 'RW' }, { pos: 'ST' }, { pos: 'LW' }],
 ]
 
+// ── Tier emojis + badges for the Tournament-Defining Moments list ──────────
+const TIER_EMOJIS: Record<string, string> = {
+  elite: '🔥',
+  rising: '⚡',
+  steady: '😐',
+  crisis: '💀',
+  award: '🏆',
+  breakout: '🚀',
+}
+
+const TIER_BADGES: Record<string, string> = {
+  elite: 'bg-[#FF6B35]/15 text-[#FF6B35]',
+  rising: 'bg-[#A855F7]/15 text-[#A855F7]',
+  steady: 'bg-[#94A3B8]/15 text-[#94A3B8]',
+  crisis: 'bg-[#EF4444]/15 text-[#EF4444]',
+  award: 'bg-[#F59E0B]/15 text-[#F59E0B]',
+  breakout: 'bg-[#10B981]/15 text-[#10B981]',
+}
+
 // ── Helpers ──────────────────────────────────────────────────
 
 function scoreToMoodEmoji(score: number): string {
@@ -258,64 +277,79 @@ export default function TeamOfTheWeekTab() {
         </Card>
       )}
 
-      {/* Player Cards Strip — FUT-style collectible cards with emoji tiers */}
+      {/* Tournament-Defining Moments — list format (like Team of the Tournament) */}
       {!loading && hasMatchData && players.length > 0 && (() => {
-        // Convert TOTW players to PlayerCardData format
-        const sortedPlayers = [...players].sort((a, b) => a.order - b.order)
+        const sortedPlayers = [...players].sort((a, b) => b.pulseScore - a.pulseScore)
         return (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#1A1A1A] dark:text-white flex items-center gap-1.5">
-                <Trophy className="size-3.5 text-[#6C2BD9] dark:text-[#8B5CF6]" />
-                {isFlops ? 'Worst Performers' : 'Top Performers'}
-                <span className="text-[10px] text-[#666] dark:text-[#CCCCCC] font-normal">
-                  · TAP TO FLIP
+          <Card className="glass-card border-[#E0E0E0]/50 dark:border-white/5">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold text-[#666] dark:text-[#CCCCCC] uppercase tracking-wide flex items-center gap-1.5">
+                  <span className="text-[#6C2BD9] dark:text-[#8B5CF6]">●</span>
+                  {isFlops ? 'Worst Performances' : 'Tournament-Defining Moments'}
+                </h3>
+                <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
+                  {players.length} players · ranked by pulse
                 </span>
-              </h3>
-              <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
-                {players.length} players · 4-3-3
-              </span>
-            </div>
+              </div>
 
-            {/* Horizontal scroll of PlayerCards — like Tournament Retro */}
-            <div className="flex gap-3 overflow-x-auto scrollbar-thin pb-2 -mx-1 px-1 snap-x snap-mandatory">
-              {sortedPlayers.map((p) => {
-                const team = findEPLTeam(p.teamCode)
-                const cardData: PlayerCardData = {
-                  id: `totw:${matchweek}:${type}:${p.playerName}`,
-                  name: p.playerName,
-                  nationCode: 'ENG', // EPL — all players in English league
-                  position: p.position,
-                  pulseScore: Math.round(p.pulseScore),
-                  scoreLabel: 'Pulse Score',
-                  trend: p.trend ?? 'stable',
-                  clubName: team?.name ?? p.teamCode,
-                  clubCode: p.teamCode,
-                  isAwardWinner: false,
-                  isYoungBreakout: false,
-                  tier: getCardTier(
+              {/* Bulleted list — player name + emoji rank + performance description */}
+              <div className="space-y-2.5">
+                {sortedPlayers.map((p, i) => {
+                  const team = findEPLTeam(p.teamCode)
+                  const rankEmoji = getPulseFaceEmoji(p.pulseScore)
+                  const tier = getCardTier(
                     Math.round(p.pulseScore),
                     p.trend ?? 'stable',
                     false,
                     false,
-                  ),
-                  verifiedNote: p.matchInfo,
-                  source: isFlops ? 'Flops of the Week' : 'Team of the Week',
-                  fanSentiment: Math.round(p.sentiment),
-                  photoUrl: p.photoUrl,
-                }
-                return (
-                  <div key={`${p.order}-${p.playerName}`} className="snap-start shrink-0">
-                    <PlayerCard data={cardData} size="compact" />
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+                  )
+                  const tierEmoji = TIER_EMOJIS[tier] ?? '⚽'
+                  return (
+                    <motion.div
+                      key={`${p.order}-${p.playerName}`}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      className="flex items-start gap-2.5 text-[12px] leading-relaxed"
+                    >
+                      {/* Gold bullet point */}
+                      <span className="text-[#F59E0B] mt-0.5 shrink-0">●</span>
+
+                      {/* Player name (bold) */}
+                      <span className="font-bold text-[#1A1A1A] dark:text-white shrink-0">
+                        {p.playerName}
+                      </span>
+
+                      {/* Rank emoji (🤩/😊/😐/😟/😵) */}
+                      <span className="shrink-0" title={`Pulse Score: ${Math.round(p.pulseScore)}`}>
+                        {rankEmoji}
+                      </span>
+
+                      {/* Tier badge (🔥 ELITE / 💀 CRISIS) */}
+                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold ${TIER_BADGES[tier] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {tierEmoji} {tier.toUpperCase()}
+                      </span>
+
+                      {/* Em dash + performance description */}
+                      <span className="text-[#444] dark:text-[#CCCCCC] flex-1">
+                        — {p.matchInfo}
+                      </span>
+
+                      {/* Club logo at the end */}
+                      <span className="shrink-0 ml-auto">
+                        <ClubLogo code={p.teamCode} name={team?.name} size={16} />
+                      </span>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
         )
       })()}
 
-      {/* Pitch overview — compact formation grid */}
+      {/* Formation Overview — compact 4-3-3 pitch grid */}
       {!loading && hasMatchData && players.length > 0 && (() => {
         const playerByOrder = buildPlayerOrderMap(players)
         return (
@@ -359,7 +393,7 @@ export default function TeamOfTheWeekTab() {
                               <span className="text-base">👤</span>
                             )}
                           </div>
-                          {/* Emoji badge — tier-based instead of sentiment */}
+                          {/* Emoji badge — tier-based */}
                           {player && (
                             <span className="absolute -bottom-1 -right-1 text-sm bg-white dark:bg-[#2D2D2D] rounded-full size-5 flex items-center justify-center shadow-sm border border-[#E0E0E0] dark:border-white/10">
                               {getPulseFaceEmoji(player.pulseScore)}
@@ -395,42 +429,6 @@ export default function TeamOfTheWeekTab() {
         </Card>
         )
       })()}
-
-      {/* Match info list — what each player did */}
-      {!loading && hasMatchData && players.length > 0 && (
-        <Card className="glass-card border-[#E0E0E0]/50 dark:border-white/5">
-          <CardContent className="p-4">
-            <h3 className="text-sm font-bold text-[#1A1A1A] dark:text-white mb-3 flex items-center gap-2">
-              <Trophy className="size-4 text-[#6C2BD9] dark:text-[#8B5CF6]" />
-              {isFlops ? 'Worst Performances' : 'Top Performances'}
-            </h3>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {players.map((p, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 p-2 rounded-lg bg-white/50 dark:bg-white/5"
-                >
-                  <span className="shrink-0"><ClubLogo code={p.teamCode} name={findEPLTeam(p.teamCode)?.name} size={24} /></span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-[#1A1A1A] dark:text-white truncate">
-                      {p.playerName}
-                    </p>
-                    <p className="text-[11px] text-[#666] dark:text-[#CCCCCC] truncate">
-                      {p.matchInfo}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-base">{scoreToMoodEmoji(p.sentiment)}</span>
-                    <span className="text-xs font-bold text-[#6C2BD9] dark:text-[#8B5CF6]">
-                      {p.pulseScore.toFixed(0)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Disclaimer + Last Synced trust signal */}
       <div className="flex flex-col items-center gap-1.5">
