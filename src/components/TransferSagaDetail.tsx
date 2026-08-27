@@ -43,6 +43,7 @@ interface SagaDetail {
     postCount: number
   }[]
   resolutionUrl?: string | null
+  resolutionNotes?: string | null
 }
 
 interface TransferSagaDetailProps {
@@ -196,6 +197,11 @@ function TransferSagaDetailContent({
               reports and fan posts below are preserved as an audit trail —
               nothing is deleted.
             </span>
+            {detail?.saga?.resolutionNotes && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-[#EF4444]/80">
+                {detail.saga.resolutionNotes}
+              </p>
+            )}
             {detail?.saga?.resolutionUrl && (
               <a
                 href={detail.saga.resolutionUrl}
@@ -218,6 +224,11 @@ function TransferSagaDetailContent({
               This transfer was <strong>confirmed</strong> by a Tier 1
               journalist. The saga is now archived.
             </span>
+            {detail?.saga?.resolutionNotes && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-[#10B981]/80">
+                {detail.saga.resolutionNotes}
+              </p>
+            )}
             {detail?.saga?.resolutionUrl && (
               <a
                 href={detail.saga.resolutionUrl}

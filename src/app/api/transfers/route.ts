@@ -121,6 +121,9 @@ export async function GET(request: NextRequest) {
           resolvedAt: s.resolvedAt,
           // Anti-hallucination: null-out resolutionUrl if fabricated
           resolutionUrl: sanitizeXPostUrl(s.resolutionUrl),
+          // Free-text explanation of why the saga was resolved
+          // (completed: confirmation details; debunked: contradiction details)
+          resolutionNotes: s.resolutionNotes,
           // Wikipedia/CC-BY-SA photo URL for the transfer TARGET player.
           // NULL when no photo → UI shows initials fallback.
           // Always https://upload.wikimedia.org/ when set.

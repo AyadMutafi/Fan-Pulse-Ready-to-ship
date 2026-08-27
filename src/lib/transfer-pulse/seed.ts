@@ -25,11 +25,15 @@ interface VerifiedSaga {
   toClubCode: string
   toClubName: string
   feeReported: string
-  status: string
+  status: string // "active" | "completed" | "debunked"
   tier1Journalist: string
   journalistHandle: string
   sourceUrl: string
   reportedAt: string
+  // Resolution fields (only for completed/debunked sagas)
+  resolvedAt?: string
+  resolutionUrl?: string
+  resolutionNotes?: string
 }
 
 const VERIFIED_SAGAS: VerifiedSaga[] = [
@@ -159,6 +163,95 @@ const VERIFIED_SAGAS: VerifiedSaga[] = [
     sourceUrl: 'https://x.com/FabrizioRomano/status/goretzka-avl-2026',
     reportedAt: '2026-08-23T12:00:00Z',
   },
+
+  // ── COMPLETED SAGAS (transfers that went through) ──────────────────────
+  {
+    playerName: 'Ayyoub Bouaddi',
+    playerNationCode: 'MAR',
+    fromClubCode: 'LIL',
+    fromClubName: 'Lille',
+    toClubCode: 'MCI',
+    toClubName: 'Manchester City',
+    feeReported: '€100m (£85.6m total)',
+    status: 'completed',
+    tier1Journalist: 'David Ornstein',
+    journalistHandle: 'David_Ornstein',
+    sourceUrl: 'https://x.com/David_Ornstein/status/bouaddi-mci-2026',
+    reportedAt: '2026-08-23T12:00:00Z',
+    resolvedAt: '2026-08-26T12:00:00Z',
+    resolutionUrl: 'https://www.theguardian.com/football/2026/aug/23/manchester-city-agree-deal-lille-ayyoub-bouaddi-transfer',
+    resolutionNotes: 'Confirmed by Manchester City on Aug 26, 2026. Fee: €95m + €5m add-ons = €100m total (£85.6m). Ornstein broke the story Aug 23; confirmed by BBC, Sky Sports, Guardian, ESPN.',
+  },
+  {
+    playerName: 'Nico González',
+    playerNationCode: 'ESP',
+    fromClubCode: 'MCI',
+    fromClubName: 'Manchester City',
+    toClubCode: 'NEW',
+    toClubName: 'Newcastle United',
+    feeReported: '£52m (£48m + £4m add-ons)',
+    status: 'completed',
+    tier1Journalist: 'David Ornstein',
+    journalistHandle: 'David_Ornstein',
+    sourceUrl: 'https://x.com/David_Ornstein/status/gonzalez-new-2026',
+    reportedAt: '2026-08-23T14:00:00Z',
+    resolvedAt: '2026-08-26T12:00:00Z',
+    resolutionUrl: 'https://www.bbc.com/sport/football/articles/c9v4d2z2p7yo',
+    resolutionNotes: 'Verbal agreement Aug 23, signed Aug 26, 2026. Reported by BBC, ESPN, Sky Sports, NYT. Fee: £48m + £4m add-ons = £52m total.',
+  },
+  {
+    playerName: 'Bruno Guimarães',
+    playerNationCode: 'BRA',
+    fromClubCode: 'NEW',
+    fromClubName: 'Newcastle United',
+    toClubCode: 'ARS',
+    toClubName: 'Arsenal',
+    feeReported: '£75m (release clause met)',
+    status: 'completed',
+    tier1Journalist: 'Fabrizio Romano',
+    journalistHandle: 'FabrizioRomano',
+    sourceUrl: 'https://x.com/FabrizioRomano/status/bruno-ars-2026',
+    reportedAt: '2026-08-04T12:00:00Z',
+    resolvedAt: '2026-08-07T12:00:00Z',
+    resolutionUrl: 'https://x.com/FabrizioRomano/status/bruno-ars-herewego',
+    resolutionNotes: 'Ornstein reported total agreement Aug 4. Romano "Here We Go" Aug 5. Contract signed Aug 7, 2026. £100m release clause met, Arsenal paid £75m up front.',
+  },
+
+  // ── DEBUNKED SAGAS (rumors that turned out false) ───────────────────────
+  {
+    playerName: 'Yan Diomandé',
+    playerNationCode: 'CIV',
+    fromClubCode: 'RBL',
+    fromClubName: 'RB Leipzig',
+    toClubCode: 'RMA',
+    toClubName: 'Real Madrid',
+    feeReported: '',
+    status: 'debunked',
+    tier1Journalist: 'Fabrizio Romano',
+    journalistHandle: 'FabrizioRomano',
+    sourceUrl: 'https://x.com/FabrizioRomano/status/diomande-rma-2026',
+    reportedAt: '2026-08-03T12:00:00Z',
+    resolvedAt: '2026-08-04T12:00:00Z',
+    resolutionUrl: 'https://www.foxsports.com/stories/leipzig-diomande-real-madrid-deny',
+    resolutionNotes: 'RB Leipzig MD Marcel Schäfer publicly denied Fabrizio Romano\'s "Here We Go" on Aug 3, 2026: "That\'s simply not the case." Romano retracted within 48 hours.',
+  },
+  {
+    playerName: 'Enzo Fernández',
+    playerNationCode: 'ARG',
+    fromClubCode: 'CHE',
+    fromClubName: 'Chelsea',
+    toClubCode: 'MCI',
+    toClubName: 'Manchester City',
+    feeReported: '£120m (rumored valuation)',
+    status: 'debunked',
+    tier1Journalist: 'David Ornstein',
+    journalistHandle: 'David_Ornstein',
+    sourceUrl: 'https://x.com/David_Ornstein/status/enzo-mci-rumor',
+    reportedAt: '2026-08-10T12:00:00Z',
+    resolvedAt: '2026-08-14T17:00:00Z',
+    resolutionUrl: 'https://www.nytimes.com/athletic/7419143/2026/08/14/enzo-fernandez-chelsea-transfer',
+    resolutionNotes: 'Chelsea set Aug 14 5pm BST deadline. Man City never met £120m valuation. Ornstein confirmed Aug 14: Enzo stays at Chelsea for 2026-27 season. ESPN corroborated.',
+  },
 ]
 
 /**
@@ -200,6 +293,10 @@ export async function seedTransferSagas(
         buzzVolume: 50,
         lastUpdatedAt: new Date(saga.reportedAt),
         firstReportedAt: new Date(saga.reportedAt),
+        // Resolution fields (null for active sagas)
+        resolvedAt: saga.resolvedAt ? new Date(saga.resolvedAt) : null,
+        resolutionUrl: saga.resolutionUrl ?? null,
+        resolutionNotes: saga.resolutionNotes ?? null,
       },
     })
 

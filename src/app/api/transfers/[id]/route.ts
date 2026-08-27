@@ -88,6 +88,7 @@ export async function GET(
         resolvedAt: saga.resolvedAt,
         // Anti-hallucination: null-out resolutionUrl if it's a fabricated X URL
         resolutionUrl: sanitizeXPostUrl(saga.resolutionUrl),
+        resolutionNotes: saga.resolutionNotes,
       },
       sources: saga.sources.map((s, i) => ({
         id: s.id,
