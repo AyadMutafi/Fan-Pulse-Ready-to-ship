@@ -176,8 +176,8 @@ export default function TeamOfTheWeekTab() {
         </h2>
         <p className="text-sm text-[#666] dark:text-[#CCCCCC]">
           {isFlops
-            ? 'The worst-performing XI from this matchweek, based on fan sentiment'
-            : 'The best-performing XI from this matchweek, based on verified EPL data + real fan sentiment'}
+            ? 'The worst-performing XI from this matchweek, based on real fan sentiment from X.com'
+            : 'The best-performing XI from this matchweek, based on real fan sentiment from X.com + verified EPL data'}
         </p>
       </motion.div>
 
@@ -289,7 +289,7 @@ export default function TeamOfTheWeekTab() {
                   {isFlops ? 'Worst Performances' : 'Tournament-Defining Moments'}
                 </h3>
                 <span className="text-[10px] text-[#666] dark:text-[#CCCCCC]">
-                  {players.length} players · ranked by pulse
+                  {players.length} players · ranked by fan sentiment
                 </span>
               </div>
 
@@ -297,7 +297,10 @@ export default function TeamOfTheWeekTab() {
               <div className="space-y-2.5">
                 {sortedPlayers.map((p, i) => {
                   const team = findEPLTeam(p.teamCode)
-                  const rankEmoji = getPulseFaceEmoji(p.pulseScore)
+                  // Rank emoji based on FAN SENTIMENT (from X.com via xAI),
+                  // NOT the pulse score. This represents how fans FEEL about
+                  // the player's performance, not just match stats.
+                  const rankEmoji = scoreToMoodEmoji(p.sentiment)
                   const tier = getCardTier(
                     Math.round(p.pulseScore),
                     p.trend ?? 'stable',
@@ -396,7 +399,7 @@ export default function TeamOfTheWeekTab() {
                           {/* Emoji badge — tier-based */}
                           {player && (
                             <span className="absolute -bottom-1 -right-1 text-sm bg-white dark:bg-[#2D2D2D] rounded-full size-5 flex items-center justify-center shadow-sm border border-[#E0E0E0] dark:border-white/10">
-                              {getPulseFaceEmoji(player.pulseScore)}
+                              {scoreToMoodEmoji(player.sentiment)}
                             </span>
                           )}
                           {/* Team badge */}

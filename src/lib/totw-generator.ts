@@ -188,12 +188,23 @@ export async function generateTOTW(
     }
   })
 
-  // Sort by derived pulseScore: TOTW = highest first, FLOPS = lowest first
-  playersWithDerived.sort((a, b) =>
-    type === 'totw'
+  // Sort by fan sentiment (from X.com via xAI) when available, otherwise by
+  // derived pulseScore. TOTW = highest sentiment first, FLOPS = lowest first.
+  // The user wants TOTW selections to "primarily rely on the feedback and
+  // opinions gathered from fans on X.com" — so real fan sentiment takes
+  // priority over match stats.
+  playersWithDerived.sort((a, b) => {
+    // Use real sentiment if it's not the default 50 (i.e., scan has run)
+    const aHasReal = a.sentiment !== 50
+    const bHasReal = b.sentiment !== 50
+    if (aHasReal && bHasReal) {
+      return type === 'totw' ? b.sentiment - a.sentiment : a.sentiment - b.sentiment
+    }
+    // Fall back to derived pulseScore when real sentiment isn't available
+    return type === 'totw'
       ? b._derivedPulseScore - a._derivedPulseScore
-      : a._derivedPulseScore - b._derivedPulseScore,
-  )
+      : a._derivedPulseScore - b._derivedPulseScore
+  })
 
   // 4. Assign each player to their best formation slot
   // For each formation slot, pick the top-scoring eligible player
