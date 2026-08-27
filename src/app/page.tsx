@@ -41,6 +41,8 @@ import { fromSentimentPlayer } from '@/lib/player-card-data'
 import { useCardCollection } from '@/hooks/use-card-collection'
 import { getPulseScoreColor, getPulseScoreColorClass } from '@/types'
 import { toast } from 'sonner'
+import TransferPulseCard, { type TransferSagaSummary } from '@/components/TransferPulseCard'
+import { ArrowLeftRight } from 'lucide-react'
 
 // ── World Cup stage label helper ─────────────────────────────
 // Renders an accurate label for a WC match based on its `group` value.
@@ -816,6 +818,55 @@ function HomeTab({ stories, viewedIds, onOpenStories, onOpenCardCollection }: {
           viewedIds={viewedIds}
           onOpen={onOpenStories}
         />
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════
+          POSITION 0.5 — TRENDING TRANSFERS (THE HERO FEATURE)
+          "The Fan Pulse of the Transfer Window" — the core product identity.
+          Shows top transfer sagas with fan approval %, vote counts, and
+          credibility labels. Each card has voting buttons (👍/😐/👎).
+          Uses the new design: pitch green accents, emojis as primary visual.
+          ════════════════════════════════════════════════════════════════════ */}
+      {transferSagas.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex size-7 items-center justify-center rounded-lg" style={{ background: 'rgba(0,168,98,0.1)' }}>
+                <ArrowLeftRight className="size-4" style={{ color: '#00A862' }} />
+              </div>
+              <div>
+                <h2 className="text-base font-bold tracking-tight text-[#1A1A1A] dark:text-white flex items-center gap-1.5">
+                  ⚽ Trending Transfers
+                </h2>
+                <p className="text-[11px] text-[#666] dark:text-[#CCCCCC]">
+                  What fans think about this week's biggest moves
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => onOpenCardCollection()}
+              className="text-[11px] font-bold px-3 py-1.5 rounded-lg transition-colors"
+              style={{ background: 'rgba(0,168,98,0.08)', color: '#00A862' }}
+            >
+              View all →
+            </button>
+          </div>
+
+          {/* Transfer cards — horizontal scroll on mobile, grid on desktop */}
+          <div className="flex gap-3 overflow-x-auto scrollbar-thin pb-2 md:grid md:grid-cols-2 md:overflow-visible md:snap-none snap-x snap-mandatory">
+            {transferSagas.slice(0, 4).map((saga) => (
+              <div key={saga.id} className="snap-start shrink-0 w-[280px] md:w-auto">
+                <TransferPulseCard
+                  saga={saga}
+                  onClick={() => {
+                    /* Navigate to transfers tab */
+                    window.location.hash = '#transfers'
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* ════════════════════════════════════════════════════════════════════
