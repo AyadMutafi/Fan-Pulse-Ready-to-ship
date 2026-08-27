@@ -3258,7 +3258,7 @@ export default function Home() {
         />
 
         {/* Main content area */}
-        <div className="flex-1 md:ml-60 min-w-0 min-h-screen flex flex-col">
+        <div className="flex-1 md:pt-[68px] min-w-0 min-h-screen flex flex-col">
           <TopHeader activeTab={activeTab} />
 
           <main className="mx-auto w-full max-w-5xl px-4 py-6 pb-24 md:pb-6">
