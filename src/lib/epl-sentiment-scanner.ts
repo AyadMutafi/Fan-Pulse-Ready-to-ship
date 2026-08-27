@@ -138,7 +138,7 @@ export async function scanPlayerSentiment(
 export async function scanEPLPlayerSentiments(
   db: PrismaClient,
   matchweek: number,
-  limit = 20,
+  limit = 5, // Small batch: 5 players per run (cron-job.org has 30s timeout)
 ): Promise<{
   scanned: number
   updated: number
@@ -179,8 +179,8 @@ export async function scanEPLPlayerSentiments(
         errors++
       }
 
-      // Small delay to avoid xAI rate limits (200ms between players)
-      await new Promise((resolve) => setTimeout(resolve, 200))
+      // Small delay to avoid xAI rate limits (50ms between players)
+      await new Promise((resolve) => setTimeout(resolve, 50))
     } catch (err) {
       results.push({
         playerName: player.name,

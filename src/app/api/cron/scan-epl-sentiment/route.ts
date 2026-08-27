@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
-export const maxDuration = 300 // 5 minutes — scanning 20 players takes ~1-2 min
+export const maxDuration = 300 // 5 minutes — the background scan runs after we respond
 
 /**
  * POST /api/cron/scan-epl-sentiment
@@ -11,27 +11,23 @@ export const maxDuration = 300 // 5 minutes — scanning 20 players takes ~1-2 m
  * scores in the database. This is what powers the TOTW rank emojis — the
  * sentiment comes from REAL fan reactions on X.com, scored by AI.
  *
+ * FIRE-AND-FORGET DESIGN:
+ *   cron-job.org free tier has a 30-second timeout. The full scan of 20
+ *   players takes 1-2 minutes (each player needs an xAI search + AI sentiment
+ *   scoring). So this endpoint returns IMMEDIATELY (< 1 second) with
+ *   "scan started" and runs the actual scan in the background.
+ *
+ *   The scan continues running on the server even after the HTTP response
+ *   is sent. The next cron run will pick up where this one left off (it
+ *   scans the top N players by pulseScore who haven't been scanned recently).
+ *
  * AUTH: caller must send either:
  *   - x-admin-password header matching process.env.ADMIN_PASSWORD
  *   - X-Cron-Secret header matching process.env.CRON_SECRET
  *
  * Body (optional):
- *   { matchweek: number }  — which matchweek to scan for (default: latest completed)
- *   { limit: number }      — max players to scan (default: 20)
- *
- * WHAT IT DOES:
- *   1. Gets the latest completed matchweek from LeagueMatch
- *   2. Gets the top N LeaguePlayers by pulseScore
- *   3. For each player, searches X.com via xAI for fan posts
- *   4. Scores the sentiment of those posts via AI (Grok → Cerebras → Groq → Z.ai)
- *   5. Updates LeaguePlayer.sentiment with the REAL fan sentiment score
- *   6. The TOTW generator then uses this sentiment for ranking + rank emojis
- *
- * TRIGGER:
- *   curl -X POST https://your-app.onrender.com/api/cron/scan-epl-sentiment \
- *        -H "X-Cron-Secret: $CRON_SECRET" \
- *        -H "Content-Type: application/json" \
- *        -d '{"matchweek": 1, "limit": 20}'
+ *   { limit: number }  — max players to scan per run (default: 5, max: 10)
+ *                       Small batch = faster background run = no timeout
  */
 export async function POST(request: NextRequest) {
   const adminPwd = request.headers.get('x-admin-password')
@@ -51,69 +47,72 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  try {
-    const body = await request.json().catch(() => ({}))
-    const limit = Math.min(50, Math.max(1, body.limit ?? 20))
-
-    // Get the latest completed matchweek if not specified
-    let matchweek = body.matchweek
-    if (!matchweek) {
-      const latest = await db.leagueMatch.findFirst({
-        where: { league: 'EPL', season: '2026-27', status: 'completed' },
-        orderBy: { matchweek: 'desc' },
-        select: { matchweek: true },
-      })
-      matchweek = latest?.matchweek ?? 1
-    }
-
-    // Check if xAI is configured
-    if (!process.env.XAI_API_KEY) {
-      return NextResponse.json(
-        {
-          error: 'XAI_API_KEY not configured — cannot scan X.com for fan sentiment',
-          matchweek,
-        },
-        { status: 503 },
-      )
-    }
-
-    // Import the scanner (dynamic import to avoid loading on every request)
-    const { scanEPLPlayerSentiments } = await import('@/lib/epl-sentiment-scanner')
-
-    console.log(`[api/cron/scan-epl-sentiment] Starting scan for matchweek ${matchweek}, limit ${limit}`)
-
-    const result = await scanEPLPlayerSentiments(db, matchweek, limit)
-
-    console.log(
-      `[api/cron/scan-epl-sentiment] Done: ${result.scanned} scanned, ${result.updated} updated, ${result.errors} errors`,
-    )
-
-    return NextResponse.json({
-      success: true,
-      matchweek,
-      scanned: result.scanned,
-      updated: result.updated,
-      errors: result.errors,
-      results: result.results.map((r) => ({
-        player: r.playerName,
-        team: r.teamCode,
-        posts: r.postCount,
-        sentiment: r.sentimentScore,
-        topQuote: r.topQuote,
-        error: r.error,
-      })),
-    })
-  } catch (err) {
-    console.error('[api/cron/scan-epl-sentiment] Error:', err)
+  // Check if xAI is configured
+  if (!process.env.XAI_API_KEY) {
     return NextResponse.json(
-      {
-        success: false,
-        error: 'Sentiment scan failed',
-        details: String(err).slice(0, 200),
-      },
-      { status: 500 },
+      { error: 'XAI_API_KEY not configured — cannot scan X.com' },
+      { status: 503 },
     )
   }
+
+  // Parse body (but don't block on it)
+  let limit = 5 // Small batch: 5 players per run = ~30-60 seconds in background
+  try {
+    const body = await request.json().catch(() => ({}))
+    limit = Math.min(10, Math.max(1, body.limit ?? 5))
+  } catch {
+    // Default limit = 5
+  }
+
+  // Get the latest completed matchweek (quick query, < 100ms)
+  let matchweek = 1
+  try {
+    const latest = await db.leagueMatch.findFirst({
+      where: { league: 'EPL', season: '2026-27', status: 'completed' },
+      orderBy: { matchweek: 'desc' },
+      select: { matchweek: true },
+    })
+    matchweek = latest?.matchweek ?? 1
+  } catch {
+    // Default to matchweek 1
+  }
+
+  // ── FIRE AND FORGET ────────────────────────────────────────────────────
+  // Start the scan in the background. We do NOT await it — the response
+  // is sent immediately so cron-job.org doesn't timeout.
+  // The scan continues running on the server after the response is sent.
+  ;(async () => {
+    try {
+      console.log(`[api/cron/scan-epl-sentiment] Background scan starting: matchweek ${matchweek}, limit ${limit}`)
+
+      const { scanEPLPlayerSentiments } = await import('@/lib/epl-sentiment-scanner')
+      const result = await scanEPLPlayerSentiments(db, matchweek, limit)
+
+      console.log(
+        `[api/cron/scan-epl-sentiment] Background scan done: ${result.scanned} scanned, ${result.updated} updated, ${result.errors} errors`,
+      )
+
+      // Log individual results for debugging
+      for (const r of result.results) {
+        if (r.error) {
+          console.warn(`[scan-epl-sentiment] ${r.playerName} (${r.teamCode}): ${r.error}`)
+        } else {
+          console.log(`[scan-epl-sentiment] ${r.playerName} (${r.teamCode}): ${r.postCount} posts, sentiment=${r.sentimentScore}`)
+        }
+      }
+    } catch (err) {
+      console.error('[api/cron/scan-epl-sentiment] Background scan failed:', err)
+    }
+  })()
+
+  // Return IMMEDIATELY — don't wait for the scan to finish
+  return NextResponse.json({
+    success: true,
+    message: 'Scan started in background — check server logs for results',
+    matchweek,
+    batchSize: limit,
+    note: 'The scan runs asynchronously. Each cron run scans a small batch of players. Run every 30 min to keep sentiment fresh.',
+  })
 }
 
 /**
