@@ -10,34 +10,40 @@ interface TopHeaderProps {
 }
 
 const tabTitles: Record<TabId, string> = {
-  home: 'Home',
-  sentiments: 'Sentiments Hub',
-  worldcup: 'World Cup',
-  totw: 'Team of the Week',
-  fpl: 'Fantasy',
-  transfers: 'Transfer Pulse',
+  home: '🏠 Home',
+  sentiments: '💓 Sentiments Hub',
+  worldcup: '🌍 World Cup',
+  totw: '🏆 Team of the Week',
+  fpl: '📊 Fantasy',
+  transfers: '⚽ Transfer Pulse',
 }
 
 export default function TopHeader({ activeTab }: TopHeaderProps) {
   const { theme, setTheme } = useTheme()
 
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-[#E0E0E0]/50 dark:border-white/5 bg-white/80 dark:bg-[#1A1A1A]/80 backdrop-blur-xl">
+    <header
+      className="sticky top-0 z-30 w-full border-b backdrop-blur-xl"
+      style={{
+        background: 'rgba(250,250,247,0.85)',
+        borderColor: 'rgba(0,168,98,0.1)',
+      }}
+    >
       <div className="flex h-11 items-center justify-between px-4 md:px-6">
-        {/* Section title */}
-        <h2 className="text-sm font-semibold text-[#1A1A1A]/70 dark:text-white/70">
+        {/* Section title — with emoji (primary visual) */}
+        <h2 className="text-sm font-semibold text-[#1A1B1E] dark:text-[#F3F4F6]">
           {tabTitles[activeTab]}
         </h2>
 
         {/* Right actions */}
         <div className="flex items-center gap-1">
-          {/* Theme Toggle */}
+          {/* Theme Toggle — Sun/Moon */}
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label="Toggle dark mode"
-            className="size-8 text-[#666] dark:text-gray-400 hover:text-[#1A1A1A] dark:hover:text-white"
+            className="size-8 text-[#6B7280] hover:text-[#00A862] dark:text-gray-400 dark:hover:text-[#00C773]"
           >
             {theme === 'dark' ? (
               <Sun className="size-4" />
