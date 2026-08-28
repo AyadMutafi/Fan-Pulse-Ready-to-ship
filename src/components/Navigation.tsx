@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useLanguage } from '@/context/LanguageContext'
 import { Home, Activity, Globe, Zap, ArrowLeftRight, Trophy, Clapperboard, BarChart3 } from 'lucide-react'
-import PulseLine from '@/components/PulseLine'
 import { TOKENS } from '@/lib/design-tokens'
 
 export type TabId = 'home' | 'sentiments' | 'worldcup' | 'totw' | 'fpl' | 'transfers'
@@ -28,13 +27,13 @@ export default function Navigation({ activeTab, onTabChange, onOpenStories }: Na
 
   return (
     <>
-      {/* ── Desktop: Top-bar nav with PulseLine ──────────────────────── */}
+      {/* ── Desktop: Top-bar nav ──────────────────────── */}
       <header
         className="hidden md:flex md:flex-col md:fixed md:inset-x-0 md:top-0 md:z-40"
         style={{ background: TOKENS.flood, borderBottom: `1px solid ${TOKENS.fog}` }}
       >
-        {/* Pulse line — the signature element */}
-        <PulseLine height={28} color={TOKENS.pitch} />
+        {/* Clean pitch line — 2px solid green, like a pitch marking */}
+        <div style={{ height: '2px', background: TOKENS.pitch }} />
 
         {/* Nav bar */}
         <div className="flex items-center justify-between px-6 py-2.5">
@@ -112,8 +111,8 @@ export default function Navigation({ activeTab, onTabChange, onOpenStories }: Na
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl safe-area-bottom"
         style={{ background: 'rgba(250,250,247,0.95)', borderTop: `1px solid ${TOKENS.fog}` }}
       >
-        {/* Mini pulse line at top of bottom bar */}
-        <PulseLine height={16} color={TOKENS.pitch} />
+        {/* Clean pitch line — 2px solid green */}
+        <div style={{ height: '2px', background: TOKENS.pitch }} />
 
         <div className="flex items-center justify-around py-1 px-0.5 overflow-x-auto scrollbar-none">
           {/* Stories button */}
