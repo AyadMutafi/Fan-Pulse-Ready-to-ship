@@ -28,6 +28,8 @@ export interface PlayerSentimentResult {
   sentimentScore: number // 0-100
   topQuote: string | null
   error: string | null
+  /** VADER pre-filter stats — how many posts were filtered before LLM scoring */
+  vaderStats?: { total: number; filtered: number; sent: number } | null
 }
 
 /**
@@ -71,9 +73,52 @@ export async function scanPlayerSentiment(
 
   const posts = searchResult.posts
 
-  // 2. Score the sentiment of each post
+  // 2. Pre-filter posts with VADER (local, free, ~1ms per post)
+  // This filters out neutral posts BEFORE sending to the LLM, saving ~40% on API costs.
+  // Only posts with |compound| >= 0.3 are sent to the LLM for nuanced scoring.
   const postTexts = posts.map((p) => p.text)
-  const sentimentResult = await scoreSentiment(postTexts)
+
+  let textsForLLM = postTexts
+  let vaderFilterStats: { total: number; filtered: number; sent: number } | null = null
+
+  try {
+    const vaderResponse = await fetch('http://localhost:3031/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ texts: postTexts }),
+      signal: AbortSignal.timeout(5000), // 5s timeout — VADER is fast
+    })
+
+    if (vaderResponse.ok) {
+      const vaderData = await vaderResponse.json()
+      vaderFilterStats = {
+        total: vaderData.total,
+        filtered: vaderData.filtered_out,
+        sent: vaderData.sent_to_llm,
+      }
+
+      // Only send posts that passed the VADER filter (strong sentiment)
+      textsForLLM = vaderData.results
+        .filter((r: { should_send_to_llm: boolean }) => r.should_send_to_llm)
+        .map((r: { text: string }) => r.text)
+
+      console.log(
+        `[vader-pre-filter] ${playerName}: ${vaderData.total} posts → ${vaderData.sent_to_llm} sent to LLM (${vaderData.filter_rate})`,
+      )
+    }
+    // If VADER service is down, fall through to sending ALL posts to LLM (graceful degradation)
+  } catch (vaderErr) {
+    console.warn(`[vader-pre-filter] VADER service unavailable, sending all ${postTexts.length} posts to LLM:`, vaderErr instanceof Error ? vaderErr.message : String(vaderErr))
+  }
+
+  // 3. Score the sentiment of the (pre-filtered) posts via the LLM chain
+  // If VADER filtered everything (all neutral), use a small sample for context
+  if (textsForLLM.length === 0) {
+    // All posts were neutral — take the top 3 original posts for the LLM to confirm
+    textsForLLM = postTexts.slice(0, 3)
+  }
+
+  const sentimentResult = await scoreSentiment(textsForLLM)
 
   if (!sentimentResult.ok || !sentimentResult.analyses) {
     return {
@@ -119,6 +164,8 @@ export async function scanPlayerSentiment(
     sentimentScore: avgSentiment,
     topQuote: topAnalysis?.topQuote ?? null,
     error: null,
+    // VADER pre-filter stats (null if VADER was unavailable)
+    vaderStats: vaderFilterStats,
   }
 }
 

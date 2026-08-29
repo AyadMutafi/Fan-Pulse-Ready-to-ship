@@ -1,0 +1,9 @@
+{
+  "name": "vader-sentiment-service",
+  "version": "1.0.0",
+  "description": "VADER sentiment pre-filter service for Fan Pulse. Scores social media posts locally (no API cost) before sending to the LLM chain.",
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {}
+}
