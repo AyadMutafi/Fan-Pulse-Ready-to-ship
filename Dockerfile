@@ -76,9 +76,25 @@ ENV HOSTNAME=0.0.0.0
 ENV DATABASE_URL="file:/data/custom.db"
 
 # OpenSSL (Prisma) + curl (Render healthchecks) + ca-certificates (outbound TLS)
+# + python3 + pip (VADER sentiment pre-filter service)
+# + bun (runs the VADER mini-service)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openssl ca-certificates curl \
+        python3 python3-pip python3-venv \
     && rm -rf /var/lib/apt/lists/*
+
+# Install VADER sentiment library (Python) — system-wide so all users can access
+RUN pip3 install --break-system-packages vaderSentiment 2>/dev/null || \
+    pip3 install vaderSentiment
+
+# Install Bun (for the VADER mini-service) — install to /usr/local/bin (system-wide)
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local/bin bash
+
+# Verify VADER is working
+RUN python3 -c "from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer; a = SentimentIntensityAnalyzer(); print('VADER OK:', a.polarity_scores('test'))"
+
+# Verify Bun is working
+RUN bun --version
 
 # Non-root user — security best practice.
 RUN groupadd --system --gid 1001 nodejs \
@@ -98,7 +114,10 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 # ── Copy the pre-built empty-schema DB for first-run init ───────────────────
 COPY --from=builder --chown=nextjs:nodejs /tmp/seed.db /data-init/fanpulse.db
 
-# ── Entrypoint: initializes /data/fanpulse.db on first boot ─────────────────
+# ── Copy the VADER sentiment mini-service ───────────────────────────────────
+COPY --chown=nextjs:nodejs mini-services/vader-sentiment ./mini-services/vader-sentiment
+
+# ── Copy the entrypoint script ──────────────────────────────────────────────
 COPY --chown=nextjs:nodejs docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

@@ -1,7 +1,7 @@
 #!/bin/sh
 # ─────────────────────────────────────────────────────────────────────────────
 # Fan Pulse — Docker entrypoint
-# Initializes the SQLite DB on first boot, then hands off to the main process.
+# Initializes the SQLite DB + starts VADER service + Next.js app
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
@@ -62,6 +62,27 @@ if [ "$INIT_NEEDED" = "1" ]; then
   echo "[entrypoint] Copying baked schema from /data-init/fanpulse.db → $DB_PATH"
   cp /data-init/fanpulse.db "$DB_PATH"
   echo "[entrypoint] ✓ Schema DB copied. instrumentation.ts will auto-seed data on startup."
+fi
+
+# ── Start VADER sentiment pre-filter service (background) ───────────────────
+# Runs on port 3031. Pre-filters social media posts before LLM scoring.
+# If it fails, the app still works — LLM gets all posts (graceful degradation).
+if [ -f /app/mini-services/vader-sentiment/index.ts ]; then
+  echo "[entrypoint] Starting VADER sentiment service on port 3031..."
+  # Try bun first, fall back to npx if bun is not available
+  if command -v bun &> /dev/null; then
+    cd /app/mini-services/vader-sentiment && bun run index.ts &
+  else
+    echo "[entrypoint] Bun not found, trying npx..."
+    cd /app/mini-services/vader-sentiment && npx tsx index.ts &
+  fi
+  VADER_PID=$!
+  echo "[entrypoint] ✓ VADER service started (PID: $VADER_PID)"
+  cd /app
+  # Give VADER 2 seconds to start
+  sleep 2
+else
+  echo "[entrypoint] VADER service not found — skipping (app will use LLM directly)"
 fi
 
 # Hand off to CMD (the Next.js standalone server)
