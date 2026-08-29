@@ -77,10 +77,11 @@ ENV DATABASE_URL="file:/data/custom.db"
 
 # OpenSSL (Prisma) + curl (Render healthchecks) + ca-certificates (outbound TLS)
 # + python3 + pip (VADER sentiment pre-filter service)
-# + bun (runs the VADER mini-service)
+# + unzip (required by Bun installer)
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openssl ca-certificates curl \
         python3 python3-pip python3-venv \
+        unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install VADER sentiment library (Python) — system-wide so all users can access
