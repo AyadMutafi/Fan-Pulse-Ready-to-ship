@@ -7,12 +7,22 @@ set -e
 
 # ── Create Z.ai SDK config file from env vars ───────────────────────────────
 # The z-ai-web-dev-sdk reads config from a .z-ai-config JSON file, NOT from
-# env vars. It checks: {cwd}/.z-ai-config, {homedir}/.z-ai-config, /etc/.z-ai-config
-# On the Z.ai sandbox, /etc/.z-ai-config exists. On Render, we create it here
-# from the ZAI_API_KEY, ZAI_TOKEN, ZAI_CHAT_ID, ZAI_USER_ID env vars.
-if [ -n "$ZAI_API_KEY" ] && [ ! -f /app/.z-ai-config ]; then
+# env vars. It checks 3 paths in order:
+#   1. process.cwd()/.z-ai-config  (=/app/.z-ai-config in the container)
+#   2. os.homedir()/.z-ai-config    (= /home/nextjs/.z-ai-config)
+#   3. /etc/.z-ai-config
+#
+# Problem: The nextjs user may not have write access to /app/ (owned by root
+# in some Docker layer configurations). So we write to MULTIPLE locations:
+#   - /tmp/.z-ai-config (always writable, but ephemeral)
+#   - /home/nextjs/.z-ai-config (the nextjs home dir — always writable by nextjs)
+#   - /app/.z-ai-config (try, but don't fail if we can't)
+# And we set HOME=/home/nextjs so the SDK's os.homedir() finds it.
+
+if [ -n "$ZAI_API_KEY" ]; then
   echo "[entrypoint] Creating Z.ai config from env vars..."
-  # Build the JSON config
+
+  # Build the JSON config string
   CONFIG="{\"baseUrl\":\"${ZAI_BASE_URL:-https://internal-api.z.ai/v1}\",\"apiKey\":\"$ZAI_API_KEY\""
   if [ -n "$ZAI_TOKEN" ]; then
     CONFIG="$CONFIG,\"token\":\"$ZAI_TOKEN\""
@@ -24,15 +34,26 @@ if [ -n "$ZAI_API_KEY" ] && [ ! -f /app/.z-ai-config ]; then
     CONFIG="$CONFIG,\"userId\":\"$ZAI_USER_ID\""
   fi
   CONFIG="$CONFIG}"
-  echo "$CONFIG" > /app/.z-ai-config
-  chmod 600 /app/.z-ai-config
-  echo "[entrypoint] ✓ Z.ai config created at /app/.z-ai-config"
+
+  # Write to /home/nextjs/ (the SDK checks os.homedir() which = $HOME)
+  mkdir -p /home/nextjs
+  echo "$CONFIG" > /home/nextjs/.z-ai-config
+  chmod 644 /home/nextjs/.z-ai-config
+  echo "[entrypoint] ✓ Z.ai config written to /home/nextjs/.z-ai-config"
+
+  # Also write to /tmp/ as a backup (always writable)
+  echo "$CONFIG" > /tmp/.z-ai-config
+  chmod 644 /tmp/.z-ai-config
+  echo "[entrypoint] ✓ Z.ai config written to /tmp/.z-ai-config"
+
+  # Try /app/ too (may fail if read-only, that's OK)
+  echo "$CONFIG" > /app/.z-ai-config 2>/dev/null && echo "[entrypoint] ✓ Z.ai config written to /app/.z-ai-config" || echo "[entrypoint] Could not write to /app/.z-ai-config (OK — using /home/nextjs/ and /tmp/ instead)"
+
+  # Set HOME so the SDK's os.homedir() resolves to /home/nextjs
+  export HOME=/home/nextjs
+  echo "[entrypoint] HOME set to /home/nextjs for Z.ai SDK"
 else
-  if [ -f /app/.z-ai-config ]; then
-    echo "[entrypoint] Z.ai config already exists at /app/.z-ai-config"
-  else
-    echo "[entrypoint] ⚠ ZAI_API_KEY not set — Z.ai SDK features will be unavailable"
-  fi
+  echo "[entrypoint] ⚠ ZAI_API_KEY not set — Z.ai SDK features will be unavailable"
 fi
 
 # /data is ephemeral on Render free tier — every cold start wipes it.

@@ -98,10 +98,13 @@ RUN bun --version
 
 # Non-root user — security best practice.
 RUN groupadd --system --gid 1001 nodejs \
-    && useradd --system --uid 1001 --gid nodejs nextjs
+    && useradd --system --uid 1001 --gid nodejs --create-home --home-dir /home/nextjs nextjs
+
+# Set HOME env var so the Z.ai SDK's os.homedir() resolves correctly
+ENV HOME=/home/nextjs
 
 # /data holds the live SQLite DB. /data-init holds the baked seed schema.
-RUN mkdir -p /data /data-init && chown -R nextjs:nodejs /data /data-init
+RUN mkdir -p /data /data-init /home/nextjs && chown -R nextjs:nodejs /data /data-init /home/nextjs
 
 # ── Copy the standalone Next.js app ─────────────────────────────────────────
 # `npm run build` already merged .next/static + public INTO the standalone dir,
