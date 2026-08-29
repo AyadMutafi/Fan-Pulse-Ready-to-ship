@@ -1,9 +1,39 @@
 #!/bin/sh
 # ─────────────────────────────────────────────────────────────────────────────
 # Fan Pulse — Docker entrypoint
-# Initializes the SQLite DB + starts VADER service + Next.js app
+# Initializes the SQLite DB + Z.ai config + VADER service + Next.js app
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
+
+# ── Create Z.ai SDK config file from env vars ───────────────────────────────
+# The z-ai-web-dev-sdk reads config from a .z-ai-config JSON file, NOT from
+# env vars. It checks: {cwd}/.z-ai-config, {homedir}/.z-ai-config, /etc/.z-ai-config
+# On the Z.ai sandbox, /etc/.z-ai-config exists. On Render, we create it here
+# from the ZAI_API_KEY, ZAI_TOKEN, ZAI_CHAT_ID, ZAI_USER_ID env vars.
+if [ -n "$ZAI_API_KEY" ] && [ ! -f /app/.z-ai-config ]; then
+  echo "[entrypoint] Creating Z.ai config from env vars..."
+  # Build the JSON config
+  CONFIG="{\"baseUrl\":\"${ZAI_BASE_URL:-https://internal-api.z.ai/v1}\",\"apiKey\":\"$ZAI_API_KEY\""
+  if [ -n "$ZAI_TOKEN" ]; then
+    CONFIG="$CONFIG,\"token\":\"$ZAI_TOKEN\""
+  fi
+  if [ -n "$ZAI_CHAT_ID" ]; then
+    CONFIG="$CONFIG,\"chatId\":\"$ZAI_CHAT_ID\""
+  fi
+  if [ -n "$ZAI_USER_ID" ]; then
+    CONFIG="$CONFIG,\"userId\":\"$ZAI_USER_ID\""
+  fi
+  CONFIG="$CONFIG}"
+  echo "$CONFIG" > /app/.z-ai-config
+  chmod 600 /app/.z-ai-config
+  echo "[entrypoint] ✓ Z.ai config created at /app/.z-ai-config"
+else
+  if [ -f /app/.z-ai-config ]; then
+    echo "[entrypoint] Z.ai config already exists at /app/.z-ai-config"
+  else
+    echo "[entrypoint] ⚠ ZAI_API_KEY not set — Z.ai SDK features will be unavailable"
+  fi
+fi
 
 # /data is ephemeral on Render free tier — every cold start wipes it.
 # We restore the baked empty-schema DB so the app has tables ready without
