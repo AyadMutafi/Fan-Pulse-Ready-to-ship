@@ -23,8 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# package.json only — no lockfile committed, npm resolves fresh on each build.
+# package.json + scripts (postinstall hook needs scripts/patch-zai-sdk.sh)
 COPY package.json ./
+COPY scripts ./scripts
 RUN npm install --legacy-peer-deps --no-audit --no-fund
 
 # ─── Stage 2: builder ────────────────────────────────────────────────────────
