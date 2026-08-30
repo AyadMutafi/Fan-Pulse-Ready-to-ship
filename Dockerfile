@@ -90,12 +90,13 @@ RUN pip3 install --break-system-packages vaderSentiment 2>/dev/null || \
 
 # Install Bun (for the VADER mini-service) — install to /usr/local/bin (system-wide)
 RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local/bin bash
+ENV PATH="/usr/local/bin:${PATH}"
 
 # Verify VADER is working
 RUN python3 -c "from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer; a = SentimentIntensityAnalyzer(); print('VADER OK:', a.polarity_scores('test'))"
 
-# Verify Bun is working
-RUN bun --version
+# Verify Bun is working (use full path in case PATH isn't updated yet)
+RUN /usr/local/bin/bun --version
 
 # Non-root user — security best practice.
 RUN groupadd --system --gid 1001 nodejs \
