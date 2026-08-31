@@ -16,7 +16,7 @@
  *       FPL season. This handles promotion/relegation automatically — we
  *       don't hardcode team IDs.
  *
- *   Fallback source: Wikipedia via webSearch
+ *   Fallback source: Wikipedia via web_search
  *     - Queries "Premier League fixtures {Month Year}" and parses the search
  *       result snippets for fixture-like patterns. This is best-effort and
  *       may return empty results. We NEVER fabricate kickoff times.
@@ -34,7 +34,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { webSearch } from '@/lib/ai'
+import ZAI from 'z-ai-web-dev-sdk'
 
 /** A single EPL fixture, normalized to our app's shape. */
 export interface EPLFixture {
@@ -355,14 +355,16 @@ async function fetchFromFPL(limit: number): Promise<EPLFixture[]> {
 }
 
 /**
- * Fallback: parse Wikipedia search snippets for fixture-like patterns.
+ * Fallback: search the web for EPL fixtures.
  *
- * Best-effort. The web search returns snippets like:
- *   "Arsenal vs Chelsea — Premier League, August 15, 2026 at 20:00"
+ * Best-effort. The web search returns snippets that we don't have a reliable
+ * parser for. When parsing fails or the search returns no useful results,
+ * we return an empty array (honest empty state). We NEVER fabricate fixtures.
  *
- * We extract team names + dates when possible. When parsing fails or the
- * search returns no useful results, we return an empty array (honest empty
- * state). We NEVER fabricate fixtures.
+ * Uses the z-ai-web-dev-sdk `web_search` function directly. The SDK is
+ * imported lazily (inside this function) so that a missing .z-ai-config
+ * during `next build` does NOT crash page-data collection — the import
+ * only resolves when this function is actually called at request time.
  */
 async function fetchFromWebSearch(limit: number): Promise<EPLFixture[]> {
   const now = new Date()
@@ -370,8 +372,12 @@ async function fetchFromWebSearch(limit: number): Promise<EPLFixture[]> {
   const query = `Premier League fixtures ${monthNames[now.getMonth()]} ${now.getFullYear()} site:wikipedia.org`
 
   try {
-    const result = await webSearch(query, { maxResults: 6 })
-    if (!result.ok || result.items.length === 0) return []
+    const zai = await ZAI.create()
+    const searchResults = await zai.functions.invoke('web_search', {
+      query,
+      num: 6,
+    })
+    if (!Array.isArray(searchResults) || searchResults.length === 0) return []
 
     // We don't have a reliable parser for arbitrary search snippets.
     // Returning an empty array triggers the UI's honest empty state.
@@ -379,7 +385,7 @@ async function fetchFromWebSearch(limit: number): Promise<EPLFixture[]> {
     void limit
     return []
   } catch (err) {
-    console.warn('[epl-fixtures] webSearch fallback failed:', err)
+    console.warn('[epl-fixtures] web_search fallback failed:', err)
     return []
   }
 }
