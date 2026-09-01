@@ -8,20 +8,15 @@
  * First provider to return a parseable response wins. If all fail, returns
  * { ok: false, analyses: [...null], error }. NEVER fabricates a score.
  *
- * ANTI-HALLUCINATION: this scorer reads real post content and returns a
- * numeric score. It NEVER invents posts, authors, or URLs. If all providers
- * fail, it returns { ok: false, analyses: [...null], error } and the caller
- * MUST render an honest neutral state (never fabricate a score).
+ * BUILD-SAFE: providers are loaded with dynamic import() INSIDE the
+ * scoreSentiment() function, so they are NOT evaluated at module-import
+ * time (build time). This prevents "Failed to collect page data" errors.
  *
  * This module is part of the @/lib/ai facade. App code should call
  * `ai.scoreSentiment(...)` rather than importing this directly.
  */
 
 import type { ChatMessage } from './types'
-import * as grok from './providers/grok'
-import * as cerebras from './providers/cerebras'
-import * as groq from './providers/groq'
-import * as zai from './providers/zai'
 
 export interface SentimentAnalysis {
   /** 0=furious, 50=neutral, 100=euphoric */
@@ -76,6 +71,8 @@ Rules:
 /**
  * Score a batch of posts for sentiment. Walks the real provider chain:
  * Grok → Cerebras → Groq → Z.ai. First parseable response wins.
+ * Providers are loaded lazily via dynamic import() so a broken or
+ * unconfigured provider doesn't crash the build.
  *
  * @param posts  Array of { content } objects (real post text only)
  */
@@ -102,7 +99,8 @@ export async function scoreSentiment(
     json: true,
   }
 
-  // PRIMARY: Grok. Then Cerebras (if configured), Groq, Z.ai.
+  // Each step dynamically imports its provider ONLY when called.
+  // At build time, none of these modules are loaded → no crash.
   const chain: {
     name: SentimentProvider
     run: () => Promise<{
@@ -112,10 +110,10 @@ export async function scoreSentiment(
       error?: string
     } | null>
   }[] = [
-    { name: 'grok', run: () => grok.chat(messages, opts) },
-    { name: 'cerebras', run: () => cerebras.chat(messages, opts) },
-    { name: 'groq', run: () => groq.chat(messages, opts) },
-    { name: 'zai', run: () => zai.chat(messages, opts) },
+    { name: 'grok', run: async () => (await import('./providers/grok')).chat(messages, opts) },
+    { name: 'cerebras', run: async () => (await import('./providers/cerebras')).chat(messages, opts) },
+    { name: 'groq', run: async () => (await import('./providers/groq')).chat(messages, opts) },
+    { name: 'zai', run: async () => (await import('./providers/zai')).chat(messages, opts) },
   ]
 
   const errors: string[] = []
@@ -164,8 +162,6 @@ export async function scoreSentiment(
 }
 
 // ── Parsing ──────────────────────────────────────────────────────────────────
-// Re-implemented here (instead of importing from groq-sentiment.ts) so this
-// module is fully self-contained and doesn't bypass the chain.
 
 function parseBatch(
   raw: string,
@@ -174,7 +170,6 @@ function parseBatch(
   const results: (SentimentAnalysis | null)[] = new Array(expectedCount).fill(null)
 
   let cleaned = raw.trim()
-  // Strip code fences
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '')
 
   let parsed: any[] = []
@@ -183,7 +178,6 @@ function parseBatch(
     if (Array.isArray(obj)) {
       parsed = obj
     } else if (obj && typeof obj === 'object') {
-      // Some providers with response_format: json_object may wrap in an object
       for (const key of ['results', 'analyses', 'posts', 'data']) {
         if (Array.isArray(obj[key])) {
           parsed = obj[key]
@@ -193,7 +187,6 @@ function parseBatch(
       if (parsed.length === 0) parsed = [obj]
     }
   } catch {
-    // Try line-by-line JSON objects
     const lines = cleaned.split('\n').filter((l) => l.trim().startsWith('{'))
     for (const line of lines) {
       try {
