@@ -816,7 +816,6 @@ model TransferVote {
   @@index([sessionId])
 }
 
-/// Curated social/news links submitted by the founder for a specific match.
 /// These are the PRIMARY source for Fan Talk — see src/lib/live-fan-talk.ts
 /// and the POST /api/curate route.
 model CuratedLink {
@@ -844,4 +843,3 @@ model CuratedLink {
   @@index([postedAt])
   @@index([isActive])
 }
-
