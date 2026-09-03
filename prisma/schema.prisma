@@ -803,10 +803,7 @@ model TransferVote {
   id        String   @id @default(cuid())
   sagaId    String
   saga      TransferSaga @relation(fields: [sagaId], references: [id], onDelete: Cascade)
-  /// "good" | "mixed" | "bad" — maps to 👍 / 😐 / 👎
   vote      String
-  /// Session ID from localStorage — prevents duplicate votes.
-  /// Same as FanVote.sessionId pattern.
   sessionId String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
