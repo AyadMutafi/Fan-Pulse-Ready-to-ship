@@ -812,31 +812,3 @@ model TransferVote {
   @@index([sagaId, vote])
   @@index([sessionId])
 }
-
-/// These are the PRIMARY source for Fan Talk — see src/lib/live-fan-talk.ts
-/// and the POST /api/curate route.
-model CuratedLink {
-  id             String   @id @default(cuid())
-  // Which match this link belongs to (nullable so founders can pre-stage links)
-  matchId        String?
-  matchLabel     String
-  // The REAL source URL (unique — dedupes naturally on upsert)
-  url            String   @unique
-  platform       String
-  author         String
-  content        String
-  sentimentScore Int      @default(50)
-  sentimentLabel String   @default("neutral")
-  hashtags       String   @default("[]")
-  postedAt       DateTime @default(now())
-  // Who curated this link (founder / admin / auto)
-  curatedBy      String   @default("founder")
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@index([matchLabel])
-  @@index([matchId])
-  @@index([postedAt])
-  @@index([isActive])
-}
