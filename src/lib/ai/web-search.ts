@@ -1,24 +1,17 @@
 /**
  * web-search.ts — web search via the @/lib/ai facade.
  *
- * The Z.ai SDK (`z-ai-web-dev-sdk`) is the only provider in the chain that
- * exposes a web_search function. We wrap it here so callers depend on
- * `@/lib/ai` rather than the SDK directly.
- *
- * ANTI-HALLUCINATION: returns ONLY real search results with real URLs from
- * the Z.ai search index. NEVER fabricates URLs, titles, or snippets. If the
- * SDK is unavailable, returns `{ ok: false, items: [], error }`.
+ * BUILD-SAFE: the Z.ai SDK is loaded with dynamic import() INSIDE the
+ * webSearch() function, so it is NOT evaluated at module-import time
+ * (build time). This prevents "Failed to collect page data" errors when
+ * the SDK's config file (.z-ai-config) is unavailable during the build.
  */
-
-import ZAI from 'z-ai-web-dev-sdk'
 
 export interface WebSearchItem {
   title: string
   url: string
   snippet: string
-  /** Source domain, e.g. "espn.com". Empty if unparseable. */
   domain: string
-  /** ISO date string if the search index returned one, else null. */
   publishedAt: string | null
 }
 
@@ -26,7 +19,6 @@ export interface WebSearchResult {
   ok: boolean
   provider: 'zai' | 'none'
   items: WebSearchItem[]
-  /** Duration in ms. */
   durationMs: number
   error?: string
 }
@@ -36,6 +28,7 @@ let cachedZai: any = null
 async function getClient(): Promise<any | null> {
   if (cachedZai) return cachedZai
   try {
+    const ZAI = (await import('z-ai-web-dev-sdk')).default
     cachedZai = await ZAI.create()
     return cachedZai
   } catch (err) {
@@ -52,12 +45,6 @@ function extractDomain(url: string): string {
   }
 }
 
-/**
- * Run a web search. Returns up to `maxResults` real results.
- *
- * @param query      search query string
- * @param maxResults cap (default 8)
- */
 export async function webSearch(
   query: string,
   opts: { maxResults?: number } = {},
@@ -92,7 +79,6 @@ export async function webSearch(
     }
   }
 
-  // The SDK returns results in a few possible shapes — be tolerant.
   const items: WebSearchItem[] = []
   const candidates: any[] =
     Array.isArray(raw) ? raw
