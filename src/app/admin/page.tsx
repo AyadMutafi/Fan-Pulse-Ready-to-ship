@@ -25,20 +25,41 @@ export default function AdminPage() {
     }
   }, [])
 
-  const handleLogin = () => {
-    if (password.trim()) {
-      localStorage.setItem(ADMIN_PASSWORD_KEY, password.trim())
-      setAuthed(true)
-      setLoginError('')
-    } else {
+  const handleLogin = async () => {
+    if (!password.trim()) {
       setLoginError('Please enter the admin password')
+      return
     }
+
+    // Try cookie-based login first (sets fp_admin cookie)
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: password.trim() }),
+      })
+      if (res.ok) {
+        localStorage.setItem(ADMIN_PASSWORD_KEY, password.trim())
+        setAuthed(true)
+        setLoginError('')
+        return
+      }
+    } catch {
+      // login endpoint might not exist — fall through to header-based auth
+    }
+
+    // Fallback: just store the password and use header-based auth
+    localStorage.setItem(ADMIN_PASSWORD_KEY, password.trim())
+    setAuthed(true)
+    setLoginError('')
   }
 
   const handleLogout = () => {
     localStorage.removeItem(ADMIN_PASSWORD_KEY)
     setPassword('')
     setAuthed(false)
+    // Also clear the cookie if it exists
+    document.cookie = 'fp_admin=; Path=/; Max-Age=0'
   }
 
   if (!authed) {
@@ -481,7 +502,7 @@ function FeedMonitorTab({ password }: { password: string }) {
   )
 }
 
-// ── Simple Action Tab (for one-button actions) ────────────────────────────────
+// ── Simple Action Tab ──────────────────────────────────────────────────────────
 function SimpleActionTab({
   password,
   title,
@@ -562,12 +583,12 @@ function SimpleActionTab({
 }
 
 // ── Health Tab ─────────────────────────────────────────────────────────────────
-function HealthTab({ password }: { password: string }) {
+function HealthTab({ password: _password }: { password: string }) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState('')
 
-  const checkHealth = async () => {
+  const checkHealth = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -579,11 +600,11 @@ function HealthTab({ password }: { password: string }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     checkHealth()
-  }, [])
+  }, [checkHealth])
 
   return (
     <Card>
