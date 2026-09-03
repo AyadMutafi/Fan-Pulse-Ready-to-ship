@@ -2,9 +2,7 @@
  * web-search.ts — web search via the @/lib/ai facade.
  *
  * BUILD-SAFE: the Z.ai SDK is loaded with dynamic import() INSIDE the
- * webSearch() function, so it is NOT evaluated at module-import time
- * (build time). This prevents "Failed to collect page data" errors when
- * the SDK's config file (.z-ai-config) is unavailable during the build.
+ * webSearch() function, so it is NOT evaluated at module-import time.
  */
 
 export interface WebSearchItem {
