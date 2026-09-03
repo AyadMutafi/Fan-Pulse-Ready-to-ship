@@ -7,7 +7,7 @@ import { timingSafeEqual } from 'node:crypto'
  * SECURITY: The admin password is read from the ADMIN_PASSWORD env var.
  * PRODUCTION FAIL-CLOSED: if ADMIN_PASSWORD is unset AND NODE_ENV is
  * 'production', ALL admin requests are denied (empty password never matches).
- * A fallback dev password ('123456789') is used ONLY in non-production
+ * A fallback dev password ('FaNpUlse_2026') is used ONLY in non-production
  * environments so the admin dashboard remains accessible during local dev.
  * Production deployments MUST set ADMIN_PASSWORD to a strong secret.
  *
@@ -31,7 +31,7 @@ import { timingSafeEqual } from 'node:crypto'
 // In production, the absence of ADMIN_PASSWORD fails CLOSED (all admin
 // requests denied). This guarantees a misconfigured deploy can never be
 // taken over with a known default password.
-const ADMIN_PASSWORD_FALLBACK = '123456789'
+const ADMIN_PASSWORD_FALLBACK = 'FaNpUlse_2026'
 
 function getAdminPassword(): string {
   const envPassword = process.env.ADMIN_PASSWORD
