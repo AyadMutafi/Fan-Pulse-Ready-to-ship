@@ -17,12 +17,20 @@
  *     resolved sagas); their existing posts + timeline are preserved.
  */
 
-import ZAI from 'z-ai-web-dev-sdk'
+
 import { db } from '@/lib/db'
 import { searchXPostsGeneric, type XPost } from '@/lib/grok-x-search'
 import { scoreSentiment, type SentimentProvider } from '@/lib/ai'
 import { fetchFanPostsViaZai } from './zai-fallback'
 
+// Lazy ZAI SDK loader (BUILD-SAFE)
+let _zai: any = null
+async function getZAI() {
+  if (_zai) return _zai
+  const ZAIModule = await import('z-ai-web-dev-sdk')
+  _zai = await ZAIModule.default.create()
+  return _zai
+}
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface IngestResult {
