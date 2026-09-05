@@ -20,9 +20,13 @@
  *
  * The Pulse Engine then reads PlayerSentiment to compute the 25% Fan Sentiment
  * component of the Pulse Score (replaces the old "95% baseline" placeholder).
+ *
+ * BUILD-SAFE: the Z.ai SDK is loaded with dynamic import() INSIDE
+ * refreshMonitor(), so it is NOT evaluated at module-import time (build time).
+ * This prevents "Failed to collect page data" errors when the SDK's config
+ * file (.z-ai-config) is unavailable during the build.
  */
 
-import ZAI from 'z-ai-web-dev-sdk'
 import type { PrismaClient } from '@prisma/client'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -82,6 +86,17 @@ const SDK_CALL_DELAY_MS = 2000
 
 /** Sleep helper for rate limiting. */
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+// ── Lazy ZAI SDK loader (BUILD-SAFE) ──────────────────────────────────────────
+// The SDK is loaded via dynamic import() ONLY when refreshMonitor() is called.
+// At build time, this module is never evaluated → no crash.
+let _zai: any = null
+async function getZAI(): Promise<any> {
+  if (_zai) return _zai
+  const ZAIModule = await import('z-ai-web-dev-sdk')
+  _zai = await ZAIModule.default.create()
+  return _zai
+}
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -162,7 +177,7 @@ export async function refreshMonitor(
   // ── 2. Initialize SDK + run searches ───────────────────────────────────
   let zai: any
   try {
-    zai = await ZAI.create()
+    zai = await getZAI()
   } catch (err) {
     return {
       monitorId,
