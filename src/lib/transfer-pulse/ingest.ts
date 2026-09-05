@@ -352,7 +352,7 @@ async function classifyTransferPosts(
 
   let zai: any
   try {
-    zai = await ZAI.create()
+      zai = await getZAI()  
   } catch {
     return fallback
   }
