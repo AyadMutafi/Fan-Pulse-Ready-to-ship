@@ -591,6 +591,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
+  
     const zai = await getZAI()
     const database = getDb()
     const allPosts: ParsedPost[] = []
