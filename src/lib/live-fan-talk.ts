@@ -20,11 +20,20 @@
  *     because they come from web_search results.
  */
 
-import ZAI from 'z-ai-web-dev-sdk'
+
 import type { PrismaClient } from '@prisma/client'
 import { searchXPosts } from './grok-x-search'
 import { scoreSentiment } from './ai'
 import { findEPLTeam } from '@/lib/epl-teams'
+
+// Lazy ZAI SDK loader (BUILD-SAFE)
+let _zai: any = null
+async function getZAI() {
+  if (_zai) return _zai
+  const ZAIModule = await import('z-ai-web-dev-sdk')
+  _zai = await ZAIModule.default.create()
+  return _zai
+}
 
 // ── Fake author detection ────────────────────────────────────────────────────
 
@@ -383,7 +392,7 @@ export async function fetchLiveFanTalk(
   // ── 3b. Initialize Z.ai SDK (needed for web_search + sentiment fallback) ─
   let zai: any
   try {
-    zai = await ZAI.create()
+      zai = await getZAI()  
   } catch (err) {
     // If X-Search already gave us posts, we can still proceed — we just
     // won't have Reddit/news coverage. Sentiment scoring will use Groq.
