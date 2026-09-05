@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
 import { db, getDb } from '@/lib/db'
 import { safeErrorResponse } from '@/lib/safe-error'
+
+// Lazy ZAI SDK loader (BUILD-SAFE — loaded only when GET is called)
+let _zai: any = null
+async function getZAI() {
+  if (_zai) return _zai
+  const ZAIModule = await import('z-ai-web-dev-sdk')
+  _zai = await ZAIModule.default.create()
+  return _zai
+}
 
 // ── Cache ─────────────────────────────────────────────────────────────────────
 const CACHE_DURATION = 30 * 60 * 1000 // 30 minutes
@@ -583,7 +591,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const zai = await ZAI.create()
+    const zai = await getZAI()
     const database = getDb()
     const allPosts: ParsedPost[] = []
     const errors: string[] = []
