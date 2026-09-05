@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
 import { NATIONAL_TEAMS } from '@/lib/national-teams'
 import { safeErrorResponse } from '@/lib/safe-error'
+// Lazy ZAI SDK loader (BUILD-SAFE)
+let _zai: any = null
+async function getZAI() {
+  if (_zai) return _zai
+  const ZAIModule = await import('z-ai-web-dev-sdk')
+  _zai = await ZAIModule.default.create()
+  return _zai
+}
 
 // Cache duration: 30 minutes
 const CACHE_DURATION = 30 * 60 * 1000
@@ -28,7 +35,7 @@ export async function GET() {
       return NextResponse.json({ source: 'cache', ...cachedResults })
     }
 
-    const zai = await ZAI.create()
+    const     zai = await getZAI()
 
     // Step 1: Search for latest WC2026 results from ESPN
     const searchResults = await zai.functions.invoke('web_search', {
