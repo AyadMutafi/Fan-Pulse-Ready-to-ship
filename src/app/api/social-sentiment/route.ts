@@ -21,7 +21,7 @@ let cachedResponse: {
   fetchedAt: string
 } | null = null
 
-// ── Supported Languages ──────────────────────────────────────────────────────
+// ── Supported Languages ────────────────────────────────────────────────────── 
 const SUPPORTED_LANGUAGES = [
   'en', 'ar', 'es', 'fr', 'pt', 'de', 'ja', 'ko', 'tr', 'id', 'ur', 'fa', 'zh',
 ] as const
