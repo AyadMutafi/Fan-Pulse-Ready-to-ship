@@ -382,7 +382,7 @@ export async function fetchFanPostsViaZai(opts: {
 
   let zai: any
   try {
-    zai = await ZAI.create()
+    zai = await getZAI()
   } catch (err) {
     return { posts: [], error: `ZAI init failed: ${String(err).slice(0, 100)}` }
   }
@@ -550,7 +550,7 @@ export async function fetchJournalistPostsViaZai(
 
   let zai: any
   try {
-    zai = await ZAI.create()
+   zai = await getZAI()
   } catch (err) {
     return { posts: [], error: `ZAI init failed: ${String(err).slice(0, 100)}` }
   }
