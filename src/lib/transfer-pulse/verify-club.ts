@@ -239,5 +239,80 @@ export async function verifyPlayerCurrentClubViaWeb(
   }
 }
 
-// The rest of module helpers (normalizeClubName, clubsMatch, verifyAndAdjustFromClub)
-// can remain unchanged; they call verifyPlayerCurrentClubViaWeb which now lazy-loads.
+// Expose helpers that other modules import
+export function normalizeClubName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\b(fc|cf|afc|ac|ssc|as|club|city|united|utd)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function clubsMatch(a: string, b: string): boolean {
+  const na = normalizeClubName(a)
+  const nb = normalizeClubName(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+  if (na.includes(nb) || nb.includes(na)) return true
+  return false
+}
+
+export async function verifyAndAdjustFromClub(opts: {
+  playerName: string
+  fromClubName: string
+  fromClubCode: string
+  toClubName: string
+  toClubCode: string
+}): Promise<{
+  fromClubName: string
+  fromClubCode: string
+  decision: 'accept' | 'update-from-club' | 'mark-completed' | 'reject'
+  verification: ClubVerification
+  reason: string
+}> {
+  const { playerName, fromClubName, fromClubCode, toClubName } = opts
+
+  const verification = await verifyPlayerCurrentClubViaWeb(playerName, fromClubName)
+
+  if (verification.confidence === 'low' || !verification.actualClub) {
+    return {
+      fromClubName,
+      fromClubCode,
+      decision: 'accept',
+      verification,
+      reason: `web verification low-confidence (${verification.reason}) — trusting LLM extraction`,
+    }
+  }
+
+  const webClub = verification.actualClub
+  const webCode = verification.actualClubCode ?? fromClubCode
+
+  if (clubsMatch(webClub, fromClubName)) {
+    return {
+      fromClubName,
+      fromClubCode,
+      decision: 'accept',
+      verification,
+      reason: `web confirms ${playerName} is at ${fromClubName}`,
+    }
+  }
+
+  if (clubsMatch(webClub, toClubName)) {
+    return {
+      fromClubName,
+      fromClubCode,
+      decision: 'mark-completed',
+      verification,
+      reason: `web says ${playerName} is already at ${webClub} (= to-club) — transfer completed`,
+    }
+  }
+
+  return {
+    fromClubName: webClub,
+    fromClubCode: webCode,
+    decision: 'update-from-club',
+    verification,
+    reason: `web says ${playerName} is at ${webClub}, not ${fromClubName} (LLM was stale) — correcting from-club`,
+  }
+}
