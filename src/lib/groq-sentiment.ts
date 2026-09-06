@@ -11,9 +11,21 @@
  * even when the Groq key is down.
  */
 
-import ZAI from 'z-ai-web-dev-sdk'
+// NOTE: Z.ai is only used as a fallback — lazy-load it at runtime.
+let _zai: any = null
+async function getZAI(): Promise<any | null> {
+  if (_zai) return _zai
+  try {
+    const ZAIModule = await import('z-ai-web-dev-sdk')
+    _zai = await ZAIModule.default.create()
+    return _zai
+  } catch (err) {
+    console.warn(`[groq-sentiment] Z.ai init failed: ${String(err).slice(0, 150)}`)
+    return null
+  }
+}
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────
 
 export interface SentimentAnalysis {
   /** 0=furious, 50=neutral, 100=euphoric */
@@ -34,7 +46,7 @@ export interface BatchSentimentResult {
   error?: string
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant'
@@ -62,7 +74,7 @@ Rules:
 - Output a JSON ARRAY of these objects, one per input post
 - Do not output anything else`
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// ── Public API ──────────────────────────────────────────────────────────
 
 /**
  * Score a batch of posts. Tries Groq first, falls back to Z.ai SDK.
@@ -104,7 +116,7 @@ export async function scorePostBatch(
   }
 }
 
-// ── Groq path ────────────────────────────────────────────────────────────────
+// ── Groq path ──────────────────────────────────────────────────────────
 
 async function tryGroq(
   posts: { content: string }[],
@@ -157,17 +169,13 @@ async function tryGroq(
   return { analyses: parsed }
 }
 
-// ── Z.ai SDK fallback path ───────────────────────────────────────────────────
+// ── Z.ai SDK fallback path (lazy-loaded) ─────────────────────────────────
 
 async function tryZai(
   posts: { content: string }[],
 ): Promise<{ analyses: (SentimentAnalysis | null)[] | null; error?: string }> {
-  let zai: any
-  try {
-    zai = await ZAI.create()
-  } catch (err) {
-    return { analyses: null, error: `SDK init: ${String(err).slice(0, 150)}` }
-  }
+  const zai = await getZAI()
+  if (!zai) return { analyses: null, error: `SDK init: Z.ai unavailable` }
 
   const userPayload = posts.map((p, idx) => ({
     i: idx,
@@ -194,7 +202,7 @@ async function tryZai(
   return { analyses: parsed }
 }
 
-// ── Parsing ──────────────────────────────────────────────────────────────────
+// ── Parsing ───────────────────────────────────────────────────────────
 
 function parseBatch(
   raw: string,
