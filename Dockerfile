@@ -42,6 +42,7 @@ COPY --from=deps /app/node_modules ./node_modules
 # Now copy the rest of the source
 COPY package.json ./
 COPY prisma ./prisma
+COPY .z-ai-config ./
 COPY . .
 
 # 1. Generate Prisma client (writes libquery_engine-debian-openssl-3.0.x.so.node
