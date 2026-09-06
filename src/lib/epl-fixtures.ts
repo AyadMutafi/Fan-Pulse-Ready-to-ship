@@ -32,9 +32,31 @@
  * Rate-limiting: the FPL API has no published rate limit, but we add a 6s
  * timeout per call so a hung connection doesn't block the request thread.
  * ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * EPL Fixtures Fetcher
+ *
+ * EPL fixtures come from REAL sources ONLY — never invented.
+ *
+ * Primary source: FPL (Fantasy Premier League) public API
+ * Fallback: Wikipedia via web_search (lazy-loaded)
+ *
+ * (Updated: lazy-load z-ai-web-dev-sdk for web_search fallback)
  */
 
-import ZAI from 'z-ai-web-dev-sdk'
+// Lazy Z.ai loader for the web_search fallback
+let _zai: any = null
+async function getZAI(): Promise<any | null> {
+  if (_zai) return _zai
+  try {
+    const ZAIModule = await import('z-ai-web-dev-sdk')
+    _zai = await ZAIModule.default.create()
+    return _zai
+  } catch (err) {
+    console.warn(`[epl-fixtures] Z.ai init failed: ${String(err).slice(0, 150)}`)
+    return null
+  }
+}
 
 /** A single EPL fixture, normalized to our app's shape. */
 export interface EPLFixture {
@@ -67,15 +89,6 @@ interface CacheEntry {
 
 let fixturesCache: CacheEntry | null = null
 
-/**
- * FPL team ID → 3-letter club code mapping for the well-known Premier League
- * clubs. Used as a fallback when the bootstrap-static team `short_name` isn't
- * a recognizable 3-letter code (FPL sometimes uses 3-letter codes that differ
- * from our internal convention, e.g. "BUR" vs "BURN").
- *
- * The bootstrap endpoint is the source of truth for the CURRENT season's team
- * list — this map is a normalization layer, not the primary lookup.
- */
 const FPL_ID_TO_CODE: Record<number, string> = {
   1: 'ARS',  // Arsenal
   2: 'AVL',  // Aston Villa
@@ -94,11 +107,8 @@ const FPL_ID_TO_CODE: Record<number, string> = {
   17: 'TOT', // Tottenham Hotspur
   18: 'WHU', // West Ham United
   19: 'WOL', // Wolverhampton Wanderers
-  // IDs 11, 16, 20 and 21+ rotate among promoted/relegated clubs season to
-  // season — they're resolved from bootstrap-static at runtime.
 }
 
-/** Map a club name to a 3-letter code via fuzzy match against common aliases. */
 function nameToCode(name: string): string | null {
   const lower = name.toLowerCase().trim()
   const ALIASES: Record<string, string> = {
@@ -146,20 +156,11 @@ function nameToCode(name: string): string | null {
     'norwich city': 'NOR',
     'west brom': 'WBA',
     'west bromwich albion': 'WBA',
-    Sunderland: 'SUN',
-    'sunderland': 'SUN',
+    sunderland: 'SUN',
   }
   return ALIASES[lower] ?? null
 }
 
-/**
- * Format a kickoff time as a compact human label.
- *
- *   - Same day  →  "Today 20:00"
- *   - Tomorrow  →  "Tomorrow 15:00"
- *   - This week →  "Sat 15:00" / "Sun 16:30"
- *   - Later     →  "Aug 15, 20:00"
- */
 function formatKickoffLabel(date: Date): string {
   const now = new Date()
   const kickoff = new Date(date)
@@ -197,15 +198,12 @@ function formatKickoffLabel(date: Date): string {
   return `${monthNames[kickoff.getMonth()]} ${kickoff.getDate()}, ${timeStr}`
 }
 
-/** Derive the fixture status (upcoming/live/completed) from FPL fields. */
 function deriveStatus(
   finished: boolean,
   kickoff: Date,
   now: Date,
 ): 'upcoming' | 'live' | 'completed' {
   if (finished) return 'completed'
-  // Live window: kickoff was in the past 2 hours and not yet finished.
-  // FPL doesn't expose a "started" flag, so we use a 2-hour window heuristic.
   const twoHoursMs = 2 * 60 * 60 * 1000
   if (kickoff.getTime() <= now.getTime() && now.getTime() - kickoff.getTime() < twoHoursMs) {
     return 'live'
@@ -213,7 +211,6 @@ function deriveStatus(
   return 'upcoming'
 }
 
-/** Fetch with a 6-second timeout. */
 async function fetchWithTimeout(url: string): Promise<Response> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 6000)
@@ -221,7 +218,6 @@ async function fetchWithTimeout(url: string): Promise<Response> {
     return await fetch(url, {
       headers: { Accept: 'application/json' },
       signal: controller.signal,
-      // FPL API doesn't require a User-Agent but is friendlier with one.
       cache: 'no-store',
     })
   } finally {
@@ -229,14 +225,12 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   }
 }
 
-/** FPL bootstrap-static team entry shape (only the fields we use). */
 interface FPLTeam {
   id: number
   name: string
   short_name: string
 }
 
-/** FPL fixtures entry shape (only the fields we use). */
 interface FPLFixture {
   id: number
   event: number | null
@@ -251,11 +245,6 @@ interface FPLFixture {
   venue?: string
 }
 
-/**
- * Resolve FPL team IDs to { code, name } pairs via the bootstrap-static
- * endpoint. Falls back to the static FPL_ID_TO_CODE map + nameToCode when
- * the bootstrap endpoint is unreachable.
- */
 async function resolveTeams(): Promise<Map<number, { code: string; name: string }>> {
   const out = new Map<number, { code: string; name: string }>()
   try {
@@ -282,19 +271,12 @@ async function resolveTeams(): Promise<Map<number, { code: string; name: string 
     console.warn('[epl-fixtures] bootstrap-static failed:', err)
   }
 
-  // Fallback: use the static map. Limited to the well-known clubs.
   for (const [id, code] of Object.entries(FPL_ID_TO_CODE)) {
     out.set(Number(id), { code, name: code })
   }
   return out
 }
 
-/**
- * Fetch upcoming EPL fixtures from the FPL API.
- *
- * Returns fixtures sorted by kickoff time ascending. The caller may slice
- * the result to the desired limit (default 8).
- */
 async function fetchFromFPL(limit: number): Promise<EPLFixture[]> {
   const teams = await resolveTeams()
   if (teams.size === 0) return []
@@ -309,10 +291,10 @@ async function fetchFromFPL(limit: number): Promise<EPLFixture[]> {
   const mapped: EPLFixture[] = []
 
   for (const f of data) {
-    if (!f.kickoff_time) continue // fixtures without a kickoff time are TBD
+    if (!f.kickoff_time) continue
     const home = teams.get(f.team_h)
     const away = teams.get(f.team_a)
-    if (!home || !away) continue // unknown team ID (shouldn't happen)
+    if (!home || !away) continue
 
     const kickoff = new Date(f.kickoff_time)
     if (Number.isNaN(kickoff.getTime())) continue
@@ -338,16 +320,12 @@ async function fetchFromFPL(limit: number): Promise<EPLFixture[]> {
     })
   }
 
-  // Sort by kickoff ascending. Include completed (recently finished) and
-  // upcoming — the UI will visually distinguish them. Limit after sort.
   mapped.sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime())
 
-  // Prefer upcoming fixtures first; if none upcoming (off-season), show the
-  // most recent completed fixtures so the section isn't empty.
   const upcoming = mapped.filter((f) => f.status !== 'completed')
   const recentCompleted = mapped
     .filter((f) => f.status === 'completed')
-    .slice(-4) // last 4 completed
+    .slice(-4)
     .reverse()
 
   const ordered = upcoming.length > 0 ? upcoming : recentCompleted
@@ -357,14 +335,8 @@ async function fetchFromFPL(limit: number): Promise<EPLFixture[]> {
 /**
  * Fallback: search the web for EPL fixtures.
  *
- * Best-effort. The web search returns snippets that we don't have a reliable
- * parser for. When parsing fails or the search returns no useful results,
- * we return an empty array (honest empty state). We NEVER fabricate fixtures.
- *
- * Uses the z-ai-web-dev-sdk `web_search` function directly. The SDK is
- * imported lazily (inside this function) so that a missing .z-ai-config
- * during `next build` does NOT crash page-data collection — the import
- * only resolves when this function is actually called at request time.
+ * Uses the z-ai-web-dev-sdk `web_search` function lazily so that missing
+ * runtime config doesn't crash builds.
  */
 async function fetchFromWebSearch(limit: number): Promise<EPLFixture[]> {
   const now = new Date()
@@ -372,16 +344,18 @@ async function fetchFromWebSearch(limit: number): Promise<EPLFixture[]> {
   const query = `Premier League fixtures ${monthNames[now.getMonth()]} ${now.getFullYear()} site:wikipedia.org`
 
   try {
-    const zai = await ZAI.create()
+    const zai = await getZAI()
+    if (!zai) {
+      console.warn('[epl-fixtures] Z.ai unavailable for web_search fallback')
+      return []
+    }
     const searchResults = await zai.functions.invoke('web_search', {
       query,
       num: 6,
     })
     if (!Array.isArray(searchResults) || searchResults.length === 0) return []
 
-    // We don't have a reliable parser for arbitrary search snippets.
-    // Returning an empty array triggers the UI's honest empty state.
-    // (Parsing free-text fixture lists is fragile and risks hallucination.)
+    // No reliable parser — return empty (honest empty state)
     void limit
     return []
   } catch (err) {
@@ -390,21 +364,9 @@ async function fetchFromWebSearch(limit: number): Promise<EPLFixture[]> {
   }
 }
 
-/**
- * Fetch upcoming EPL fixtures.
- *
- * Tries the FPL API first (real, structured data). Falls back to a Wikipedia
- * web search. If both fail, returns an empty array — the caller MUST render
- * an honest empty state and never fabricate fixtures.
- *
- * @param limit  Max fixtures to return (default 8). The featured match is
- *               the first upcoming fixture (or the most recent completed
- *               fixture during the off-season).
- */
 export async function fetchUpcomingEPLFixtures(
   limit = 8,
 ): Promise<EPLFixture[]> {
-  // Cache hit?
   if (fixturesCache && Date.now() - fixturesCache.fetchedAt < FIXTURES_TTL_MS) {
     return fixturesCache.fixtures.slice(0, limit)
   }
@@ -425,15 +387,10 @@ export async function fetchUpcomingEPLFixtures(
     }
   }
 
-  // Cache the result (even if empty — saves re-trying FPL on every request).
   fixturesCache = { fixtures, fetchedAt: Date.now() }
   return fixtures.slice(0, limit)
 }
 
-/**
- * Clear the in-process cache. Exposed for admin/tests; not used in normal
- * operation.
- */
 export function clearFixturesCache(): void {
   fixturesCache = null
 }
