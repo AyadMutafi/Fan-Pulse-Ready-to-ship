@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
+import { getSdk } from '@/lib/ai/providers/zai'
 import { db } from '@/lib/db'
 import { getAdminFromRequest } from '@/lib/admin-auth'
 
 /** LLM-score the sentiment of a single social post. Returns 0-100 + label. */
 async function scoreSentiment(text: string): Promise<{ score: number; label: string }> {
   try {
-    const zai = await ZAI.create()
+    const zai = await getSdk()
+    if (!zai) throw new Error('zai unavailable')
     const completion = await zai.chat.completions.create({
       messages: [
         {

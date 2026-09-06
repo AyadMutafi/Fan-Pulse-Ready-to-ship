@@ -35,13 +35,13 @@
 
 import { db } from '@/lib/db'
 import { ai } from '@/lib/ai'
-import ZAI from 'z-ai-web-dev-sdk'
+import { getSdk } from '@/lib/ai/providers/zai'
 import { TIER1_HANDLES, getTier1Source } from './tier1-sources'
 import { resolveClub } from './clubs'
 import { decodeSnowflakeDate, extractStatusId } from './zai-fallback'
 import { verifyAndAdjustFromClub } from './verify-club'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────[...]
 
 export interface SeedByUrlResult {
   ok: boolean
@@ -57,11 +57,11 @@ export interface SeedByUrlResult {
   error?: string
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────��[...]
 
 const MAX_POST_AGE_DAYS = 60
 
-// ── Public API ───────────────────────────────────────────────────────────────
+// ── Public API ──────────────────────────────────────────────────────────�[...]
 
 /**
  * Process a single Tier 1 journalist's X post URL:
@@ -145,7 +145,8 @@ export async function seedSagaByUrl(url: string): Promise<SeedByUrlResult> {
   // 5. Fetch the post text via Z.ai page_reader
   let zai: any
   try {
-    zai = await ZAI.create()
+    zai = await getSdk()
+    if (!zai) throw new Error('zai unavailable')
   } catch (err) {
     return { ...base, handle, postedAt: postDate.toISOString(), error: `ZAI init failed: ${String(err).slice(0, 100)}` }
   }
@@ -469,7 +470,7 @@ async function extractTransferFieldsFromPost(
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────[...]
 
 function stripHtml(html: string): string {
   return html
