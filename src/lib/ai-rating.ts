@@ -16,9 +16,22 @@
  */
 
 import type { PrismaClient } from '@prisma/client'
-import ZAI from 'z-ai-web-dev-sdk'
 import { PULSE_WEIGHTS } from '@/types'
 import { MATCH_EVENTS } from '@/lib/match-events-data'
+
+// Lazy Z.ai loader — avoid top-level import that triggers SDK init at build time.
+let _zai: any = null
+async function getZAI(): Promise<any | null> {
+  if (_zai) return _zai
+  try {
+    const ZAIModule = await import('z-ai-web-dev-sdk')
+    _zai = await ZAIModule.default.create()
+    return _zai
+  } catch (err) {
+    console.warn(`[ai-rating] Z.ai init failed: ${String(err).slice(0, 150)}`)
+    return null
+  }
+}
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v))
 const round1 = (v: number) => Math.round(v * 10) / 10
@@ -173,7 +186,10 @@ ${matchRatingBlock}
 Rate this player now. Return only the JSON.`
 
   // ── 5. Call LLM ──
-  const zai = await ZAI.create()
+  const zai = await getZAI()
+  if (!zai) {
+    return { ok: false, error: 'Z.ai unavailable' }
+  }
   const completion = await zai.chat.completions.create({
     messages: [
       { role: 'assistant', content: systemPrompt },
