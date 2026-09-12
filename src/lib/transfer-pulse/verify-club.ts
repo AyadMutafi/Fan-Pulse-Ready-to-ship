@@ -1,285 +1,100 @@
-/**
- * Transfer Pulse — Verify player's CURRENT club via web_search.
- *
- * PROBLEM (2026-07-26, user report):
- *   The LLM extraction in feed-scan.ts and seed-by-url.ts trusts its own
- *   internal "current club" knowledge when filling in `fromClubName`. But LLM
- *   training data lags reality — for example:
- *     • Isak: LLM thinks "Newcastle" but he joined Liverpool on 1 Sep 2025.
- *     • Garnacho: LLM thinks "Man United" but he joined Chelsea on 30 Aug 2025.
- *     • Tielemans: LLM thinks "Leicester" but he was at Aston Villa from 2023
- *       and joined Man Utd on 14 Jul 2026.
- *   The discovery.ts `checkPlayerAlreadyMoved` guard has the SAME problem —
- *   it asks the LLM whether the player has moved, but the LLM's knowledge
- *   cutoff may predate the move.
- *
- * SOLUTION:
- *   This module asks the WEB (via Z.ai web_search) for the player's actual
- *   current club. Web search results are ALWAYS fresher than LLM training
- *   data, because they include same-day news articles. We ask for the top
- *   5 results and let the LLM read them and tell us the current club with a
- *   confidence rating.
- *
- * USAGE:
- *   const v = await verifyPlayerCurrentClubViaWeb('Alexander Isak')
- *   // → { actualClub: 'Liverpool', confidence: 'high', sources: [...] }
- *
- *   The caller can then compare `v.actualClub` to the LLM-extracted
- *   `fromClubName`:
- *     • If they match → trust the extraction, proceed.
- *     • If they differ → either update the from-club to the web-verified
- *       actual club, OR reject the saga (caller's choice depending on
- *       context), OR mark the saga as completed if the to-club matches the
- *       actual current club.
- *
- * ANTI-HALLUCINATION CONTRACT:
- *   - We never fabricate a club. If web_search returns no useful results,
- *     confidence='low' and actualClub=null (caller fails open).
- *   - We never trust a single source. The LLM must see ≥2 corroborating
- *     results to return 'high' confidence.
- *   - We include the source URLs in the result so the caller can audit.
- */
-/**
- * Transfer Pulse — Verify player's CURRENT club via web_search.
- *
- * (Updated: lazy-load z-ai-web-dev-sdk at runtime to avoid build-time init)
- */
+// Add this to src/lib/transfer-pulse/verify-club.ts
 
-/** 
- * Transfer Pulse — Verify player's CURRENT club via web_search.
- * (file header omitted here for brevity — keep your existing comments if desired)
- */
-
-// NOTE: Z.ai SDK imported lazily to avoid top-level SDK initialization during
-// Next.js build. Top-level imports can cause the SDK to attempt to read its
-// config files before the build-stage environment provides them, leading to
-// "Failed to collect page data" errors. Use getZAI() instead of importing
-// the SDK at module scope.
-
-export interface ClubVerification {
-  actualClub: string | null
-  actualClubCode: string | null
-  confidence: 'high' | 'medium' | 'low'
+export type VerifyAdjustDecision = {
+  decision: 'accept' | 'reject' | 'mark-completed'
+  fromClubCode: string | null
+  fromClubName: string | null
   reason: string
-  sources: string[]
-  resultsConsidered: number
-}
-
-interface WebSearchResultItem {
-  url: string
-  name: string
-  snippet: string
-  host_name: string
-  date?: string
-}
-
-// Lazy-load the Z.ai SDK at runtime to avoid top-level initialization during
-// build time. This mirrors the fix you requested: remove top-level import and
-// replace ZAI.create() calls with getZAI().
-let _zai: any = null
-async function getZAI() {
-  if (_zai) return _zai
-  const ZAIModule = await import('z-ai-web-dev-sdk')
-  _zai = await ZAIModule.default.create()
-  return _zai
 }
 
 /**
- * Verify a player's CURRENT club via Z.ai web_search + LLM extraction.
- *
- * @param playerName  e.g. "Alexander Isak"
- * @param hintClub    optional — the club the caller THINKS the player is at
- *                    (e.g. the LLM-extracted fromClub). Used to disambiguate
- *                    the search query.
+ * High-level helper used by feed-scan.ts and seed-by-url.ts.
+ * Input: caller passes the LLM-extracted values so the wrapper can compare
+ * web-verified club to those values and return a small decision object.
  */
-export async function verifyPlayerCurrentClubViaWeb(
-  playerName: string,
-  hintClub?: string,
-): Promise<ClubVerification> {
-  const empty: ClubVerification = {
-    actualClub: null,
-    actualClubCode: null,
-    confidence: 'low',
-    reason: 'web_search unavailable',
-    sources: [],
-    resultsConsidered: 0,
+export async function verifyAndAdjustFromClub(opts: {
+  playerName: string
+  fromClubName: string
+  fromClubCode?: string
+  toClubName: string
+  toClubCode?: string
+}): Promise<VerifyAdjustDecision> {
+  const { playerName, fromClubName, fromClubCode, toClubName } = opts
+
+  // Default — fail open (trust caller extraction) with low confidence reason.
+  const fallback: VerifyAdjustDecision = {
+    decision: 'accept',
+    fromClubCode: fromClubCode ?? null,
+    fromClubName: fromClubName ?? null,
+    reason: 'verification skipped or low confidence — failing open',
   }
 
-  let zai: any
+  // Ask the web + LLM for verification
+  let v
   try {
-    zai = await getZAI()
-  } catch {
-    return empty
-  }
-
-  // ── 1. Run 2 web_search queries (broad + specific) ─────────────────────
-  const queries = [
-    `${playerName} current club ${new Date().getFullYear()}`,
-    `${playerName} transfer ${hintClub ? `from ${hintClub} ` : ''}latest news`,
-  ]
-
-  const allResults: WebSearchResultItem[] = []
-  const seenUrls = new Set<string>()
-  for (const q of queries) {
-    try {
-      const res = await zai.functions.invoke('web_search', { query: q, num: 5 })
-      if (Array.isArray(res)) {
-        for (const item of res) {
-          if (item && typeof item.url === 'string' && !seenUrls.has(item.url)) {
-            seenUrls.add(item.url)
-            allResults.push(item)
-          }
-        }
-      }
-    } catch (err) {
-      console.warn(
-        `[verify-club] web_search failed for "${q}": ${String(err).slice(0, 120)}`,
-      )
-    }
-  }
-
-  if (allResults.length === 0) {
-    return empty
-  }
-
-  // ── 2. Build a compact context for the LLM ─────────────────────────────
-  const context = allResults
-    .slice(0, 10)
-    .map((r, i) => `[${i + 1}] ${r.name}\n    ${r.snippet}\n    URL: ${r.url}`)
-    .join('\n\n')
-
-  // ── 3. Ask the LLM to read the search results and answer ───────────────
-  const today = new Date().toISOString().slice(0, 10)
-  const systemPrompt =
-    `You are a football transfer fact-checker. Today is ${today}.\n` +
-    `The user wants to know: what club does ${playerName} CURRENTLY play for ` +
-    `(as of today, not historically)?\n\n` +
-    `Here are the top ${Math.min(allResults.length, 10)} web search results:\n\n` +
-    `${context}\n\n` +
-    `Read the results carefully. Return a JSON object with these fields:\n` +
-    `  "actualClub": string | null   — the full name of the club ${playerName} currently plays for, or null if the results don't say\n` +
-    `  "actualClubCode": string | null — a 3-4 letter uppercase code for the club (e.g. "LIV", "CHE", "AVL"), or null\n` +
-    `  "confidence": "high" | "medium" | "low"\n` +
-    `  "reason": string               — 1-sentence explanation citing the source(s)\n\n` +
-    `CONFIDENCE RULES:\n` +
-    `- "high": ≥2 independent sources (different domains) explicitly state the player's CURRENT club.\n` +
-    `- "medium": 1 source states it, OR multiple sources imply it via transfer reporting (e.g. "X left Y for Z last summer").\n` +
-    `- "low": no source clearly states the current club.\n\n` +
-    `RULES:\n` +
-    `- The CURRENT club is where he plays RIGHT NOW, not where he used to play.\n` +
-    `- If the results talk about a transfer that has COMPLETED (signed/announced/presented), ` +
-    `the CURRENT club is the DESTINATION club of that transfer.\n` +
-    `- If the results only mention RUMORS of interest, the current club is still his existing club.\n` +
-    `- Do NOT invent a club. If unsure, return actualClub=null and confidence="low".\n` +
-    `- Output ONLY the JSON object, no commentary.`
-
-  let zaiChat: any
-  try {
-    zaiChat = await getZAI()
-  } catch {
-    // fall through with empty (already set above); we still have search results
-    // but no LLM to interpret them. Return low-confidence with sources.
-    return {
-      ...empty,
-      reason: 'LLM unavailable to interpret search results',
-      sources: allResults.map((r) => r.url),
-      resultsConsidered: allResults.length,
-    }
-  }
-
-  let raw = ''
-  try {
-    const completion = await zaiChat.chat.completions.create({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `${playerName} — current club?` },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    raw = completion?.choices?.[0]?.message?.content || ''
+    v = await verifyPlayerCurrentClubViaWeb(playerName, fromClubName)
   } catch (err) {
-    console.warn(
-      `[verify-club] LLM call failed for ${playerName}: ${String(err).slice(0, 120)}`,
-    )
+    // On unexpected error, fail open
     return {
-      ...empty,
-      reason: `LLM call failed: ${String(err).slice(0, 80)}`,
-      sources: allResults.map((r) => r.url),
-      resultsConsidered: allResults.length,
+      ...fallback,
+      reason: `verification error: ${String(err).slice(0, 200)}`,
     }
   }
 
-  // ── 4. Parse the LLM response ──────────────────────────────────────────
-  let cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '')
-  const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
-  if (start === -1 || end === -1 || end <= start) {
+  // No useful web results
+  if (!v || !v.actualClub) {
     return {
-      ...empty,
-      reason: 'LLM did not return JSON',
-      sources: allResults.map((r) => r.url),
-      resultsConsidered: allResults.length,
+      ...fallback,
+      reason: `no web-confirmed club (confidence=${v?.confidence ?? 'low'})`,
     }
   }
 
-  try {
-    const obj = JSON.parse(cleaned.slice(start, end + 1))
-    const actualClub =
-      typeof obj.actualClub === 'string' && obj.actualClub.trim()
-        ? obj.actualClub.trim()
-        : null
-    const actualClubCode =
-      typeof obj.actualClubCode === 'string' && obj.actualClubCode.trim()
-        ? obj.actualClubCode.trim().toUpperCase().slice(0, 4)
-        : null
-    const confidenceRaw = String(obj.confidence).toLowerCase().trim()
-    const confidence: 'high' | 'medium' | 'low' =
-      confidenceRaw === 'high' ? 'high' : confidenceRaw === 'medium' ? 'medium' : 'low'
-    const reason =
-      typeof obj.reason === 'string' && obj.reason.trim()
-        ? obj.reason.trim().slice(0, 280)
-        : ''
+  const actual = v.actualClub
+  const actualCode = v.actualClubCode ?? null
 
+  // If web says current club matches the toClub => mark-completed
+  if (toClubName && clubsMatch(actual, toClubName)) {
     return {
-      actualClub,
-      actualClubCode,
-      confidence,
-      reason,
-      sources: allResults.map((r) => r.url),
-      resultsConsidered: allResults.length,
-    }
-  } catch {
-    return {
-      ...empty,
-      reason: 'LLM JSON parse failed',
-      sources: allResults.map((r) => r.url),
-      resultsConsidered: allResults.length,
+      decision: 'mark-completed',
+      fromClubCode: actualCode ?? fromClubCode ?? null,
+      fromClubName: actual ?? fromClubName ?? null,
+      reason: `web-verified current club = destination club (${actual}); marking as completed (confidence=${v.confidence})`,
     }
   }
-}
 
-/**
- * Normalize a club name for fuzzy comparison.
- */
-export function normalizeClubName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\b(fc|cf|afc|ac|ssc|as|club|city|united|utd)\b/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
+  // If web confirms the caller's fromClub (same club) => accept and normalize
+  if (fromClubName && clubsMatch(actual, fromClubName)) {
+    return {
+      decision: 'accept',
+      fromClubCode: actualCode ?? fromClubCode ?? null,
+      fromClubName: actual ?? fromClubName ?? null,
+      reason: `web confirms from-club (${actual}) (confidence=${v.confidence})`,
+    }
+  }
 
-/**
- * Returns true if two club names refer to the same club (fuzzy match).
- */
-export function clubsMatch(a: string, b: string): boolean {
-  const na = normalizeClubName(a)
-  const nb = normalizeClubName(b)
-  if (!na || !nb) return false
-  if (na === nb) return true
-  if (na.includes(nb) || nb.includes(na)) return true
-  return false
-}
+  // Web strongly contradicts (high confidence) — reject the extraction so caller can decide
+  if (v.confidence === 'high') {
+    return {
+      decision: 'reject',
+      fromClubCode: actualCode,
+      fromClubName: actual,
+      reason: `web indicates current club is ${actual} (confidence=high); reject or adjust manually`,
+    }
+  }
 
-// ── Higher-level functions (verifyAndAdjustFromClub) unchanged; keep as-is.
+  // Medium confidence — prefer to update caller's from-club (fail-open-ish)
+  if (v.confidence === 'medium') {
+    return {
+      decision: 'accept',
+      fromClubCode: actualCode ?? fromClubCode ?? null,
+      fromClubName: actual ?? fromClubName ?? null,
+      reason: `web suggests current club = ${actual} (confidence=medium); updating from-club`,
+    }
+  }
+
+  // Low confidence: fail open
+  return {
+    ...fallback,
+    reason: `low-confidence web result (${actual}) — failing open`,
+  }
+}
