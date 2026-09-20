@@ -13,33 +13,20 @@
  * handles the call.
  */
 
-// NOTE: we intentionally DO NOT import the SDK at top-level. Importing it
-// during module evaluation causes Next.js builds to attempt to initialize the
-// SDK (which needs runtime config). Load it lazily at runtime instead.
+import ZAI from 'z-ai-web-dev-sdk'
 import type { ChatMessage, ChatResult } from '../types'
 
 let cachedZai: any = null
 
-// Lazy loader per the fix requested: avoid top-level import that runs at
-// build-time. Use a dynamic import and cache the created client.
-let _zai: any = null
-async function getZAI(): Promise<any | null> {
-  if (_zai) return _zai
+async function getClient(): Promise<any | null> {
+  if (cachedZai) return cachedZai
   try {
-    const ZAIModule = await import('z-ai-web-dev-sdk')
-    _zai = await ZAIModule.default.create()
-    return _zai
+    cachedZai = await ZAI.create()
+    return cachedZai
   } catch (err) {
     console.warn(`[ai/zai] SDK init failed: ${String(err).slice(0, 150)}`)
     return null
   }
-}
-
-async function getClient(): Promise<any | null> {
-  if (cachedZai) return cachedZai
-  const zai = await getZAI()
-  cachedZai = zai
-  return cachedZai
 }
 
 export function isAvailable(): boolean {

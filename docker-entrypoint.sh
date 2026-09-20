@@ -1,7 +1,7 @@
 #!/bin/sh
 # ─────────────────────────────────────────────────────────────────────────────
 # Fan Pulse — Docker entrypoint
-# Initializes the SQLite DB, then starts Next.js
+# Initializes the SQLite DB on first boot, then hands off to the main process.
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
@@ -13,8 +13,13 @@ set -e
 # WHERE the SQLite file should live. We parse it and copy the baked schema
 # to that path. This is robust against dashboard env var overrides — the
 # entrypoint always initializes the correct file.
+#
+# Once the schema exists, instrumentation.ts (Next.js register hook) checks
+# if the tables are empty and auto-seeds all verified World Cup + EPL data.
 
 DB_URL="${DATABASE_URL:-file:/data/fanpulse.db}"
+
+# Extract path from "file:<path>" format
 DB_PATH="${DB_URL#file:}"
 
 if [ -z "$DB_PATH" ]; then
@@ -33,7 +38,11 @@ if [ ! -d "$DB_DIR" ]; then
   mkdir -p "$DB_DIR"
 fi
 
-# If the DB file doesn't exist OR is smaller than 8KB, copy the baked schema
+# If the DB file doesn't exist OR is smaller than 8KB (empty SQLite file with
+# no tables — SQLite header is 100 bytes, a schema-only DB is typically 12KB+),
+# copy the baked schema. This handles:
+#   1. First boot (file doesn't exist)
+#   2. Render dashboard created an empty file (size = 0 or 4096 bytes)
 INIT_NEEDED=0
 if [ ! -f "$DB_PATH" ]; then
   echo "[entrypoint] DB file not found — initializing from baked schema..."
@@ -42,7 +51,7 @@ else
   DB_SIZE=$(stat -c%s "$DB_PATH" 2>/dev/null || stat -f%z "$DB_PATH" 2>/dev/null || echo 0)
   echo "[entrypoint] Existing DB file size: ${DB_SIZE} bytes"
   if [ "$DB_SIZE" -lt 8192 ]; then
-    echo "[entrypoint] DB file is suspiciously small (< 8KB) — re-initializing..."
+    echo "[entrypoint] DB file is suspiciously small (< 8KB — likely empty schema) — re-initializing..."
     INIT_NEEDED=1
   else
     echo "[entrypoint] ✓ DB file exists with data — skipping init."

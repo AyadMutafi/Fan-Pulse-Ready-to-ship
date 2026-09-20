@@ -5,16 +5,15 @@
  * first success wins. If ALL fail, returns { ok: false, error }. NEVER
  * fabricates content.
  *
- * BUILD-SAFE: providers are loaded with dynamic import() INSIDE the chat()
- * function, so they are NOT evaluated at module-import time (build time).
- * This prevents "Failed to collect page data" errors when a provider
- * module has top-level side effects (e.g. new Groq() at import time).
- *
  * This module is part of the @/lib/ai facade. App code should call
  * `ai.chat(...)` rather than importing this directly.
  */
 
 import type { ChatMessage, ChatResult } from './types'
+import * as cerebras from './providers/cerebras'
+import * as groq from './providers/groq'
+import * as grok from './providers/grok'
+import * as zai from './providers/zai'
 
 export type { ChatMessage, ChatResult } from './types'
 
@@ -28,8 +27,6 @@ export interface ChatOptions {
 
 /**
  * Run a single chat completion, walking the fallback chain.
- * Providers are loaded lazily via dynamic import() so that a broken or
- * unconfigured provider doesn't crash the build.
  *
  * @param messages  OpenAI-style message array
  * @param opts      model/temperature/maxTokens/json
@@ -38,13 +35,12 @@ export async function chat(
   messages: ChatMessage[],
   opts: ChatOptions = {},
 ): Promise<ChatResult> {
-  // Each step dynamically imports its provider ONLY when called.
-  // At build time, none of these modules are loaded → no crash.
+  // PRIMARY: Grok. Then Cerebras (if configured), Groq, Z.ai.
   const chain: { name: string; run: () => Promise<ChatResult | null> }[] = [
-    { name: 'grok', run: async () => (await import('./providers/grok')).chat(messages, opts) },
-    { name: 'cerebras', run: async () => (await import('./providers/cerebras')).chat(messages, opts) },
-    { name: 'groq', run: async () => (await import('./providers/groq')).chat(messages, opts) },
-    { name: 'zai', run: async () => (await import('./providers/zai')).chat(messages, opts) },
+    { name: 'grok', run: () => grok.chat(messages, opts) },
+    { name: 'cerebras', run: () => cerebras.chat(messages, opts) },
+    { name: 'groq', run: () => groq.chat(messages, opts) },
+    { name: 'zai', run: () => zai.chat(messages, opts) },
   ]
 
   const errors: string[] = []
