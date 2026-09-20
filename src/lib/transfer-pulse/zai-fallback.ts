@@ -9,7 +9,7 @@
  * This module provides a FALLBACK that uses the Z.ai SDK's `web_search`
  * function (which auto-initializes in the Z.ai sandbox without an explicit
  * API key) to find the SAME real X posts — but via web search indexing
- * instead of X's own API. 
+ * instead of X's own API.
  *
  * ANTI-HALLUCINATION CONTRACT (preserved):
  *   - We only accept URLs matching ^https://(x.com|twitter.com)/<handle>/status/<digits>$
@@ -31,17 +31,10 @@
  *     last year's contract-extension tweet from appearing as "current news."
  *   - Posts with NO parseable date are REJECTED. No date = no trust.
  */
+import ZAI from 'z-ai-web-dev-sdk'
 import type { XPost } from '@/lib/grok-x-search'
 import { TIER1_HANDLES } from './tier1-sources'
 import type { TrackedPlayer } from './tracked-players'
-// Lazy ZAI SDK loader (BUILD-SAFE)
-let _zai: any = null
-async function getZAI() {
-  if (_zai) return _zai
-  const ZAIModule = await import('z-ai-web-dev-sdk')
-  _zai = await ZAIModule.default.create()
-  return _zai
-}
 
 const SDK_CALL_DELAY_MS = 2500
 const MAX_QUERIES_PER_PLAYER = 3
@@ -181,7 +174,7 @@ export async function fetchTier1PostsViaZai(
 
   let zai: any
   try {
-      zai = await getZAI()  
+    zai = await ZAI.create()
   } catch (err) {
     return { posts: [], error: `ZAI init failed: ${String(err).slice(0, 100)}` }
   }
@@ -382,7 +375,7 @@ export async function fetchFanPostsViaZai(opts: {
 
   let zai: any
   try {
-    zai = await getZAI()
+    zai = await ZAI.create()
   } catch (err) {
     return { posts: [], error: `ZAI init failed: ${String(err).slice(0, 100)}` }
   }
@@ -550,7 +543,7 @@ export async function fetchJournalistPostsViaZai(
 
   let zai: any
   try {
-   zai = await getZAI()
+    zai = await ZAI.create()
   } catch (err) {
     return { posts: [], error: `ZAI init failed: ${String(err).slice(0, 100)}` }
   }

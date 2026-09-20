@@ -23,9 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# package.json + scripts (postinstall hook needs scripts/patch-zai-sdk.sh)
+# package.json only — no lockfile committed, npm resolves fresh on each build.
 COPY package.json ./
-COPY scripts ./scripts
 RUN npm install --legacy-peer-deps --no-audit --no-fund
 
 # ─── Stage 2: builder ────────────────────────────────────────────────────────
@@ -42,7 +41,6 @@ COPY --from=deps /app/node_modules ./node_modules
 # Now copy the rest of the source
 COPY package.json ./
 COPY prisma ./prisma
-COPY .z-ai-config ./
 COPY . .
 
 # 1. Generate Prisma client (writes libquery_engine-debian-openssl-3.0.x.so.node
@@ -84,13 +82,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Non-root user — security best practice.
 RUN groupadd --system --gid 1001 nodejs \
-    && useradd --system --uid 1001 --gid nodejs --create-home --home-dir /home/nextjs nextjs
-
-# Set HOME env var so the Z.ai SDK's os.homedir() resolves correctly
-ENV HOME=/home/nextjs
+    && useradd --system --uid 1001 --gid nodejs nextjs
 
 # /data holds the live SQLite DB. /data-init holds the baked seed schema.
-RUN mkdir -p /data /data-init /home/nextjs && chown -R nextjs:nodejs /data /data-init /home/nextjs
+RUN mkdir -p /data /data-init && chown -R nextjs:nodejs /data /data-init
 
 # ── Copy the standalone Next.js app ─────────────────────────────────────────
 # `npm run build` already merged .next/static + public INTO the standalone dir,
@@ -103,7 +98,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 # ── Copy the pre-built empty-schema DB for first-run init ───────────────────
 COPY --from=builder --chown=nextjs:nodejs /tmp/seed.db /data-init/fanpulse.db
 
-# ── Entrypoint ──────────────────────────────────────────────────────────────
+# ── Entrypoint: initializes /data/fanpulse.db on first boot ─────────────────
 COPY --chown=nextjs:nodejs docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
