@@ -419,7 +419,7 @@ model BallonDorSource {
   analysisError   String?
   curatedAt       DateTime @default(now())
   curatedBy       String   @default("founder")
-  isActive        Boolean  @default(true)
+  isActive        Boolean  @default(true)   // ── Weekly buzz tracking (Option C: admin override + live search) ──   // Admin can set notes like "bad season" or "injured Sep-Oct"   adminNotes      String?   // Manual override — if set, takes precedence over live web-search buzz   manualBuzzScore Int?   // Last time a weekly snapshot was saved for this contender   lastBuzzRefreshAt DateTime?   weeklySnapshots BallonDorWeeklySnapshot[]
 
   contender       BallonDorContender? @relation(fields: [playerName], references: [name], onDelete: NoAction, onUpdate: NoAction)
 
@@ -454,7 +454,15 @@ model BallonDorContender {
   lastRecomputedAt DateTime @default(now())
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  isActive        Boolean  @default(true)
+    isActive        Boolean  @default(true)
+  // ── Weekly buzz tracking (Option C: admin override + live search) ──
+  // Admin can set notes like "bad season" or "injured Sep-Oct"
+  adminNotes      String?
+  // Manual override — if set, takes precedence over live web-search buzz
+  manualBuzzScore Int?
+  // Last time a weekly snapshot was saved for this contender
+  lastBuzzRefreshAt DateTime?
+  weeklySnapshots BallonDorWeeklySnapshot[]
 
   sources         BallonDorSource[]
 
@@ -814,4 +822,29 @@ model TransferVote {
   @@unique([sagaId, sessionId])
   @@index([sagaId, vote])
   @@index([sessionId])
+}
+
+// ── Ballon d'Or Weekly Buzz Snapshots ────────────────────────────────────────
+// One row per contender per ISO week (e.g. "2026-W38"). Captures the live buzz
+// at a point in time so we can show weekly trends + an overall average.
+model BallonDorWeeklySnapshot {
+  id               String   @id @default(cuid())
+  contenderId      String
+  contender        BallonDorContender @relation(fields: [contenderId], references: [id], onDelete: Cascade)
+  // ISO week key: "2026-W38"
+  weekKey          String
+  // Raw mention data from web search
+  mentionCount     Int
+  positiveMentions  Int
+  negativeMentions  Int
+  // Computed buzz score (0-100) from volume + sentiment
+  buzzScore        Int
+  trend            String   // "rising" | "stable" | "falling"
+  // Top search snippet for context
+  topSnippet       String?
+  refreshedAt      DateTime @default(now())
+
+  @@unique([contenderId, weekKey])
+  @@index([contenderId, weekKey])
+  @@index([weekKey])
 }
