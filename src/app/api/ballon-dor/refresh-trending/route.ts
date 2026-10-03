@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthorized } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
-
-let _zai: any = null
-async function getZAI(): Promise<any | null> {
-  if (_zai) return _zai
-  try {
-    const ZAIModule = await import('z-ai-web-dev-sdk')
-    _zai = await ZAIModule.default.create()
-    return _zai
-  } catch (err) {
-    console.warn(`[ballon-dor/trending] ZAI init failed: ${String(err).slice(0, 150)}`)
-    return null
-  }
-}
+import { getSdk } from '@/lib/ai/providers/zai'
 
 function getISOWeekKey(date: Date = new Date()): string {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
@@ -30,7 +18,7 @@ export async function POST(request: NextRequest) {
   }
   const startedAt = Date.now()
   const weekKey = getISOWeekKey()
-  const zai = await getZAI()
+  const zai = await getSdk()
   if (!zai) {
     return NextResponse.json({ error: 'Z.ai SDK unavailable' }, { status: 503 })
   }
