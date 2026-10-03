@@ -21,7 +21,14 @@ let cachedZai: any = null
 async function getClient(): Promise<any | null> {
   if (cachedZai) return cachedZai
   try {
-    cachedZai = await ZAI.create()
+    cachedZai = await ZAI.create({
+      apiKey: process.env.ZAI_API_KEY || '',
+      baseUrl: process.env.ZAI_BASE_URL || 'https://api.z.ai/api/paas/v4',
+      ...(process.env.ZAI_CHAT_ID ? { chatId: process.env.ZAI_CHAT_ID } : {}),
+      ...(process.env.ZAI_USER_ID ? { userId: process.env.ZAI_USER_ID } : {}),
+      ...(process.env.ZAI_TOKEN ? { token: process.env.ZAI_TOKEN } : {}),
+    })
+    if (!cachedZai) throw new Error('ZAI SDK init failed — check ZAI_API_KEY env var')
     return cachedZai
   } catch (err) {
     console.warn(`[ai/zai] SDK init failed: ${String(err).slice(0, 150)}`)
