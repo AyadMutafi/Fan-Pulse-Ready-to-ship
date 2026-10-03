@@ -172,14 +172,7 @@ export default function AdminPage() {
             <HealthTab />
           </TabsContent>
           <TabsContent value="ballon" className="mt-4">
-            <SimpleActionTab
-              password={password}
-              title="Ballon d'Or Management"
-              description="View and manage Ballon d'Or contenders and sources"
-              endpoint="/api/ballon-dor"
-              method="GET"
-              buttonText="Load Ballon d'Or Data"
-            />
+            <BallonDorTab password={password} />
           </TabsContent>
         </Tabs>
       </div>
@@ -187,7 +180,7 @@ export default function AdminPage() {
   )
 }
 
-// ── Curate Tab ─────────────────────────────────────────────────────────────────
+// ── Curate Tab ──────────────────────────────────────────────────────────[...] 
 function CurateTab({ password }: { password: string }) {
   const [matchLabel, setMatchLabel] = useState('')
   const [matchId, setMatchId] = useState('')
@@ -432,7 +425,7 @@ function CuratedLinksTab({ password }: { password: string }) {
   )
 }
 
-// ── Feed Monitor Tab ──────────────────────────────────────────────────────────
+// ── Feed Monitor Tab ────────────────────────────────────────────────────────[...]
 function FeedMonitorTab({ password }: { password: string }) {
   const [monitors, setMonitors] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -637,7 +630,7 @@ function SimpleActionTab({
   )
 }
 
-// ── Health Tab ─────────────────────────────────────────────────────────────────
+// ── Health Tab ───────────────────��──────────────────────────────────────[...]
 function HealthTab() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<any>(null)
@@ -697,6 +690,262 @@ function HealthTab() {
             <pre className="text-xs whitespace-pre-wrap p-3 rounded bg-gray-50 dark:bg-gray-900">
               {JSON.stringify(result, null, 2)}
             </pre>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function BallonDorTab({ password }: { password: string }) {
+  const [tab, setTab] = useState<'weekly' | 'overall' | 'manage'>('weekly')
+  const [contenders, setContenders] = useState<any[]>([])
+  const [weekly, setWeekly] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<any>({})
+
+  const loadContenders = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/ballon-dor/contenders', {
+        headers: { 'x-admin-password': password },
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || `HTTP ${res.status}`)
+      } else {
+        setContenders(data.contenders || [])
+      }
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const refreshTrending = async () => {
+    setRefreshing(true)
+    setError('')
+    setWeekly([])
+    try {
+      const res = await fetch('/api/ballon-dor/refresh-trending', {
+        method: 'POST',
+        headers: { 'x-admin-password': password },
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || `HTTP ${res.status}`)
+      } else {
+        setWeekly(data.trending || [])
+        await loadContenders()
+      }
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  useEffect(() => {
+    loadContenders()
+  }, [])
+
+  const startEdit = (c: any) => {
+    setEditingId(c.id)
+    setEditForm({ ...c })
+  }
+
+  const saveEdit = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/ballon-dor/contenders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+        body: JSON.stringify({
+          id: editingId,
+          name: editForm.name,
+          clubName: editForm.clubName,
+          clubCode: editForm.clubCode,
+          nationCode: editForm.nationCode,
+          position: editForm.position,
+          adminNotes: editForm.adminNotes,
+          manualBuzzScore: editForm.manualBuzzScore ? Number(editForm.manualBuzzScore) : null,
+          verifiedMatchFact: editForm.verifiedMatchFact,
+          reason: editForm.reason,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || `HTTP ${res.status}`)
+      } else {
+        setEditingId(null)
+        await loadContenders()
+      }
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const overall = contenders
+    .map((c) => ({
+      name: c.name, club: c.clubName, nation: c.nationCode, position: c.position,
+      score: c.ballonDorScore, trend: c.trend, manualBuzz: c.manualBuzzScore,
+      adminNotes: c.adminNotes, snapshotCount: c._count?.weeklySnapshots || 0,
+    }))
+    .sort((a, b) => b.score - a.score)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Trophy className="h-5 w-5" />
+          Ballon d&rsquo;Or Management
+        </CardTitle>
+        <CardDescription>Weekly buzz + overall ranking + contender management</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex gap-2 border-b pb-2">
+          <Button size="sm" variant={tab === 'weekly' ? 'default' : 'ghost'} onClick={() => setTab('weekly')}>Weekly Buzz</Button>
+          <Button size="sm" variant={tab === 'overall' ? 'default' : 'ghost'} onClick={() => setTab('overall')}>Overall Buzz</Button>
+          <Button size="sm" variant={tab === 'manage' ? 'default' : 'ghost'} onClick={() => setTab('manage')}>Manage Contenders</Button>
+        </div>
+
+        {error && (
+          <div className="p-3 rounded bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-sm">{error}</div>
+        )}
+
+        {tab === 'weekly' && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Searches the web for each contender&rsquo;s current buzz, saves a weekly snapshot, and ranks them. Takes 2-3 minutes.
+            </p>
+            <Button onClick={refreshTrending} disabled={refreshing} className="w-full">
+              {refreshing ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Searching web for all contenders...</>
+              ) : (
+                <><Zap className="h-4 w-4 mr-2" />Refresh Weekly Buzz</>
+              )}
+            </Button>
+            {weekly.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm">This Week&rsquo;s Ranking (live):</h4>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {weekly.map((p: any, i: number) => (
+                    <div key={i} className="p-3 rounded border bg-white dark:bg-gray-900">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="font-medium text-sm">#{i + 1} {p.name}</div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={p.finalBuzzScore >= 70 ? 'default' : p.finalBuzzScore >= 50 ? 'secondary' : 'destructive'}>{p.finalBuzzScore}</Badge>
+                          <Badge variant="outline">{p.trend}</Badge>
+                          {p.scoreSource === 'admin-override' && <Badge variant="secondary">admin</Badge>}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground">{p.club} · {p.nation} · {p.position}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Mentions: {p.mentionCount} · 👍 {p.positiveMentions} · 👎 {p.negativeMentions}
+                        {p.scoreSource === 'admin-override' && <span className="ml-2 text-orange-500">(live was {p.liveBuzzScore})</span>}
+                      </div>
+                      {p.adminNotes && (
+                        <div className="text-xs mt-1 p-2 rounded bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400">📝 {p.adminNotes}</div>
+                      )}
+                      {p.topSnippet && (
+                        <div className="text-xs mt-2 p-2 rounded bg-gray-50 dark:bg-gray-800 italic">&ldquo;{p.topSnippet}&rdquo;</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'overall' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Overall ranking (current ballonDorScore)</p>
+              <Button size="sm" variant="outline" onClick={loadContenders} disabled={loading}>
+                <RefreshCw className={`h-3 w-3 mr-1 ${loading ? 'animate-spin' : ''}`} />Reload
+              </Button>
+            </div>
+            {loading ? (
+              <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            ) : overall.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground text-sm">No contenders loaded. Click Reload.</div>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {overall.map((p: any, i: number) => (
+                  <div key={i} className="p-3 rounded border bg-white dark:bg-gray-900">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="font-medium text-sm">#{i + 1} {p.name}</div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={p.score >= 70 ? 'default' : p.score >= 50 ? 'secondary' : 'destructive'}>{Math.round(p.score)}</Badge>
+                        <Badge variant="outline">{p.trend}</Badge>
+                        {p.manualBuzz !== null && p.manualBuzz !== undefined && <Badge variant="secondary">admin: {p.manualBuzz}</Badge>}
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{p.club} · {p.nation} · {p.position} · {p.snapshotCount} snapshots</div>
+                    {p.adminNotes && (
+                      <div className="text-xs mt-1 p-2 rounded bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400">📝 {p.adminNotes}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'manage' && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Edit contender info (fix clubs, add notes, set manual buzz overrides).</p>
+            {loading ? (
+              <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {contenders.map((c: any) => (
+                  <div key={c.id} className="p-3 rounded border bg-white dark:bg-gray-900">
+                    {editingId === c.id ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <Input placeholder="Name" value={editForm.name || ''} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                          <Input placeholder="Club" value={editForm.clubName || ''} onChange={(e) => setEditForm({ ...editForm, clubName: e.target.value })} />
+                          <Input placeholder="Club Code" value={editForm.clubCode || ''} onChange={(e) => setEditForm({ ...editForm, clubCode: e.target.value })} />
+                          <Input placeholder="Nation" value={editForm.nationCode || ''} onChange={(e) => setEditForm({ ...editForm, nationCode: e.target.value })} />
+                          <Input placeholder="Position" value={editForm.position || ''} onChange={(e) => setEditForm({ ...editForm, position: e.target.value })} />
+                          <Input placeholder="Manual Buzz (0-99)" type="number" value={editForm.manualBuzzScore ?? ''} onChange={(e) => setEditForm({ ...editForm, manualBuzzScore: e.target.value })} />
+                        </div>
+                        <Textarea placeholder="Admin notes (e.g. 'Bad season at Liverpool')" value={editForm.adminNotes || ''} onChange={(e) => setEditForm({ ...editForm, adminNotes: e.target.value })} rows={2} />
+                        <Textarea placeholder="Verified match fact" value={editForm.verifiedMatchFact || ''} onChange={(e) => setEditForm({ ...editForm, verifiedMatchFact: e.target.value })} rows={2} />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={saveEdit} disabled={loading}>Save</Button>
+                          <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm">
+                            {c.name} <span className="text-muted-foreground">· {c.clubName} · {c.nationCode}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Score: {Math.round(c.ballonDorScore)} · Trend: {c.trend}
+                            {c.manualBuzzScore !== null && c.manualBuzzScore !== undefined && <span className="ml-2 text-orange-500">manual: {c.manualBuzzScore}</span>}
+                          </div>
+                          {c.adminNotes && <div className="text-xs mt-1 text-orange-600 dark:text-orange-400">📝 {c.adminNotes}</div>}
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => startEdit(c)}>Edit</Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </CardContent>
