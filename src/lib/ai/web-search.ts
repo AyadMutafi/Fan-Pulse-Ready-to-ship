@@ -4,7 +4,7 @@
  * BUILD-SAFE: the Z.ai SDK is loaded via the shared getSdk() provider.
  */
 
-import { getSdk } from '@/lib/ai/providers/zai'
+import { getSdk } from '@/lib/ai/providers/zai' 
 
 export interface WebSearchItem {
   title: string
