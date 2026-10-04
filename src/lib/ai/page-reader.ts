@@ -1,39 +1,18 @@
 /**
  * page-reader.ts — page content extraction via the @/lib/ai facade.
  *
- * Wraps the Z.ai SDK's page_reader function. Returns the extracted text
- * content of a web page (useful for reading Tier 1 journalist articles to
- * confirm a transfer report before upserting a TransferSource).
- *
- * ANTI-HALLUCINATION: returns ONLY the actual page text. NEVER fabricates
- * content. If the page is unreachable, returns { ok: false, text: '' }.
+ * BUILD-SAFE: the Z.ai SDK is loaded via the shared getSdk() provider.
  */
 
-import ZAI from 'z-ai-web-dev-sdk'
+import { getSdk } from '@/lib/ai/providers/zai'
 
 export interface PageReadResult {
   ok: boolean
   provider: 'zai' | 'none'
-  /** Extracted plain text (HTML stripped). May be empty on block pages. */
   text: string
-  /** Page title if the SDK returned one. */
   title: string
-  /** Duration in ms. */
   durationMs: number
   error?: string
-}
-
-let cachedZai: any = null
-
-async function getClient(): Promise<any | null> {
-  if (cachedZai) return cachedZai
-  try {
-    cachedZai = await ZAI.create()
-    return cachedZai
-  } catch (err) {
-    console.warn(`[ai/page-reader] SDK init failed: ${String(err).slice(0, 150)}`)
-    return null
-  }
 }
 
 function stripHtml(html: string): string {
@@ -51,11 +30,6 @@ function stripHtml(html: string): string {
     .trim()
 }
 
-/**
- * Read a web page and return its text content.
- *
- * @param url  must be a valid http(s) URL
- */
 export async function readPage(url: string): Promise<PageReadResult> {
   const startedAt = Date.now()
 
@@ -70,7 +44,7 @@ export async function readPage(url: string): Promise<PageReadResult> {
     }
   }
 
-  const zai = await getClient()
+  const zai = await getSdk()
   if (!zai) {
     return {
       ok: false,
@@ -96,12 +70,6 @@ export async function readPage(url: string): Promise<PageReadResult> {
     }
   }
 
-  // The z-ai SDK returns the page content nested under `raw.data` with keys
-  // { html, content, title, publishedTime, ... }. Older call paths in
-  // live-fan-talk.ts already knew this (they access `pageData?.data?.html`).
-  // The facade previously only checked the top level, which returned empty
-  // for every URL — making readPage unusable. Fix: check both `.data.*`
-  // (current SDK shape) and top-level (defensive fallback).
   const data = raw?.data ?? raw
   const html = String(data?.html || data?.content || raw?.html || raw?.content || raw?.text || '')
   const title = String(data?.title || raw?.title || '')
