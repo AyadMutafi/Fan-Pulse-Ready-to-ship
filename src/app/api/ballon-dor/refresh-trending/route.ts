@@ -32,14 +32,17 @@ export async function POST(request: NextRequest) {
     let negativeMentions = 0
     const snippets: string[] = []
     const queries = [
-      `"${contender.name}" Ballon d'Or 2026`,
-      `"${contender.name}" ${contender.clubName} 2026 season performance`,
-      `"${contender.name}" disappointing OR overrated OR bad season 2026`,
+      `${contender.name} Ballon d'Or 2026`,
+      `${contender.name} ${contender.clubName} 2026`,
+      `${contender.name} football 2026`,
     ]
     for (const query of queries) {
       try {
         const searchResults = await zai.functions.invoke('web_search', { query, num: 5 })
-        if (!Array.isArray(searchResults)) continue
+        if (!Array.isArray(searchResults) || searchResults.length === 0) {
+          console.warn(`[ballon-dor/trending] 0 results for query: "${query}"`)
+          continue
+        }
         for (const result of searchResults) {
           const text = `${result.title || ''} ${result.snippet || ''}`.toLowerCase()
           snippets.push(result.snippet || result.title || '')
@@ -51,6 +54,26 @@ export async function POST(request: NextRequest) {
       }
       await new Promise((r) => setTimeout(r, 2000))
     }
+
+    // Fallback if no mentions found from the standard queries
+    if (snippets.length === 0) {
+      try {
+        const fallback = await zai.functions.invoke('web_search', { query: contender.name, num: 5 })
+        if (Array.isArray(fallback)) {
+          if (fallback.length === 0) {
+            console.warn(`[ballon-dor/trending] 0 results for fallback query: "${contender.name}"`)
+          }
+          for (const result of fallback) {
+            snippets.push(result.snippet || result.title || '')
+          }
+        } else {
+          console.warn(`[ballon-dor/trending] fallback returned non-array for ${contender.name}`)
+        }
+      } catch (e) {
+        console.warn(`[ballon-dor/trending] fallback search failed for ${contender.name}: ${String(e).slice(0, 100)}`)
+      }
+    }
+
     const totalMentions = snippets.length
     const volumeBonus = Math.min(20, totalMentions * 2)
     const sentimentBonus = Math.min(15, positiveMentions * 3) - Math.min(20, negativeMentions * 4)
@@ -65,7 +88,7 @@ export async function POST(request: NextRequest) {
       await db.ballonDorWeeklySnapshot.upsert({
         where: { contenderId_weekKey: { contenderId: contender.id, weekKey } },
         update: { mentionCount: totalMentions, positiveMentions, negativeMentions, buzzScore: finalBuzzScore, trend, topSnippet: snippets[0]?.slice(0, 280) || null, refreshedAt: new Date() },
-        create: { contenderId: contender.id, weekKey, mentionCount: totalMentions, positiveMentions, negativeMentions, buzzScore: finalBuzzScore, trend, topSnippet: snippets[0]?.slice(0, 280) || null },
+        create: { contenderId: contender.id, weekKey, mentionCount: totalMentions, positiveMentions, negativeMentions, buzzScore: finalBuzzScore, trend, topSnippet: snippets[0]?.slice(0, 280) || null, refreshedAt: new Date() },
       })
       await db.ballonDorContender.update({
         where: { id: contender.id },
