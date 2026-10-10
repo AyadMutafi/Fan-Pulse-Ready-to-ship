@@ -3,19 +3,19 @@ import { isAdminAuthorized } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
 
 const INITIAL_CONTENDERS = [
-  { name: 'Harry Kane',            clubName: 'Bayern Munich',      clubCode: 'BMC', nationCode: 'ENG', position: 'ST',  verifiedMatchFact: 'England WC 3rd place + Bayern domestic double. 70+ goals calendar year.', reason: 'Statistical favorite' },
-  { name: 'Lamine Yamal',          clubName: 'Barcelona',          clubCode: 'BAR', nationCode: 'ESP', position: 'RW',  verifiedMatchFact: 'Spain World Cup winner. La Liga champion.', reason: 'Trophies + eye test' },
-  { name: 'Kylian Mbappé',         clubName: 'Real Madrid',         clubCode: 'RMA', nationCode: 'FRA', position: 'ST',  verifiedMatchFact: 'France WC Golden Boot. Individual brilliance.', reason: 'Individual brilliance' },
-  { name: 'Vinícius Júnior',      clubName: 'Real Madrid',         clubCode: 'RMA', nationCode: 'BRA', position: 'LW',  verifiedMatchFact: 'Champions League decisive displays.', reason: 'CL heroics' },
+  { name: 'Harry Kane',            clubName: 'Bayern Munich',      clubCode: 'BMC', nationCode: 'ENG', position: 'ST',  verifiedMatchFact: 'England WC 3rd place + Bayern domestic double. 70+ goals', reason: 'Clinical finisher' },
+  { name: 'Lamine Yamal',          clubName: 'Barcelona',          clubCode: 'BAR', nationCode: 'ESP', position: 'RW',  verifiedMatchFact: 'Spain World Cup winner. La Liga champion.', reason: 'Tropical winger' },
+  { name: 'Kylian Mbappé',         clubName: 'Real Madrid',         clubCode: 'RMA', nationCode: 'FRA', position: 'ST',  verifiedMatchFact: 'France WC Golden Boot. Individual brilliance.', reason: 'Explosive' },
+  { name: 'Vinícius Júnior',      clubName: 'Real Madrid',         clubCode: 'RMA', nationCode: 'BRA', position: 'LW',  verifiedMatchFact: 'Champions League decisive displays.', reason: 'Dribbler' },
   { name: 'Jude Bellingham',      clubName: 'Real Madrid',         clubCode: 'RMA', nationCode: 'ENG', position: 'CM',  verifiedMatchFact: 'Late-game heroic moments.', reason: 'Clutch moments' },
   { name: 'Erling Haaland',       clubName: 'Manchester City',     clubCode: 'MCI', nationCode: 'NOR', position: 'ST',  verifiedMatchFact: 'Record-breaking goal ratios.', reason: 'Goal machine' },
-  { name: 'Florian Wirtz',        clubName: 'Liverpool',           clubCode: 'LIV', nationCode: 'GER', position: 'CAM', verifiedMatchFact: 'Transferred to Liverpool summer 2025. Disappointing 2025/26 season.', reason: 'Bad season', manualBuzzScore: 25, adminNotes: 'Bad season at Liverpool — underperforming expectations' },
+  { name: 'Florian Wirtz',        clubName: 'Liverpool',           clubCode: 'LIV', nationCode: 'GER', position: 'CAM', verifiedMatchFact: 'Transferred to Liverpool summer 2025. Disappointing 2025 season', reason: 'Playmaker' },
   { name: 'Rodri',                clubName: 'Manchester City',     clubCode: 'MCI', nationCode: 'ESP', position: 'CM',  verifiedMatchFact: 'WC Golden Ball. 2024 winner.', reason: 'Tactical respect' },
-  { name: 'Raphinha',             clubName: 'Barcelona',           clubCode: 'BAR', nationCode: 'BRA', position: 'RW',  verifiedMatchFact: 'Snubbed from 30-man shortlist. Multiple hat-tricks.', reason: 'Snub controversy' },
-  { name: 'Ousmane Dembélé',      clubName: 'PSG',                 clubCode: 'PSG', nationCode: 'FRA', position: 'RW',  verifiedMatchFact: 'Defending champion (2025 winner).', reason: 'Defending champion' },
-  { name: 'Khvicha Kvaratskhelia',clubName: 'PSG',                 clubCode: 'PSG', nationCode: 'GEO', position: 'LW',  verifiedMatchFact: 'PSG key player.', reason: 'PSG impact' },
-  { name: 'Michael Olise',        clubName: 'Bayern Munich',       clubCode: 'BMC', nationCode: 'FRA', position: 'RW',  verifiedMatchFact: 'Strong start at Bayern.', reason: 'Bayern form' },
-  { name: 'Lionel Messi',         clubName: 'Inter Miami',          clubCode: 'MIA', nationCode: 'ARG', position: 'RW',  verifiedMatchFact: 'Controversial 9th candidacy.', reason: 'Loyal support' },
+  { name: 'Raphinha',             clubName: 'Barcelona',           clubCode: 'BAR', nationCode: 'BRA', position: 'RW',  verifiedMatchFact: 'Snubbed from 30-man shortlist. Multiple hat-tricks.', reason: 'Goal threat' },
+  { name: 'Ousmane Dembélé',      clubName: 'PSG',                 clubCode: 'PSG', nationCode: 'FRA', position: 'RW',  verifiedMatchFact: 'Defending champion (2025 winner).', reason: 'Experienced winner' },
+  { name: 'Khvicha Kvaratskhelia',clubName: 'PSG',                 clubCode: 'PSG', nationCode: 'GEO', position: 'LW', verifiedMatchFact: 'PSG key player.', reason: 'Impact' },
+  { name: 'Michael Olise',        clubName: 'Bayern Munich',       clubCode: 'BMC', nationCode: 'FRA', position: 'RW',  verifiedMatchFact: 'Strong start at Bayern.', reason: 'Form' },
+  { name: 'Lionel Messi',         clubName: 'Inter Miami',          clubCode: 'MIA', nationCode: 'ARG', position: 'RW',  verifiedMatchFact: 'Controversial 9th candidacy.', reason: 'Legacy' },
 ]
 
 export async function GET(request: NextRequest) {
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       include: { _count: { select: { weeklySnapshots: true } } },
     })
     if (contenders.length === 0) {
+      await db.ballonDorContender.deleteMany({})
       await db.ballonDorContender.createMany({
         data: INITIAL_CONTENDERS.map((c) => ({
           name: c.name, clubName: c.clubName, clubCode: c.clubCode,
@@ -67,11 +68,11 @@ export async function POST(request: NextRequest) {
     if (id) {
       contender = await db.ballonDorContender.update({
         where: { id },
-        data: { name, clubName, clubCode: clubCode || '', nationCode, position: position || 'ST', adminNotes: adminNotes ?? null, manualBuzzScore: manualBuzzScore ?? null, verifiedMatchFact: verifiedMatchFact ?? '', reason: reason ?? '', isActive: isActive ?? true },
+        data: { name, clubName, clubCode: clubCode || '', nationCode, position: position || 'ST', adminNotes: adminNotes ?? null, manualBuzzScore: manualBuzzScore ?? null, verifiedMatchFact: verifiedMatchFact ?? null, reason: reason ?? null, isActive: isActive ?? true },
       })
     } else {
       contender = await db.ballonDorContender.create({
-        data: { name, clubName, clubCode: clubCode || '', nationCode, position: position || 'ST', adminNotes: adminNotes ?? null, manualBuzzScore: manualBuzzScore ?? null, verifiedMatchFact: verifiedMatchFact ?? '', reason: reason ?? '', ballonDorScore: manualBuzzScore ?? 50, isActive: isActive ?? true },
+        data: { name, clubName, clubCode: clubCode || '', nationCode, position: position || 'ST', adminNotes: adminNotes ?? null, manualBuzzScore: manualBuzzScore ?? null, verifiedMatchFact: verifiedMatchFact ?? null, reason: reason ?? null, isActive: isActive ?? true },
       })
     }
     return NextResponse.json({ contender })
