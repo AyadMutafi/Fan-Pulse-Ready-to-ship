@@ -17,8 +17,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const startedAt = Date.now()
-    console.log('[ballon-dor/trending] ZAI_BASE_URL env:', process.env.ZAI_BASE_URL || '(not set)')
-  console.log('[ballon-dor/trending] ZAI_API_KEY set:', process.env.ZAI_API_KEY ? 'yes (' + process.env.ZAI_API_KEY.slice(0, 10) + '...)' : 'no')
+  console.log('[ballon-dor/trending] ZAI_BASE_URL env:', process.env.ZAI_BASE_URL || '(not set)')
+  console.log('[ballon-dor/trending] ZAI_API_KEY set:', process.env.ZAI_API_KEY ? 'yes' : 'no') 'no')
   const weekKey = getISOWeekKey()
   const zai = await getSdk()
   if (!zai) {
