@@ -16,28 +16,46 @@
 import ZAI from 'z-ai-web-dev-sdk'
 import type { ChatMessage, ChatResult } from '../types'
 
-let cachedZai: any = null
+let cachedChatClient: any = null
+let cachedSearchClient: any = null
 
-async function getClient(): Promise<any | null> {
-  if (cachedZai) return cachedZai
+async function getChatClient(): Promise<any | null> {
+  if (cachedChatClient) return cachedChatClient
   try {
-    // IMPORTANT: use `new ZAI(config)` instead of `ZAI.create()` because
-    // the SDK's static create() ALWAYS reads the on-disk .z-ai-config file
-    // and ignores any passed-in config object. Creating the instance
-    // directly with env vars bypasses the file lookup and works on cloud
-    // platforms where you set env vars (Render/Vercel/etc.).
-    cachedZai = new ZAI({
+    // Chat client (public API)
+    cachedChatClient = new ZAI({
       apiKey: process.env.ZAI_API_KEY || '',
       baseUrl: process.env.ZAI_BASE_URL || 'https://api.z.ai/api/paas/v4',
       ...(process.env.ZAI_CHAT_ID ? { chatId: process.env.ZAI_CHAT_ID } : {}),
       ...(process.env.ZAI_USER_ID ? { userId: process.env.ZAI_USER_ID } : {}),
+      // token may also be present but chat client primarily uses apiKey
       ...(process.env.ZAI_TOKEN ? { token: process.env.ZAI_TOKEN } : {}),
     })
 
-    if (!cachedZai) throw new Error('ZAI SDK init failed — check ZAI_API_KEY env var')
-    return cachedZai
+    if (!cachedChatClient) throw new Error('ZAI chat client init failed — check ZAI_API_KEY env var')
+    return cachedChatClient
   } catch (err) {
-    console.warn(`[ai/zai] SDK init failed: ${String(err).slice(0, 150)}`)
+    console.warn(`[ai/zai] chat client init failed: ${String(err).slice(0, 150)}`)
+    return null
+  }
+}
+
+async function getInternalSearchClient(): Promise<any | null> {
+  if (cachedSearchClient) return cachedSearchClient
+  try {
+    // Search client (internal API) — internal-api.z.ai/v1 supports functions.invoke
+    // Use token-based/session auth (ZAI_TOKEN) and any session identifiers
+    cachedSearchClient = new ZAI({
+      token: process.env.ZAI_TOKEN || '',
+      baseUrl: process.env.ZAI_INTERNAL_BASE_URL || 'https://internal-api.z.ai/v1',
+      ...(process.env.ZAI_CHAT_ID ? { chatId: process.env.ZAI_CHAT_ID } : {}),
+      ...(process.env.ZAI_USER_ID ? { userId: process.env.ZAI_USER_ID } : {}),
+    })
+
+    if (!cachedSearchClient) throw new Error('ZAI search client init failed — check ZAI_TOKEN env var')
+    return cachedSearchClient
+  } catch (err) {
+    console.warn(`[ai/zai] internal search client init failed: ${String(err).slice(0, 150)}`)
     return null
   }
 }
@@ -50,7 +68,7 @@ export async function chat(
   messages: ChatMessage[],
   opts: { temperature?: number; maxTokens?: number } = {},
 ): Promise<ChatResult | null> {
-  const zai = await getClient()
+  const zai = await getChatClient()
   if (!zai) return null
 
   try {
@@ -78,7 +96,12 @@ export async function chat(
   }
 }
 
-/** Expose the underlying SDK client for web_search / page_reader (internal). */
+/** Expose the underlying SDK client for public chat usage (legacy). */
 export async function getSdk(): Promise<any | null> {
-  return getClient()
+  return getChatClient()
+}
+
+/** Expose an internal search client configured for internal-api.z.ai/v1 */
+export async function getSearchClient(): Promise<any | null> {
+  return getInternalSearchClient()
 }
