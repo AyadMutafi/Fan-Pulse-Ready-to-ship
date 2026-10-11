@@ -11,29 +11,150 @@ function getISOWeekKey(date: Date = new Date()): string {
   return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`
 }
 
-async function searchWeb(query: string): Promise<any[]> {
+/**
+ * Web search via xAI (Grok) Responses API with web_search tool.
+ * Includes deep debug logging to diagnose response structure.
+ */
+async function searchWeb(query: string): Promise<{ url: string; title: string; snippet: string }[]> {
+  const key = process.env.XAI_API_KEY
+  if (!key) {
+    console.warn('[ballon-dor/trending] XAI_API_KEY not set — search unavailable')
+    return []
+  }
+
   try {
-    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    const payload = {
+      model: 'grok-4-latest',
+      input: [
+        {
+          role: 'user',
+          content: `Search the web for: ${query}. Summarize the top results with titles, URLs, and short snippets.`,
+        },
+      ],
+      tools: [{ type: 'web_search' }],
+      stream: false,
+    }
+
+    const res = await fetch('https://api.x.ai/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30000),
     })
-    const html = await res.text()
-    const results: any[] = []
-    // match DuckDuckGo result title + snippet pattern
-    const re = /<a[^>]*class="result__a"[^>]*href="([^"']+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gs
-    for (const match of html.matchAll(re)) {
-      try {
-        const url = match[1]
-        const title = match[2].replace(/<[^>]+>/g, '').trim()
-        const snippet = (match[3] || '').replace(/<[^>]+>/g, '').trim()
-        results.push({ url, title, snippet })
-      } catch {
-        // skip malformed match
+
+    const status = res.status
+    const contentType = res.headers.get('content-type') || ''
+    const raw = await res.text().catch(() => '')
+
+    let parsed: any = null
+    try {
+      parsed = raw ? JSON.parse(raw) : null
+    } catch {
+      parsed = null
+    }
+
+    console.log('[ballon-dor/trending] xAI search debug', {
+      query,
+      hasKey: !!key,
+      status,
+      contentType,
+      bodyPreview: raw ? raw.slice(0, 2000) : '(empty)',
+      parsedKeys: parsed && typeof parsed === 'object' ? Object.keys(parsed).slice(0, 20) : null,
+    })
+
+    if (!res.ok) {
+      console.warn(`[ballon-dor/trending] xAI search HTTP ${status} for query="${query}"`)
+      return []
+    }
+
+    const results: { url: string; title: string; snippet: string }[] = []
+
+    const pushResult = (r: { url?: string; title?: string; snippet?: string }) => {
+      const url = (r.url || r.link || r.href || '').toString()
+      const title = (r.title || r.name || '').toString().trim()
+      const snippet = (r.snippet || r.summary || r.description || r.text || '').toString().trim()
+      if (url || title || snippet) {
+        results.push({ url: url || 'https://x.ai', title: title || query, snippet: snippet || title || '' })
       }
     }
-    return results
+
+    if (Array.isArray(parsed?.output)) {
+      for (const item of parsed.output) {
+        try {
+          if (item?.type === 'message' && item?.role === 'assistant') {
+            const contents = Array.isArray(item.content) ? item.content : [item.content]
+            for (const c of contents) {
+              if (typeof c?.text === 'string' && c.text.trim()) {
+                const chunks = c.text.split(/\n{1,2}/).map((s: string) => s.trim()).filter(Boolean)
+                for (const chunk of chunks.slice(0, 3)) {
+                  results.push({ url: 'https://x.ai', title: query, snippet: chunk.slice(0, 500) })
+                }
+              }
+              if (Array.isArray(c?.items)) {
+                for (const it of c.items) {
+                  pushResult({
+                    url: it.url || it.link || it.href,
+                    title: it.title || it.name,
+                    snippet: it.snippet || it.summary || it.description,
+                  })
+                }
+              }
+            }
+          }
+
+          if (item?.tool_response) {
+            const tr = item.tool_response
+            if (Array.isArray(tr?.results)) {
+              for (const r of tr.results) {
+                pushResult({
+                  url: r.url || r.link || r.href,
+                  title: r.title || r.name,
+                  snippet: r.snippet || r.summary || r.description,
+                })
+              }
+            } else if (Array.isArray(tr?.data)) {
+              for (const r of tr.data) {
+                pushResult({
+                  url: r.url || r.link || r.href,
+                  title: r.title || r.name,
+                  snippet: r.snippet || r.summary || r.description,
+                })
+              }
+            } else {
+              const trText = typeof tr === 'string' ? tr : JSON.stringify(tr).slice(0, 1000)
+              if (trText) results.push({ url: 'https://x.ai', title: query, snippet: trText.slice(0, 500) })
+            }
+          }
+        } catch (innerErr) {
+          console.warn('[ballon-dor/trending] xAI item parse error', String(innerErr).slice(0, 200))
+        }
+      }
+    }
+
+    if (Array.isArray(parsed?.sources)) {
+      for (const s of parsed.sources) {
+        pushResult({ url: s.url || s.link || s.href, title: s.title || s.name, snippet: s.snippet || s.summary || s.description })
+      }
+    }
+
+    const seen = new Set<string>()
+    const deduped: { url: string; title: string; snippet: string }[] = []
+    for (const r of results) {
+      const key = `${r.url}::${r.snippet}`.slice(0, 1000)
+      if (!seen.has(key)) {
+        seen.add(key)
+        deduped.push(r)
+      }
+      if (deduped.length >= 10) break
+    }
+
+    console.log('[ballon-dor/trending] xAI parsed results count', { rawCount: results.length, deduped: deduped.length })
+    return deduped
   } catch (e) {
-    console.warn('[ballon-dor/trending] DuckDuckGo search failed:', String(e).slice(0, 100))
+    console.warn('[ballon-dor/trending] xAI search failed (exception):', String(e).slice(0, 200))
     return []
   }
 }
@@ -43,6 +164,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const startedAt = Date.now()
+  console.log('[ballon-dor/trending] starting refresh-weekly-buzz')
 
   const weekKey = getISOWeekKey()
   const contenders = await db.ballonDorContender.findMany({ where: { isActive: true } })
@@ -61,7 +183,9 @@ export async function POST(request: NextRequest) {
     ]
     for (const query of queries) {
       try {
+        console.log(`[ballon-dor/trending] search query="${query}"`)
         const searchResults = await searchWeb(query)
+        console.log(`[ballon-dor/trending] search results for "${query}" => ${Array.isArray(searchResults) ? searchResults.length : 'not-array'}`)
         if (!Array.isArray(searchResults) || searchResults.length === 0) {
           console.warn(`[ballon-dor/trending] 0 results for query: "${query}"`)
           continue
@@ -73,15 +197,16 @@ export async function POST(request: NextRequest) {
           if (/snub|unfair|rigged|overrated|controvers|disappoint|critic|bad season|flop/.test(text)) negativeMentions++
         }
       } catch (err) {
-        console.warn(`[ballon-dor/trending] search failed for ${contender.name}: ${String(err).slice(0, 100)}`)
+        console.warn(`[ballon-dor/trending] search failed for ${contender.name}: ${String(err).slice(0, 200)}`)
       }
       await new Promise((r) => setTimeout(r, 2000))
     }
 
-    // Fallback if no mentions found from the standard queries
     if (snippets.length === 0) {
       try {
+        console.log(`[ballon-dor/trending] fallback search for "${contender.name}"`)
         const fallback = await searchWeb(contender.name)
+        console.log(`[ballon-dor/trending] fallback results => ${Array.isArray(fallback) ? fallback.length : 'not-array'}`)
         if (Array.isArray(fallback)) {
           if (fallback.length === 0) {
             console.warn(`[ballon-dor/trending] 0 results for fallback query: "${contender.name}"`)
@@ -93,7 +218,7 @@ export async function POST(request: NextRequest) {
           console.warn(`[ballon-dor/trending] fallback returned non-array for ${contender.name}`)
         }
       } catch (e) {
-        console.warn(`[ballon-dor/trending] fallback search failed for ${contender.name}: ${String(e).slice(0, 100)}`)
+        console.warn(`[ballon-dor/trending] fallback search failed for ${contender.name}: ${String(e).slice(0, 200)}`)
       }
     }
 
@@ -110,8 +235,26 @@ export async function POST(request: NextRequest) {
     try {
       await db.ballonDorWeeklySnapshot.upsert({
         where: { contenderId_weekKey: { contenderId: contender.id, weekKey } },
-        update: { mentionCount: totalMentions, positiveMentions, negativeMentions, buzzScore: finalBuzzScore, trend, topSnippet: snippets[0]?.slice(0, 280) || null, refreshedAt: new Date() },
-        create: { contenderId: contender.id, weekKey, mentionCount: totalMentions, positiveMentions, negativeMentions, buzzScore: finalBuzzScore, trend, topSnippet: snippets[0]?.slice(0, 280) || null, refreshedAt: new Date() },
+        update: {
+          mentionCount: totalMentions,
+          positiveMentions,
+          negativeMentions,
+          buzzScore: finalBuzzScore,
+          trend,
+          topSnippet: snippets[0]?.slice(0, 280) || null,
+          refreshedAt: new Date(),
+        },
+        create: {
+          contenderId: contender.id,
+          weekKey,
+          mentionCount: totalMentions,
+          positiveMentions,
+          negativeMentions,
+          buzzScore: finalBuzzScore,
+          trend,
+          topSnippet: snippets[0]?.slice(0, 280) || null,
+          refreshedAt: new Date(),
+        },
       })
       await db.ballonDorContender.update({
         where: { id: contender.id },
@@ -121,15 +264,29 @@ export async function POST(request: NextRequest) {
       console.warn(`[ballon-dor/trending] DB save failed for ${contender.name}: ${String(dbErr).slice(0, 100)}`)
     }
     results.push({
-      name: contender.name, club: contender.clubName, nation: contender.nationCode, position: contender.position,
-      mentionCount: totalMentions, positiveMentions, negativeMentions, liveBuzzScore, finalBuzzScore, scoreSource, trend,
-      adminNotes: contender.adminNotes, topSnippet: snippets[0]?.slice(0, 280) || null,
+      name: contender.name,
+      club: contender.clubName,
+      nation: contender.nationCode,
+      position: contender.position,
+      mentionCount: totalMentions,
+      positiveMentions,
+      negativeMentions,
+      liveBuzzScore,
+      finalBuzzScore,
+      scoreSource,
+      trend,
+      adminNotes: contender.adminNotes,
+      topSnippet: snippets[0]?.slice(0, 280) || null,
     })
     await new Promise((r) => setTimeout(r, 1500))
   }
   results.sort((a, b) => b.finalBuzzScore - a.finalBuzzScore)
   return NextResponse.json({
-    ok: true, weekKey, trending: results, playersProcessed: results.length,
-    durationMs: Date.now() - startedAt, refreshedAt: new Date().toISOString(),
+    ok: true,
+    weekKey,
+    trending: results,
+    playersProcessed: results.length,
+    durationMs: Date.now() - startedAt,
+    refreshedAt: new Date().toISOString(),
   })
 }
