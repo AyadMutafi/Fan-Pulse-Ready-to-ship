@@ -43,6 +43,41 @@ async function scoreSentiment(text: string): Promise<{ score: number; label: str
   }
 }
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function fetchPageText(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!res.ok) {
+      console.warn('[curate] fetch failed', { url, status: res.status })
+      return ''
+    }
+    const html = await res.text().catch(() => '')
+    if (!html) return ''
+    const text = stripHtml(html)
+    return text
+  } catch (err) {
+    console.warn('[curate] fetch error:', String(err).slice(0, 200))
+    return ''
+  }
+}
+
 /** POST /api/admin/curate — add a curated post (admin only). */
 export async function POST(request: NextRequest) {
   const adminId = getAdminFromRequest(request)
@@ -55,18 +90,32 @@ export async function POST(request: NextRequest) {
     const {
       playerId,
       matchId = null,
-      text,
       author,
       sourceUrl = null,
       platform = 'twitter',
       matchRating = null,
     } = body || {}
 
+    // Allow `text` to be supplied OR extracted from sourceUrl. We prefer an
+    // explicit `text` if it's reasonably long, otherwise attempt to fetch the
+    // page and strip HTML to obtain the text to score.
+    let text = typeof body?.text === 'string' ? body.text.trim() : ''
+    if ((!text || text.length < 30) && sourceUrl && typeof sourceUrl === 'string') {
+      console.log('[curate] fetching sourceUrl for text extraction:', sourceUrl)
+      const fetched = await fetchPageText(sourceUrl)
+      if (fetched && fetched.length >= 30) {
+        text = fetched
+        console.log('[curate] extracted text length:', text.length)
+      } else {
+        console.warn('[curate] fetched page produced insufficient text, falling back to provided text (if any)')
+      }
+    }
+
     if (!playerId || typeof playerId !== 'string') {
       return NextResponse.json({ ok: false, error: 'playerId required' }, { status: 400 })
     }
     if (!text || typeof text !== 'string' || text.trim().length < 3) {
-      return NextResponse.json({ ok: false, error: 'text required (min 3 chars)' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: 'text required (min 3 chars) or provide a readable sourceUrl' }, { status: 400 })
     }
     if (!author || typeof author !== 'string') {
       return NextResponse.json({ ok: false, error: 'author required' }, { status: 400 })
