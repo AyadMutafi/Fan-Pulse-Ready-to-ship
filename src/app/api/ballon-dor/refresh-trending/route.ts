@@ -11,29 +11,108 @@ function getISOWeekKey(date: Date = new Date()): string {
   return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`
 }
 
-async function searchWeb(query: string): Promise<any[]> {
+/**
+ * Use xAI Responses API (Grok) with built-in web_search tool.
+ * Falls back to [] if XAI_API_KEY is not set or the call fails.
+ */
+async function searchWeb(query: string): Promise<{ url: string; title: string; snippet: string }[]> {
+  const key = process.env.XAI_API_KEY
+  if (!key) {
+    console.warn('[ballon-dor/trending] XAI_API_KEY not set — search unavailable')
+    return []
+  }
+
   try {
-    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    const res = await fetch('https://api.x.ai/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        model: 'grok-4-latest',
+        input: [
+          {
+            role: 'user',
+            content: `Search the web for: ${query}. Summarize the top results with titles, URLs, and key snippets. Return concise snippets only.`,
+          },
+        ],
+        tools: [{ type: 'web_search' }],
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(30000),
     })
-    const html = await res.text()
-    const results: any[] = []
-    // match DuckDuckGo result title + snippet pattern
-    const re = /<a[^>]*class="result__a"[^>]*href="([^"']+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gs
-    for (const match of html.matchAll(re)) {
-      try {
-        const url = match[1]
-        const title = match[2].replace(/<[^>]+>/g, '').trim()
-        const snippet = (match[3] || '').replace(/<[^>]+>/g, '').trim()
-        results.push({ url, title, snippet })
-      } catch {
-        // skip malformed match
+
+    if (!res.ok) {
+      console.warn(`[ballon-dor/trending] xAI search HTTP ${res.status}`)
+      return []
+    }
+
+    const json = await res.json().catch(() => null)
+    const results: { url: string; title: string; snippet: string }[] = []
+
+    // xAI responses vary in structure; look for assistant messages with text
+    if (Array.isArray(json?.output)) {
+      for (const item of json.output) {
+        if (item?.type === 'message' && item?.role === 'assistant') {
+          const contentArr = Array.isArray(item.content) ? item.content : [item.content]
+          for (const c of contentArr) {
+            if (typeof c?.text === 'string' && c.text.trim()) {
+              // The assistant's text may contain multiple lines summarizing results.
+              // Split into lines and take top chunk(s) as snippets.
+              const text = c.text.trim()
+              // Heuristic: split on newlines and blank lines, take up to first 3
+              const parts = text.split(/\n{1,2}/).map((p: string) => p.trim()).filter(Boolean)
+              for (const p of parts.slice(0, 3)) {
+                results.push({ url: 'https://x.ai', title: query, snippet: p.slice(0, 500) })
+              }
+            }
+            // Some tool outputs may embed structured items under c?.items or c?.results
+            if (Array.isArray(c?.items)) {
+              for (const it of c.items) {
+                const title = (it.title || it.name || '').toString().slice(0, 200)
+                const url = (it.url || it.link || '').toString()
+                const snippet = (it.snippet || it.description || it.summary || '').toString().slice(0, 500)
+                if (title || snippet || url) results.push({ url: url || 'https://x.ai', title: title || query, snippet: snippet || title || '' })
+              }
+            }
+          }
+        }
+        // Some tool results may appear under tool_response shapes
+        if (item?.tool_response && typeof item.tool_response === 'object') {
+          try {
+            const tr = item.tool_response
+            // if tr.results array exists
+            if (Array.isArray(tr.results)) {
+              for (const r of tr.results) {
+                const title = (r.title || r.name || '').toString().slice(0, 200)
+                const url = (r.url || r.link || '').toString()
+                const snippet = (r.snippet || r.description || r.summary || '').toString().slice(0, 500)
+                if (title || snippet || url) results.push({ url: url || 'https://x.ai', title: title || query, snippet: snippet || title || '' })
+              }
+            }
+          } catch {
+            /* ignore parsing errors */
+          }
+        }
       }
     }
-    return results
+
+    // Deduplicate and limit
+    const seen = new Set()
+    const dedup: { url: string; title: string; snippet: string }[] = []
+    for (const r of results) {
+      const k = `${r.url}::${r.snippet}`
+      if (!seen.has(k)) {
+        seen.add(k)
+        dedup.push(r)
+      }
+      if (dedup.length >= 10) break
+    }
+
+    return dedup
   } catch (e) {
-    console.warn('[ballon-dor/trending] DuckDuckGo search failed:', String(e).slice(0, 100))
+    console.warn(`[ballon-dor/trending] xAI search failed: ${String(e).slice(0, 200)}`)
     return []
   }
 }
@@ -43,6 +122,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const startedAt = Date.now()
+
+  console.log('[ballon-dor/trending] starting refresh-weekly-buzz (xAI search)')
 
   const weekKey = getISOWeekKey()
   const contenders = await db.ballonDorContender.findMany({ where: { isActive: true } })
@@ -61,7 +142,9 @@ export async function POST(request: NextRequest) {
     ]
     for (const query of queries) {
       try {
+        console.log(`[ballon-dor/trending] xAI search query="${query}"`)
         const searchResults = await searchWeb(query)
+        console.log(`[ballon-dor/trending] xAI results for "${query}" => ${Array.isArray(searchResults) ? searchResults.length : 'not-array'}`)
         if (!Array.isArray(searchResults) || searchResults.length === 0) {
           console.warn(`[ballon-dor/trending] 0 results for query: "${query}"`)
           continue
@@ -73,7 +156,7 @@ export async function POST(request: NextRequest) {
           if (/snub|unfair|rigged|overrated|controvers|disappoint|critic|bad season|flop/.test(text)) negativeMentions++
         }
       } catch (err) {
-        console.warn(`[ballon-dor/trending] search failed for ${contender.name}: ${String(err).slice(0, 100)}`)
+        console.warn(`[ballon-dor/trending] search failed for ${contender.name}: ${String(err).slice(0, 200)}`)
       }
       await new Promise((r) => setTimeout(r, 2000))
     }
@@ -81,7 +164,9 @@ export async function POST(request: NextRequest) {
     // Fallback if no mentions found from the standard queries
     if (snippets.length === 0) {
       try {
+        console.log(`[ballon-dor/trending] xAI fallback search for "${contender.name}"`)
         const fallback = await searchWeb(contender.name)
+        console.log(`[ballon-dor/trending] xAI fallback results => ${Array.isArray(fallback) ? fallback.length : 'not-array'}`)
         if (Array.isArray(fallback)) {
           if (fallback.length === 0) {
             console.warn(`[ballon-dor/trending] 0 results for fallback query: "${contender.name}"`)
@@ -93,7 +178,7 @@ export async function POST(request: NextRequest) {
           console.warn(`[ballon-dor/trending] fallback returned non-array for ${contender.name}`)
         }
       } catch (e) {
-        console.warn(`[ballon-dor/trending] fallback search failed for ${contender.name}: ${String(e).slice(0, 100)}`)
+        console.warn(`[ballon-dor/trending] fallback search failed for ${contender.name}: ${String(e).slice(0, 200)}`)
       }
     }
 
