@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isAdminAuthorized } from '@/lib/admin-auth'
 import { db } from '@/lib/db'
-import { getSdk } from '@/lib/ai/providers/zai'
 
 function getISOWeekKey(date: Date = new Date()): string {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
@@ -12,6 +11,33 @@ function getISOWeekKey(date: Date = new Date()): string {
   return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`
 }
 
+async function searchWeb(query: string): Promise<any[]> {
+  try {
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    })
+    const html = await res.text()
+    const results: any[] = []
+    // match DuckDuckGo result title + snippet pattern
+    const re = /<a[^>]*class="result__a"[^>]*href="([^"']+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gs
+    for (const match of html.matchAll(re)) {
+      try {
+        const url = match[1]
+        const title = match[2].replace(/<[^>]+>/g, '').trim()
+        const snippet = (match[3] || '').replace(/<[^>]+>/g, '').trim()
+        results.push({ url, title, snippet })
+      } catch {
+        // skip malformed match
+      }
+    }
+    return results
+  } catch (e) {
+    console.warn('[ballon-dor/trending] DuckDuckGo search failed:', String(e).slice(0, 100))
+    return []
+  }
+}
+
 export async function POST(request: NextRequest) {
   if (!isAdminAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -19,10 +45,6 @@ export async function POST(request: NextRequest) {
   const startedAt = Date.now()
 
   const weekKey = getISOWeekKey()
-  const zai = await getSdk()
-  if (!zai) {
-    return NextResponse.json({ error: 'Z.ai SDK unavailable' }, { status: 503 })
-  }
   const contenders = await db.ballonDorContender.findMany({ where: { isActive: true } })
   if (contenders.length === 0) {
     return NextResponse.json({ error: 'No active contenders. Seed them first via /api/ballon-dor/contenders' }, { status: 400 })
@@ -39,12 +61,12 @@ export async function POST(request: NextRequest) {
     ]
     for (const query of queries) {
       try {
-        const searchResults = await zai.functions.invoke('web_search', { query, num: 5 })
+        const searchResults = await searchWeb(query)
         if (!Array.isArray(searchResults) || searchResults.length === 0) {
           console.warn(`[ballon-dor/trending] 0 results for query: "${query}"`)
           continue
         }
-        for (const result of searchResults) {
+        for (const result of searchResults.slice(0, 5)) {
           const text = `${result.title || ''} ${result.snippet || ''}`.toLowerCase()
           snippets.push(result.snippet || result.title || '')
           if (/deserv|favorite|win|best|top|brilliant|unstoppable|incredible|amazing|hero/.test(text)) positiveMentions++
@@ -59,12 +81,12 @@ export async function POST(request: NextRequest) {
     // Fallback if no mentions found from the standard queries
     if (snippets.length === 0) {
       try {
-        const fallback = await zai.functions.invoke('web_search', { query: contender.name, num: 5 })
+        const fallback = await searchWeb(contender.name)
         if (Array.isArray(fallback)) {
           if (fallback.length === 0) {
             console.warn(`[ballon-dor/trending] 0 results for fallback query: "${contender.name}"`)
           }
-          for (const result of fallback) {
+          for (const result of fallback.slice(0, 5)) {
             snippets.push(result.snippet || result.title || '')
           }
         } else {
