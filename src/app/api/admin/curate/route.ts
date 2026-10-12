@@ -1,12 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server'
-import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
-import { getAdminFromRequest } from '@/lib/admin-auth'
+import { isAdminAuthorized } from '@/lib/admin-auth'
+import { getSdk } from '@/lib/ai/providers/zai'
 
-/** LLM-score the sentiment of a single social post. Returns 0-100 + label. */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function fetchPageText(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!res.ok) {
+      console.warn('[curate] fetch failed', { url, status: res.status })
+      return ''
+    }
+    const html = await res.text().catch(() => '')
+    if (!html) return ''
+    return stripHtml(html)
+  } catch (err) {
+    console.warn('[curate] fetch error:', String(err).slice(0, 200))
+    return ''
+  }
+}
+
 async function scoreSentiment(text: string): Promise<{ score: number; label: string }> {
   try {
-    const zai = await ZAI.create()
+    const zai = await getSdk()
+    if (!zai) throw new Error('Z.ai SDK unavailable')
+
     const completion = await zai.chat.completions.create({
       messages: [
         {
@@ -17,7 +54,7 @@ async function scoreSentiment(text: string): Promise<{ score: number; label: str
             'score 0 = extremely negative, 50 = neutral, 100 = extremely positive. ' +
             'No prose, no markdown fences, just the JSON.',
         },
-        { role: 'user', content: `Post text:\n"""\n${text}\n"""` },
+        { role: 'user', content: `Post text:\n"""\n${text.slice(0, 1500)}\n"""` },
       ],
       thinking: { type: 'disabled' },
     })
@@ -30,8 +67,7 @@ async function scoreSentiment(text: string): Promise<{ score: number; label: str
       : 'NEUTRAL'
     return { score, label }
   } catch (err) {
-    console.error('sentiment scoring failed, falling back', err)
-    // Naive fallback: keyword polarity
+    console.error('[curate] sentiment scoring failed, using heuristic fallback', err)
     const lower = text.toLowerCase()
     const pos = ['great', 'amazing', 'goat', 'incredible', 'class', 'brilliant', 'love', 'masterclass', 'hat-trick', 'stunner']
     const neg = ['bad', 'terrible', 'awful', 'fraud', 'overrated', 'frustrated', 'poor', 'disgrace', 'finished', 'washed']
@@ -43,99 +79,260 @@ async function scoreSentiment(text: string): Promise<{ score: number; label: str
   }
 }
 
-/** POST /api/admin/curate — add a curated post (admin only). */
-export async function POST(request: NextRequest) {
-  const adminId = getAdminFromRequest(request)
-  if (!adminId) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
-  }
+// ── Allowed domains for curated links ────────────────────────────────────────
+const ALLOWED_DOMAIN_PATTERNS: readonly RegExp[] = [
+  /^x\.com$/i,
+  /^twitter\.com$/i,
+  /^www\.reddit\.com$/i,
+  /^reddit\.com$/i,
+  /^old\.reddit\.com$/i,
+  /^www\.instagram\.com$/i,
+  /^instagram\.com$/i,
+  /^www\.facebook\.com$/i,
+  /^facebook\.com$/i,
+  /^m\.facebook\.com$/i,
+  /^www\.tiktok\.com$/i,
+  /^tiktok\.com$/i,
+  /^vm\.tiktok\.com$/i,
+  /^www\.espn\.com$/i,
+  /^espn\.com$/i,
+  /^www\.bbc\.co\.uk$/i,
+  /^bbc\.co\.uk$/i,
+  /^www\.bbc\.com$/i,
+  /^bbc\.com$/i,
+  /^www\.skysports\.com$/i,
+  /^skysports\.com$/i,
+  /^www\.theathletic\.com$/i,
+  /^theathletic\.com$/i,
+  /^www\.guardian\.com$/i,
+  /^theguardian\.com$/i,
+  /^www\.goal\.com$/i,
+  /^goal\.com$/i,
+  /^www\.90min\.com$/i,
+  /^90min\.com$/i,
+  /^www\.football365\.com$/i,
+  /^football365\.com$/i,
+  /^www\.aljazeera\.com$/i,
+  /^aljazeera\.com$/i,
+  /^www\.reuters\.com$/i,
+  /^reuters\.com$/i,
+  /^sports\.yahoo\.com$/i,
+  /^www\.sportskeeda\.com$/i,
+  /^sportskeeda\.com$/i,
+]
 
-  try {
-    const body = await request.json().catch(() => ({}))
-    const {
-      playerId,
-      matchId = null,
-      text,
-      author,
-      sourceUrl = null,
-      platform = 'twitter',
-      matchRating = null,
-    } = body || {}
+const BLOCK_PATTERNS = [
+  'log into instagram',
+  'please enable javascript',
+  'access denied',
+  'attention required',
+  'enable javascript and cookies',
+  'are you a robot',
+  'unusual traffic',
+  'sorry, you have been blocked',
+  'checking your browser',
+  'cloudflare',
+  'please verify you are a human',
+  'request blocked',
+  'sign in to x',
+  'sign in / x',
+  'log in to x',
+]
 
-    if (!playerId || typeof playerId !== 'string') {
-      return NextResponse.json({ ok: false, error: 'playerId required' }, { status: 400 })
-    }
-    if (!text || typeof text !== 'string' || text.trim().length < 3) {
-      return NextResponse.json({ ok: false, error: 'text required (min 3 chars)' }, { status: 400 })
-    }
-    if (!author || typeof author !== 'string') {
-      return NextResponse.json({ ok: false, error: 'author required' }, { status: 400 })
-    }
-
-    // Look up the player to denormalize name + nationCode + validate existence
-    const player = await db.wCSelectionPlayer.findUnique({
-      where: { id: playerId },
-      select: { playerName: true, nationCode: true },
-    })
-    if (!player) {
-      return NextResponse.json({ ok: false, error: 'Player not found' }, { status: 404 })
-    }
-
-    // LLM-score the sentiment on ingest (so it's available immediately)
-    const { score, label } = await scoreSentiment(text)
-
-    const post = await db.curatedPost.create({
-      data: {
-        playerId,
-        playerName: player.playerName,
-        nationCode: player.nationCode,
-        matchId: matchId || null,
-        text: text.trim(),
-        author: author.trim().replace(/^@/, ''),
-        sourceUrl: sourceUrl || null,
-        platform: typeof platform === 'string' ? platform : 'twitter',
-        sentimentLabel: label,
-        sentimentScore: score,
-        matchRating:
-          typeof matchRating === 'number' && matchRating > 0
-            ? Math.max(0, Math.min(10, matchRating))
-            : null,
-        addedByAdmin: adminId,
-      },
-    })
-
-    return NextResponse.json({ ok: true, post })
-  } catch (err) {
-    console.error('curate POST error', err)
-    return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 })
-  }
+interface CurationResult {
+  url: string
+  status: 'added' | 'skipped' | 'error'
+  reason?: string
+  linkId?: string
+  author?: string
+  sentimentScore?: number
+  sentimentLabel?: string
 }
 
-/** GET /api/admin/curate — list curated posts (admin only). */
-export async function GET(request: NextRequest) {
-  const adminId = getAdminFromRequest(request)
-  if (!adminId) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
-  }
-
+function validateUrl(url: string) {
+  if (!url.startsWith('https://')) return { ok: false, reason: 'URL must start with https://' }
+  let parsed: URL
   try {
-    const { searchParams } = new URL(request.url)
-    const playerId = searchParams.get('playerId')
-    const nationCode = searchParams.get('nationCode')
-    const limit = Math.min(200, Number(searchParams.get('limit') || 100))
-
-    const posts = await db.curatedPost.findMany({
-      where: {
-        ...(playerId ? { playerId } : {}),
-        ...(nationCode ? { nationCode } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    })
-
-    return NextResponse.json({ ok: true, posts, count: posts.length })
-  } catch (err) {
-    console.error('curate GET error', err)
-    return NextResponse.json({ ok: false, error: 'Server error' }, { status: 500 })
+    parsed = new URL(url)
+  } catch {
+    return { ok: false, reason: 'Invalid URL' }
   }
+  const hostname = parsed.hostname.toLowerCase()
+  const isAllowed = ALLOWED_DOMAIN_PATTERNS.some((pat) => pat.test(hostname))
+  if (!isAllowed) return { ok: false, reason: `Domain "${hostname}" not in allowed list` }
+
+  const pathParts = parsed.pathname.split('/').filter(Boolean)
+
+  if (hostname === 'x.com' || hostname === 'twitter.com') {
+    const handle = pathParts[0] || ''
+    const author = handle ? `@${handle}` : hostname
+    return { ok: true, platform: 'twitter', author, hostname }
+  }
+  if (hostname.includes('reddit.com')) {
+    if (pathParts[0] === 'r' && pathParts[1]) return { ok: true, platform: 'reddit', author: `r/${pathParts[1]}`, hostname }
+    if (pathParts[0] === 'user' && pathParts[1]) return { ok: true, platform: 'reddit', author: `u/${pathParts[1]}`, hostname }
+    return { ok: true, platform: 'reddit', author: hostname, hostname }
+  }
+  if (hostname.includes('instagram.com')) {
+    if (pathParts[0] === 'p' || pathParts[0] === 'reel') return { ok: true, platform: 'instagram', author: hostname, hostname }
+    if (pathParts[0]) return { ok: true, platform: 'instagram', author: `@${pathParts[0]}`, hostname }
+    return { ok: true, platform: 'instagram', author: hostname, hostname }
+  }
+  if (hostname.includes('facebook.com')) {
+    if (pathParts[0]) return { ok: true, platform: 'facebook', author: pathParts[0], hostname }
+    return { ok: true, platform: 'facebook', author: hostname, hostname }
+  }
+  if (hostname.includes('tiktok.com')) {
+    if (pathParts[0] && pathParts[0].startsWith('@')) return { ok: true, platform: 'tiktok', author: pathParts[0], hostname }
+    return { ok: true, platform: 'tiktok', author: hostname, hostname }
+  }
+  return { ok: true, platform: 'web', author: hostname, hostname }
+}
+
+function isBlockMessage(content: string): boolean {
+  if (!content) return true
+  const lower = content.toLowerCase()
+  return BLOCK_PATTERNS.some((p) => lower.includes(p))
+}
+
+export async function POST(request: NextRequest) {
+  if (!isAdminAuthorized(request)) {
+    return NextResponse.json({ error: 'Unauthorized — admin password required' }, { status: 401 })
+  }
+
+  let body: any
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const { matchId = null, matchLabel, urls: rawUrls, hashtags: rawHashtags = [] } = body || {}
+
+  if (!matchLabel || typeof matchLabel !== 'string' || matchLabel.trim().length < 3) {
+    return NextResponse.json({ error: 'matchLabel is required (min 3 chars)' }, { status: 400 })
+  }
+  if (!Array.isArray(rawUrls) || rawUrls.length === 0) {
+    return NextResponse.json({ error: 'urls must be a non-empty array' }, { status: 400 })
+  }
+
+  const seenUrls = new Set<string>()
+  const urls: string[] = []
+  for (const raw of rawUrls) {
+    if (typeof raw !== 'string') continue
+    const url = raw.trim()
+    if (!url) continue
+    const key = url.toLowerCase()
+    if (seenUrls.has(key)) continue
+    seenUrls.add(key)
+    urls.push(url)
+  }
+
+  if (urls.length === 0) {
+    return NextResponse.json({ error: 'No valid URLs after deduplication' }, { status: 400 })
+  }
+
+  const hashtags: string[] = Array.isArray(rawHashtags)
+    ? Array.from(
+        new Set(
+          rawHashtags
+            .filter((h: unknown): h is string => typeof h === 'string')
+            .map((h) => h.trim().replace(/^@/, ''))
+            .filter((h) => h.length > 0)
+            .map((h) => (h.startsWith('#') ? h : `#${h}`)),
+        ),
+      )
+    : []
+
+  const hashtagsJson = JSON.stringify(hashtags)
+  const results: CurationResult[] = []
+  let added = 0
+  let skipped = 0
+  const errors: string[] = []
+
+  for (const url of urls) {
+    try {
+      const validation = validateUrl(url)
+      if (!validation.ok) {
+        skipped++
+        results.push({ url, status: 'skipped', reason: validation.reason })
+        errors.push(`${url}: ${validation.reason}`)
+        continue
+      }
+
+      const { platform, author: urlAuthor, hostname } = validation
+
+      // ── Fetch page content directly (no Z.ai page_reader) ──
+      const pageText = await fetchPageText(url)
+      if (!pageText || pageText.length < 40) {
+        skipped++
+        const reason = 'Empty page content or fetch failed'
+        results.push({ url, status: 'skipped', reason })
+        errors.push(`${url}: ${reason}`)
+        continue
+      }
+
+      if (isBlockMessage(pageText)) {
+        skipped++
+        const reason = 'Block page detected (login wall / bot challenge)'
+        results.push({ url, status: 'skipped', reason })
+        errors.push(`${url}: ${reason}`)
+        continue
+      }
+
+      const author = urlAuthor || hostname || 'unknown'
+      const truncatedContent = pageText.slice(0, 2000)
+
+      // ── Score sentiment via Z.ai chat (works on public API) ──
+      const { score, label } = await scoreSentiment(truncatedContent)
+
+      const link = await db.curatedLink.upsert({
+        where: { url },
+        update: {
+          matchId: matchId || null,
+          matchLabel: matchLabel.trim(),
+          platform,
+          author,
+          content: truncatedContent,
+          sentimentScore: score,
+          sentimentLabel: label,
+          hashtags: hashtagsJson,
+          postedAt: new Date(),
+          isActive: true,
+          curatedBy: 'founder',
+        },
+        create: {
+          matchId: matchId || null,
+          matchLabel: matchLabel.trim(),
+          url,
+          platform,
+          author,
+          content: truncatedContent,
+          sentimentScore: score,
+          sentimentLabel: label,
+          hashtags: hashtagsJson,
+          postedAt: new Date(),
+          curatedBy: 'founder',
+          isActive: true,
+        },
+      })
+
+      added++
+      results.push({
+        url,
+        status: 'added',
+        linkId: link.id,
+        author,
+        sentimentScore: score,
+        sentimentLabel: label,
+      })
+    } catch (err) {
+      skipped++
+      const reason = `Unexpected error: ${String(err).slice(0, 150)}`
+      results.push({ url, status: 'error', reason })
+      errors.push(`${url}: ${reason}`)
+    }
+  }
+
+  return NextResponse.json({ added, skipped, total: urls.length, results, errors })
 }
