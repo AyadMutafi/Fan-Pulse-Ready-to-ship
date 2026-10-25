@@ -194,10 +194,10 @@ export async function POST(request: NextRequest) {
   const contenders = await db.ballonDorContender.findMany({ where: { isActive: true } })
 
   if (contenders.length === 0) {
-    return NextResponse.json({
-      error: 'No active contenders. Seed them first via /api/ballon-dor/contenders',
-      status: 400,
-    })
+    return NextResponse.json(
+      { error: 'No active contenders. Seed them first via /api/ballon-dor/contenders' },
+      { status: 400 }
+    )
   }
 
   const results: any[] = []
@@ -271,8 +271,8 @@ export async function POST(request: NextRequest) {
     if (positiveMentions > negativeMentions + 2) trend = 'rising'
     else if (negativeMentions > positiveMentions + 2) trend = 'falling'
 
-    const hasManualOverride = contender.manualBuzzScore !== null
-    const finalBuzzScore = hasManualOverride ? (contender.manualBuzzScore as number) : liveBuzzScore
+    const hasManualOverride = typeof contender.manualBuzzScore === 'number'
+    const finalBuzzScore = hasManualOverride ? contender.manualBuzzScore : liveBuzzScore
     const scoreSource = hasManualOverride ? 'admin-override' : 'live'
 
     try {
