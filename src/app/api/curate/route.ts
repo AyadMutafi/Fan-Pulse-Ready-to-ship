@@ -16,7 +16,7 @@ function stripHtml(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, ' ')
     .trim()
-}
+} 
 
 async function fetchPageText(url: string): Promise<string> {
   try {
