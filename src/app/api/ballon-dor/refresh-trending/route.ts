@@ -87,11 +87,14 @@ async function searchWeb(query: string): Promise<{ url: string; title: string; s
       const title = (r.title || r.name || '').toString().trim()
       const snippet = (r.snippet || r.summary || r.description || r.text || '').toString().trim()
       if (url || title || snippet) {
-        results.push({ url: url || 'https://x.ai', title: title || query, snippet: snippet || title || '' })
+        results.push({
+          url: url || 'https://x.ai',
+          title: title || query,
+          snippet: snippet || title || '',
+        })
       }
     }
 
-    // Common xAI response shapes
     if (Array.isArray(parsed?.output)) {
       for (const item of parsed.output) {
         try {
@@ -101,7 +104,11 @@ async function searchWeb(query: string): Promise<{ url: string; title: string; s
               if (typeof c?.text === 'string' && c.text.trim()) {
                 const chunks = c.text.split(/\n{1,2}/).map((s) => s.trim()).filter(Boolean)
                 for (const chunk of chunks.slice(0, 3)) {
-                  results.push({ url: 'https://x.ai', title: query, snippet: chunk.slice(0, 500) })
+                  results.push({
+                    url: 'https://x.ai',
+                    title: query,
+                    snippet: chunk.slice(0, 500),
+                  })
                 }
               }
 
@@ -139,7 +146,11 @@ async function searchWeb(query: string): Promise<{ url: string; title: string; s
             } else {
               const trText = typeof tr === 'string' ? tr : JSON.stringify(tr).slice(0, 1000)
               if (trText) {
-                results.push({ url: 'https://x.ai', title: query, snippet: trText.slice(0, 500) })
+                results.push({
+                  url: 'https://x.ai',
+                  title: query,
+                  snippet: trText.slice(0, 500),
+                })
               }
             }
           }
@@ -217,7 +228,9 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`[ballon-dor/trending] xAI search query="${query}"`)
         const searchResults = await searchWeb(query)
-        console.log(`[ballon-dor/trending] xAI results for "${query}" => ${Array.isArray(searchResults) ? searchResults.length : 'not-array'}`)
+        console.log(
+          `[ballon-dor/trending] xAI results for "${query}" => ${Array.isArray(searchResults) ? searchResults.length : 'not-array'}`
+        )
 
         if (!Array.isArray(searchResults) || searchResults.length === 0) {
           console.warn(`[ballon-dor/trending] 0 results for query: "${query}"`)
@@ -245,7 +258,9 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`[ballon-dor/trending] xAI fallback search for "${contender.name}"`)
         const fallback = await searchWeb(contender.name)
-        console.log(`[ballon-dor/trending] xAI fallback results => ${Array.isArray(fallback) ? fallback.length : 'not-array'}`)
+        console.log(
+          `[ballon-dor/trending] xAI fallback results => ${Array.isArray(fallback) ? fallback.length : 'not-array'}`
+        )
 
         if (Array.isArray(fallback)) {
           if (fallback.length === 0) {
