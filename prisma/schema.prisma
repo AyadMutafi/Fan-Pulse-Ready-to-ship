@@ -204,8 +204,8 @@ model LeagueMatch {
   kickoffAt    DateTime
   /// FPL fixture ID for joining to FPLFixture. NULL for non-FPL sources.
   fplFixtureId Int?     @unique
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([league, season, matchweek, homeTeamCode, awayTeamCode])
   @@index([league, season, matchweek, status])
@@ -222,8 +222,8 @@ model TeamOfTheWeek {
   type        String // "totw" | "flops"
   formation   String   @default("4-3-3")
   publishedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   players TOTWPlayer[]
 
@@ -632,7 +632,7 @@ model FeedMonitor {
   seedUrls        String    @default("[]") // JSON array of seed tweet/post URLs (anchor context)
   status          String    @default("active") // "active" | "paused" | "ended"
   refreshInterval Int       @default(5) // minutes between auto-refreshes
-  lastRefreshedAt DateTime?
+  lastRefreshedAt  DateTime?
   endsAt          DateTime // auto-end time (typically kickoff + 6h)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -656,7 +656,7 @@ model FeedPost {
   sentimentScore   Float       @default(50) // 0-100, LLM-scored
   positiveRatio    Float       @default(0.5) // 0-1
   mentionedPlayers String      @default("[]") // JSON array of player IDs found in content
-  topQuote         String? // notable fan quote extracted by LLM (for UI display)
+  topQuote        String? // notable fan quote extracted by LLM (for UI display)
   postedAt         DateTime    @default(now())
   analyzedAt       DateTime    @default(now())
 
@@ -677,7 +677,7 @@ model PlayerSentiment {
   topQuotes     String   @default("[]") // JSON array of {quote, source} objects
   avgEngagement Float    @default(0) // avg likes+replies+shares (best-effort, often 0)
   analyzedAt    DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  updatedAt      DateTime @updatedAt
 
   @@index([monitorId])
 }
@@ -847,4 +847,55 @@ model BallonDorWeeklySnapshot {
   @@unique([contenderId, weekKey])
   @@index([contenderId, weekKey])
   @@index([weekKey])
+}
+
+// ── Intelligence Layer: Semantic Search + Forecasting ────────────────────────
+// Powers /api/semantic-search (natural-language search over scraped post
+// content) and /api/forecast (Holt momentum + crisis detection).
+// Purely ADDITIVE — no existing model is modified, so `prisma db push` only
+// creates two new tables (safe, non-breaking migration).
+//
+// VECTOR STORAGE NOTE: SQLite has no vector type, so embeddings live as
+// JSON-encoded number arrays (PostEmbedding.vector). Brute-force cosine over
+// ~10k vectors runs ~10ms in-process — no pgvector/middleware at this scale.
+// The `model` column is the migration key: swapping embedding models
+// invalidates existing vectors (full re-embed required), which is why the
+// model name is stored per row rather than assumed.
+
+/// One embedding per source post. `postId` matches the source table's id
+/// (cuid) — FeedPost today; extend via `source` when CuratedLink/TransferPost
+/// join in. NOT a foreign key on purpose (same pattern as FanVote.matchId /
+/// CuratedLink.matchId): source rows may be pruned, embeddings must survive
+/// as an audit trail and be recreatable from `source + postId`.
+model PostEmbedding {
+  id        String   @id @default(cuid())
+  /// "feed" (FeedPost) | "curated" (CuratedLink) | "transfer" (TransferPost)
+  source    String   @default("feed")
+  postId    String
+  /// HuggingFace model id, e.g. "Xenova/multilingual-e5-small"
+  model     String
+  /// JSON-encoded Float32Array (e.g. 384 dims for e5-small)
+  vector    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([source, postId])
+  @@index([model])
+}
+
+/// Rolling sentiment snapshot per scope, upserted by the cron loop (Phase 5).
+/// Scope examples: "team:ARS" | "player:<id>" | "saga:<sagaId>" | "global".
+/// GET /api/forecast reads these rows to run Holt smoothing + delta z-score
+/// crisis detection (src/lib/forecast.ts). Same pattern as the existing
+/// SentimentTimeline / BallonDorWeeklySnapshot snapshot models.
+model PulseSnapshot {
+  id         String   @id @default(cuid())
+  scope      String
+  /// 0-100
+  sentiment  Float    @default(50)
+  voteCount  Int      @default(0)
+  postCount  Int      @default(0)
+  takenAt    DateTime @default(now())
+
+  @@index([scope, takenAt])
 }
